@@ -5,9 +5,9 @@ import mongoose from 'mongoose';
 import { StatusCodes } from 'http-status-codes';
 
 // Routes
-import repRoutes from './src/routes/repRoutes.js';
-import gigRoutes from './src/routes/gigRoutes.js';
-import matchRoutes from './src/routes/matchRoutes.js';
+import repRoutes from './routes/repRoutes.js';
+import gigRoutes from './routes/gigRoutes.js';
+import matchRoutes from './routes/matchRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -24,9 +24,7 @@ const connectDB = async () => {
   try {
     // Use a fallback connection string for demo purposes if environment variable is not set
     // or if it's set to localhost (which won't work in the browser environment)
-    const connectionString = process.env.MONGODB_URI.includes('localhost') 
-      ? 'mongodb+srv://harxuser:harxpassword123@cluster0.mongodb.net/harx-matching-system?retryWrites=true&w=majority'
-      : process.env.MONGODB_URI;
+    const connectionString = process.env.MONGODB_URI || 'mongodb://localhost:27017/matching';
     
     await mongoose.connect(connectionString);
     console.log('Connected to MongoDB');
@@ -39,7 +37,7 @@ const connectDB = async () => {
       if (repCount === 0 && gigCount === 0) {
         console.log('Seeding initial data...');
         // Import and run seed function dynamically
-        const { seedDatabase } = await import('./src/data/seedData.js');
+        const { seedDatabase } = await import('./data/seedData.js');
         await seedDatabase();
         console.log('Initial data seeded successfully');
       }
@@ -74,7 +72,7 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-const PORT =  5011;
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

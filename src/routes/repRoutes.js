@@ -4,7 +4,8 @@ import {
   getRepById,
   createRep,
   updateRep,
-  deleteRep
+  deleteRep,
+  getZohoReps
 } from '../controllers/repController.js';
 
 const router = express.Router();
@@ -12,6 +13,9 @@ const router = express.Router();
 router.route('/')
   .get(getAllReps)
   .post(createRep);
+
+router.route('/zoho')
+  .get(getZohoReps);
 
 router.route('/:id')
   .get(getRepById)

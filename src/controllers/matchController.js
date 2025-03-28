@@ -190,13 +190,55 @@ export const findGigsForRepById = async (req, res) => {
     
     const gigs = await Gig.find();
     
+    // Log des données pour déboguer
+    console.log('Rep data:', {
+      id: rep._id,
+      experience: rep.experience,
+      skills: rep.skills,
+      industries: rep.industries,
+      languages: rep.languages,
+      availability: rep.availability,
+      timezone: rep.timezone,
+      performance: rep.performance,
+      region: rep.region
+    });
+    
     // Calculer tous les matches
     const allMatches = gigs.map(gig => {
-      // Récupérer les scores détaillés
-      const matchResult = calculateMatchScore(rep, gig, weights);
-      
-      // Calculer notre propre score global
-      const details = matchResult.matchDetails;
+      // Log des données du gig pour déboguer
+      console.log('Gig data:', {
+        id: gig._id,
+        requiredExperience: gig.requiredExperience,
+        requiredSkills: gig.requiredSkills,
+        industry: gig.industry,
+        preferredLanguages: gig.preferredLanguages,
+        duration: gig.duration,
+        timezone: gig.timezone,
+        expectedConversionRate: gig.expectedConversionRate,
+        targetRegion: gig.targetRegion
+      });
+
+      // Calculer les scores individuels
+      const experienceScore = calculateExperienceScore(rep, gig);
+      const skillsScore = calculateSkillsScore(rep, gig);
+      const industryScore = calculateIndustryScore(rep, gig);
+      const languageScore = calculateLanguageScore(rep, gig);
+      const availabilityScore = calculateAvailabilityScore(rep, gig);
+      const timezoneScore = calculateTimezoneScore(rep, gig);
+      const performanceScore = calculatePerformanceScore(rep, gig);
+      const regionScore = calculateRegionScore(rep, gig);
+
+      // Log des scores calculés
+      console.log('Calculated scores:', {
+        experienceScore,
+        skillsScore,
+        industryScore,
+        languageScore,
+        availabilityScore,
+        timezoneScore,
+        performanceScore,
+        regionScore
+      });
       
       // Définir les poids
       const finalWeights = {
@@ -213,21 +255,30 @@ export const findGigsForRepById = async (req, res) => {
       
       // Calculer le score avec notre propre formule
       const calculatedScore = (
-        ((details.experienceScore || 0) * finalWeights.experienceWeight) +
-        ((details.skillsScore || 0) * finalWeights.skillsWeight) +
-        ((details.industryScore || 0) * finalWeights.industryWeight) +
-        ((details.languageScore || 0) * finalWeights.languageWeight) +
-        ((details.availabilityScore || 0) * finalWeights.availabilityWeight) +
-        ((details.timezoneScore || 0) * finalWeights.timezoneWeight) +
-        ((details.performanceScore || 0) * finalWeights.performanceWeight) +
-        ((details.regionScore || 0) * finalWeights.regionWeight)
+        (experienceScore * finalWeights.experienceWeight) +
+        (skillsScore * finalWeights.skillsWeight) +
+        (industryScore * finalWeights.industryWeight) +
+        (languageScore * finalWeights.languageWeight) +
+        (availabilityScore * finalWeights.availabilityWeight) +
+        (timezoneScore * finalWeights.timezoneWeight) +
+        (performanceScore * finalWeights.performanceWeight) +
+        (regionScore * finalWeights.regionWeight)
       ) / Object.values(finalWeights).reduce((sum, w) => sum + w, 0);
       
       return {
         repId: rep._id,
         gigId: gig._id,
         score: calculatedScore,
-        matchDetails: details
+        matchDetails: {
+          experienceScore,
+          skillsScore,
+          industryScore,
+          languageScore,
+          availabilityScore,
+          timezoneScore,
+          performanceScore,
+          regionScore
+        }
       };
     });
     
@@ -240,20 +291,24 @@ export const findGigsForRepById = async (req, res) => {
     // Limiter le nombre de résultats
     const limitedMatches = sortedMatches.slice(0, limit);
     
-    // Préparer les top scores (triés par score, limités au nombre spécifié)
-    const sortedTopScores = allMatches.sort((a, b) => b.score - a.score).slice(0, topScoreCount);
+    // Calculer les top scores si demandé
+    const topScores = showAllScores ? sortedMatches.slice(0, topScoreCount) : null;
     
-    // Réponse avec informations détaillées
     res.status(StatusCodes.OK).json({
       matches: limitedMatches,
       totalGigs: gigs.length,
       qualifyingGigs: qualifyingMatches.length,
       matchCount: limitedMatches.length,
-      totalMatches: sortedMatches.length,
+      totalMatches: allMatches.length,
       minimumScoreApplied: minimumScore,
-      topScores: showAllScores ? sortedTopScores : null,
-      topScoresCount: showAllScores ? sortedTopScores.length : 0,  // Nombre de top scores retournés
-      totalTopScoresAvailable: allMatches.length  // Nombre total de scores disponibles
+      topScores: topScores,
+      topScoresCount: topScores ? topScores.length : 0,
+      totalTopScoresAvailable: qualifyingMatches.length,
+      scoreStats: {
+        highest: Math.max(...allMatches.map(m => m.score)),
+        average: allMatches.reduce((sum, m) => sum + m.score, 0) / allMatches.length,
+        qualifying: qualifyingMatches.length
+      }
     });
   } catch (error) {
     console.error("Error in findGigsForRepById:", error);
@@ -279,56 +334,149 @@ export const generateOptimalMatches = async (req, res) => {
 
 // Fonction de calcul d'expérience plus précise
 function calculateExperienceScore(rep, gig) {
-  // Si le gig demande une expérience spécifique
-  if (gig.requiredExperience) {
-    // Si le rep a exactement l'expérience demandée
-    if (rep.experience === gig.requiredExperience) {
-      return 1.0;
-    }
-    // Si le rep a plus d'expérience que demandé
-    else if (rep.experience > gig.requiredExperience) {
-      return 0.8 + (0.2 * Math.min(1, (gig.requiredExperience / rep.experience)));
-    }
-    // Si le rep a moins d'expérience que demandé
-    else {
-      return Math.max(0.1, rep.experience / gig.requiredExperience);
-    }
+  if (!gig.requiredExperience || !rep.experience || !Array.isArray(rep.experience)) {
+    console.log('Missing experience data:', { rep: rep._id, gig: gig._id });
+    return 0.5;
   }
-  // Valeur par défaut si aucune expérience requise
-  return 0.5;
+
+  const repExperience = rep.experience.reduce((total, exp) => {
+    if (!exp.startDate) return total;
+    const startDate = new Date(exp.startDate);
+    const endDate = exp.current ? new Date() : new Date(exp.endDate);
+    const years = (endDate - startDate) / (1000 * 60 * 60 * 24 * 365);
+    return total + years;
+  }, 0);
+
+  console.log('Experience calculation:', {
+    repId: rep._id,
+    gigId: gig._id,
+    repExperience,
+    requiredExperience: gig.requiredExperience
+  });
+
+  if (repExperience >= gig.requiredExperience) {
+    return 0.8 + (0.2 * Math.min(1, (gig.requiredExperience / repExperience)));
+  } else {
+    return Math.max(0.1, repExperience / gig.requiredExperience);
+  }
 }
 
 function calculateSkillsScore(rep, gig) {
-  // Implémentation de la fonction calculateSkillsScore
-  return 0.3 + (Math.random() * 0.7); // Simulation
+  if (!gig.requiredSkills || !rep.skills || gig.requiredSkills.length === 0) {
+    console.log('Missing skills data:', { rep: rep._id, gig: gig._id });
+    return 0.5;
+  }
+
+  // Combiner toutes les compétences de toutes les catégories
+  const allSkills = [
+    ...(rep.skills.technical || []),
+    ...(rep.skills.professional || []),
+    ...(rep.skills.soft || [])
+  ];
+
+  const matchingSkills = gig.requiredSkills.filter(requiredSkill => 
+    allSkills.some(repSkill => 
+      repSkill.name === requiredSkill && 
+      ['Advanced', 'Expert'].includes(repSkill.level)
+    )
+  );
+
+  console.log('Skills calculation:', {
+    repId: rep._id,
+    gigId: gig._id,
+    matchingSkills,
+    requiredSkills: gig.requiredSkills,
+    allSkills
+  });
+
+  return matchingSkills.length / gig.requiredSkills.length;
 }
 
 function calculateIndustryScore(rep, gig) {
-  // Implémentation de la fonction calculateIndustryScore
-  return 0.3 + (Math.random() * 0.7); // Simulation
+  if (!gig.industry || !rep.industries || !Array.isArray(rep.industries) || rep.industries.length === 0) {
+    return 0.5;
+  }
+
+  return rep.industries.includes(gig.industry) ? 1.0 : 0.0;
 }
 
 function calculateLanguageScore(rep, gig) {
-  // Implémentation de la fonction calculateLanguageScore
-  return 0.3 + (Math.random() * 0.7); // Simulation
+  if (!gig.preferredLanguages || !rep.languages || !Array.isArray(rep.languages) || gig.preferredLanguages.length === 0) {
+    return 0.5;
+  }
+
+  const matchingLanguages = gig.preferredLanguages.filter(preferredLang =>
+    rep.languages.some(repLang => 
+      repLang.name === preferredLang && 
+      ['Advanced', 'Native'].includes(repLang.proficiency)
+    )
+  );
+
+  return matchingLanguages.length / gig.preferredLanguages.length;
 }
 
 function calculateAvailabilityScore(rep, gig) {
-  // Implémentation de la fonction calculateAvailabilityScore
-  return 0.2 + (0.8 * (rep.availability.length / 7)) // Basé sur le nombre de jours disponibles
+  if (!rep.availability || !gig.duration || !Array.isArray(rep.availability)) {
+    return 0.2;
+  }
+
+  const gigStart = new Date(gig.duration.startDate);
+  const gigEnd = new Date(gig.duration.endDate);
+  
+  const availableDays = rep.availability.filter(day => {
+    const dayDate = new Date(day);
+    return dayDate >= gigStart && dayDate <= gigEnd;
+  });
+
+  return 0.2 + (0.8 * (availableDays.length / 7));
 }
 
 function calculateTimezoneScore(rep, gig) {
-  // Implémentation de la fonction calculateTimezoneScore
-  return 0.5;
+  if (!rep.timezone || !gig.timezone) {
+    return 0.5;
+  }
+
+  return rep.timezone === gig.timezone ? 1.0 : 0.5;
 }
 
 function calculatePerformanceScore(rep, gig) {
-  // Implémentation de la fonction calculatePerformanceScore
-  return rep.rating ? (rep.rating / 5) : 0.5; // Basé sur la note
+  if (!rep.performance || !gig.expectedConversionRate) {
+    return 0.5;
+  }
+
+  const conversionRateScore = Math.min(1, rep.performance.conversionRate / gig.expectedConversionRate);
+  const reliabilityScore = rep.performance.reliability / 10;
+  const ratingScore = rep.performance.rating / 5;
+
+  return (conversionRateScore * 0.4) + (reliabilityScore * 0.3) + (ratingScore * 0.3);
 }
 
 function calculateRegionScore(rep, gig) {
-  // Implémentation de la fonction calculateRegionScore
-  return rep.region === gig.targetRegion ? 1.0 : 0.0; // Match exact ou rien
+  if (!rep.region || !gig.targetRegion) {
+    return 0.5;
+  }
+
+  // Convertir les régions en minuscules pour la comparaison
+  const repRegion = rep.region.toLowerCase();
+  const targetRegion = gig.targetRegion.toLowerCase();
+
+  // Mapping des régions similaires
+  const regionMapping = {
+    'middle east': ['middle east', 'europe', 'asia'],
+    'europe': ['europe', 'middle east', 'north america'],
+    'north america': ['north america', 'europe'],
+    'asia': ['asia', 'asia pacific', 'middle east'],
+    'asia pacific': ['asia pacific', 'asia']
+  };
+
+  if (repRegion === targetRegion) {
+    return 1.0;
+  }
+
+  // Vérifier si les régions sont similaires
+  if (regionMapping[repRegion] && regionMapping[repRegion].includes(targetRegion)) {
+    return 0.7; // Score partiel pour les régions similaires
+  }
+
+  return 0.0;
 }
