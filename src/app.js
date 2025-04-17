@@ -1,0 +1,41 @@
+import express from 'express';
+import cors from 'cors';
+import mongoose from 'mongoose';
+import dotenv from 'dotenv';
+import gigRoutes from './routes/gigRoutes.js';
+import agentRoutes from './routes/agentRoutes.js';
+import matchRoutes from './routes/matchRoutes.js';
+
+// Load environment variables
+dotenv.config();
+
+const app = express();
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+
+// Routes
+app.use('/api/gigs', gigRoutes);
+app.use('/api/agents', agentRoutes);
+app.use('/api/matches', matchRoutes);
+
+// MongoDB connection
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => {
+    console.log('Connected to MongoDB');
+  })
+  .catch((error) => {
+    console.error('MongoDB connection error:', error);
+  });
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ message: 'Something went wrong!' });
+});
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+}); 

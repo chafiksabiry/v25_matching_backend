@@ -1,70 +1,270 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
-import Rep from '../models/Rep.js';
+import Agent from '../models/Agent.js';
 import Gig from '../models/Gig.js';
 
 // Load environment variables
 dotenv.config();
 
-// Sample data for reps
-const reps = [
+// Sample data for agents
+const agents = [
   {
+    userId: new mongoose.Types.ObjectId(),
+    status: "completed",
+    completionSteps: {
+      basicInfo: true,
+      experience: true,
+      skills: true,
+      languages: true,
+      assessment: true
+    },
+    personalInfo: {
     name: "Alex Johnson",
-    experience: 8,
-    skills: ["Cold Calling", "Sales Closing", "Negotiation"],
+      location: "New York",
+      email: "alex.johnson@example.com",
+      phone: "+1 234 567 8900",
+      languages: [
+        {
+          language: "English",
+          proficiency: "First Language"
+        },
+        {
+          language: "Spanish",
+          proficiency: "B2 - Advanced"
+        }
+      ]
+    },
+    professionalSummary: {
+      yearsOfExperience: "8 years",
+      currentRole: "Senior Sales Representative",
     industries: ["Technology", "Finance"],
-    languages: ["English", "Spanish"],
-    availability: [
-      { day: "Monday", startTime: "09:00", endTime: "17:00" },
-      { day: "Tuesday", startTime: "09:00", endTime: "17:00" },
-      { day: "Wednesday", startTime: "09:00", endTime: "17:00" },
-      { day: "Thursday", startTime: "09:00", endTime: "17:00" },
-      { day: "Friday", startTime: "09:00", endTime: "17:00" },
+      keyExpertise: ["Enterprise Sales", "Account Management"],
+      notableCompanies: ["TechCorp", "FinancePro"]
+    },
+    skills: {
+      technical: [
+        {
+          skill: "Sales CRM",
+          level: 0.9,
+          details: "Salesforce, HubSpot"
+        },
+        {
+          skill: "Data Analysis",
+          level: 0.8,
+          details: "Excel, PowerBI"
+        }
+      ],
+      professional: [
+        {
+          skill: "Sales Closing",
+          level: 0.9,
+          details: "Enterprise Sales"
+        },
+        {
+          skill: "Negotiation",
+          level: 0.9,
+          details: "Complex Deals"
+        }
+      ],
+      soft: [
+        {
+          skill: "Communication",
+          level: 0.9,
+          details: "Client Presentations"
+        },
+        {
+          skill: "Leadership",
+          level: 0.8,
+          details: "Team Management"
+        }
+      ]
+    },
+    achievements: [
+      {
+        description: "Exceeded sales quota by 150%",
+        impact: "Generated $2M in new revenue",
+        context: "TechCorp - Senior Sales Representative",
+        skills: ["Sales Closing", "Account Management"]
+      },
+      {
+        description: "Led team of 5 sales representatives",
+        impact: "Team achieved 120% of target",
+        context: "FinancePro - Sales Manager",
+        skills: ["Leadership", "Team Management"]
+      }
     ],
-    timezone: "America/New_York",
-    conversionRate: 0.35,
-    reliability: 9,
-    rating: 4.8,
-    completedGigs: 47,
-    region: "North America"
+    experience: [
+      {
+        title: "Senior Sales Representative",
+        company: "TechCorp",
+        startDate: "01/2020",
+        endDate: "Present",
+        responsibilities: [
+          "Manage enterprise accounts",
+          "Develop sales strategies",
+          "Lead sales team"
+        ],
+        achievements: [
+          "Exceeded sales quota by 150%",
+          "Developed new sales process"
+        ]
+      },
+      {
+        title: "Sales Manager",
+        company: "FinancePro",
+        startDate: "01/2018",
+        endDate: "12/2019",
+        responsibilities: [
+          "Led sales team",
+          "Developed sales training",
+          "Managed key accounts"
+        ],
+        achievements: [
+          "Team achieved 120% of target",
+          "Implemented new CRM system"
+        ]
+      }
+    ],
+    assessments: {
+      contactCenter: [
+        {
+          date: new Date(),
+          score: 95,
+          category: "Communication",
+          feedback: "Excellent communication skills",
+          evaluator: "John Smith"
+        }
+      ]
+    }
   },
   {
+    userId: new mongoose.Types.ObjectId(),
+    status: "completed",
+    completionSteps: {
+      basicInfo: true,
+      experience: true,
+      skills: true,
+      languages: true,
+      assessment: true
+    },
+    personalInfo: {
     name: "Samantha Lee",
-    experience: 5,
-    skills: ["Lead Generation", "Customer Service", "Relationship Building"],
+      location: "San Francisco",
+      email: "samantha.lee@example.com",
+      phone: "+1 234 567 8901",
+      languages: [
+        {
+          language: "English",
+          proficiency: "First Language"
+        },
+        {
+          language: "Mandarin",
+          proficiency: "C1 - Advanced"
+        }
+      ]
+    },
+    professionalSummary: {
+      yearsOfExperience: "5 years",
+      currentRole: "Sales Development Representative",
     industries: ["Healthcare", "Education"],
-    languages: ["English", "Mandarin"],
-    availability: [
-      { day: "Monday", startTime: "10:00", endTime: "18:00" },
-      { day: "Wednesday", startTime: "10:00", endTime: "18:00" },
-      { day: "Friday", startTime: "10:00", endTime: "18:00" },
+      keyExpertise: ["Lead Generation", "Customer Service"],
+      notableCompanies: ["HealthCare Plus", "EduTech Solutions"]
+    },
+    skills: {
+      technical: [
+        {
+          skill: "Sales CRM",
+          level: 0.8,
+          details: "Salesforce, HubSpot"
+        },
+        {
+          skill: "Data Analysis",
+          level: 0.7,
+          details: "Excel, PowerBI"
+        }
+      ],
+      professional: [
+        {
+          skill: "Lead Generation",
+          level: 0.9,
+          details: "B2B Sales"
+        },
+        {
+          skill: "Customer Service",
+          level: 0.9,
+          details: "Client Support"
+        }
+      ],
+      soft: [
+        {
+          skill: "Communication",
+          level: 0.9,
+          details: "Client Presentations"
+        },
+        {
+          skill: "Problem Solving",
+          level: 0.8,
+          details: "Client Issues"
+        }
+      ]
+    },
+    achievements: [
+      {
+        description: "Generated 200+ qualified leads",
+        impact: "Increased sales pipeline by 40%",
+        context: "HealthCare Plus - Sales Development Representative",
+        skills: ["Lead Generation", "Sales CRM"]
+      },
+      {
+        description: "Improved customer satisfaction score",
+        impact: "Achieved 95% satisfaction rate",
+        context: "EduTech Solutions - Customer Service Manager",
+        skills: ["Customer Service", "Problem Solving"]
+      }
     ],
-    timezone: "America/Los_Angeles",
-    conversionRate: 0.28,
-    reliability: 8,
-    rating: 4.5,
-    completedGigs: 23,
-    region: "North America"
-  },
-  {
-    name: "Marcus Williams",
-    experience: 10,
-    skills: ["Sales Closing", "Negotiation", "Product Demonstration"],
-    industries: ["Technology", "Automotive", "Manufacturing"],
-    languages: ["English", "German"],
-    availability: [
-      { day: "Monday", startTime: "08:00", endTime: "16:00" },
-      { day: "Tuesday", startTime: "08:00", endTime: "16:00" },
-      { day: "Wednesday", startTime: "08:00", endTime: "16:00" },
-      { day: "Thursday", startTime: "08:00", endTime: "16:00" },
-      { day: "Friday", startTime: "08:00", endTime: "16:00" },
+    experience: [
+      {
+        title: "Sales Development Representative",
+        company: "HealthCare Plus",
+        startDate: "01/2021",
+        endDate: "Present",
+        responsibilities: [
+          "Generate qualified leads",
+          "Qualify sales opportunities",
+          "Manage sales pipeline"
+        ],
+        achievements: [
+          "Generated 200+ qualified leads",
+          "Increased pipeline by 40%"
+        ]
+      },
+      {
+        title: "Customer Service Manager",
+        company: "EduTech Solutions",
+        startDate: "01/2018",
+        endDate: "12/2020",
+        responsibilities: [
+          "Manage customer support team",
+          "Handle escalated issues",
+          "Develop support processes"
+        ],
+        achievements: [
+          "Achieved 95% satisfaction rate",
+          "Reduced response time by 30%"
+        ]
+      }
     ],
-    timezone: "Europe/Berlin",
-    conversionRate: 0.42,
-    reliability: 10,
-    rating: 4.9,
-    completedGigs: 89,
-    region: "Europe"
+    assessments: {
+      contactCenter: [
+        {
+          date: new Date(),
+          score: 92,
+          category: "Customer Service",
+          feedback: "Excellent customer service skills",
+          evaluator: "Jane Doe"
+        }
+      ]
+    }
   }
 ];
 
@@ -74,9 +274,9 @@ const gigs = [
     companyId: "comp1",
     companyName: "TechNova Solutions",
     title: "Enterprise SaaS Sales Campaign",
-    description: "Looking for experienced reps to promote our new cloud-based project management solution to enterprise clients.",
+    description: "Looking for experienced agents to promote our new cloud-based project management solution to enterprise clients.",
     industry: "Technology",
-    requiredSkills: ["Cold Calling", "Sales Closing", "Product Demonstration"],
+    requiredSkills: ["Sales CRM", "Sales Closing", "Account Management"],
     preferredLanguages: ["English"],
     requiredExperience: 7,
     expectedConversionRate: 0.3,
@@ -95,9 +295,9 @@ const gigs = [
     companyId: "comp2",
     companyName: "MediCare Plus",
     title: "Healthcare Provider Outreach",
-    description: "Seeking reps to connect with healthcare providers about our new patient management platform.",
+    description: "Seeking agents to connect with healthcare providers about our new patient management platform.",
     industry: "Healthcare",
-    requiredSkills: ["Lead Generation", "Relationship Building"],
+    requiredSkills: ["Lead Generation", "Customer Service"],
     preferredLanguages: ["English", "Spanish"],
     requiredExperience: 4,
     expectedConversionRate: 0.25,
@@ -111,27 +311,6 @@ const gigs = [
     },
     timezone: "America/Chicago",
     targetRegion: "North America"
-  },
-  {
-    companyId: "comp3",
-    companyName: "AutoTech Innovations",
-    title: "Automotive Software Demo Campaign",
-    description: "Need technical sales reps to demonstrate our new diagnostic software to auto repair shops and dealerships.",
-    industry: "Automotive",
-    requiredSkills: ["Product Demonstration", "Technical Support", "Sales Closing"],
-    preferredLanguages: ["German", "English"],
-    requiredExperience: 6,
-    expectedConversionRate: 0.35,
-    compensation: {
-      base: 30,
-      commission: 120
-    },
-    duration: {
-      startDate: new Date("2025-06-01"),
-      endDate: new Date("2025-07-31")
-    },
-    timezone: "Europe/Berlin",
-    targetRegion: "Europe"
   }
 ];
 
@@ -142,11 +321,11 @@ mongoose.connect(process.env.MONGODB_URI)
     
     try {
       // Clear existing data
-      await Rep.deleteMany({});
+      await Agent.deleteMany({});
       await Gig.deleteMany({});
       
       // Insert new data
-      await Rep.insertMany(reps);
+      await Agent.insertMany(agents);
       await Gig.insertMany(gigs);
       
       console.log('Data seeded successfully');

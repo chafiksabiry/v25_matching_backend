@@ -1,45 +1,38 @@
 import Gig from '../models/Gig.js';
 import { StatusCodes } from 'http-status-codes';
+import Agent from '../models/Agent.js';
+import { findMatches } from '../utils/matchingUtils.js';
 
-// Get all gigs
-export const getAllGigs = async (req, res) => {
+export const createGig = async (req, res) => {
   try {
-    const cursor = Gig.find().cursor();
-    const gigs = [];
-    for (let gig = await cursor.next(); gig != null; gig = await cursor.next()) {
-      gigs.push(gig);
-    }
-    res.status(StatusCodes.OK).json(gigs);
+    const gig = await Gig.create(req.body);
+    res.status(StatusCodes.CREATED).json(gig);
   } catch (error) {
-    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
+    res.status(StatusCodes.BAD_REQUEST).json({ error: error.message });
   }
 };
 
-// Get a single gig
-export const getGigById = async (req, res) => {
+export const getGigs = async (req, res) => {
+  try {
+    const gigs = await Gig.find();
+    res.status(StatusCodes.OK).json(gigs);
+  } catch (error) {
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: error.message });
+  }
+};
+
+export const getGig = async (req, res) => {
   try {
     const gig = await Gig.findById(req.params.id);
     if (!gig) {
-      return res.status(StatusCodes.NOT_FOUND).json({ message: 'Gig not found' });
+      return res.status(StatusCodes.NOT_FOUND).json({ error: 'Gig not found' });
     }
     res.status(StatusCodes.OK).json(gig);
   } catch (error) {
-    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: error.message });
   }
 };
 
-// Create a new gig
-export const createGig = async (req, res) => {
-  try {
-    const gig = new Gig(req.body);
-    const savedGig = await gig.save();
-    res.status(StatusCodes.CREATED).json(savedGig);
-  } catch (error) {
-    res.status(StatusCodes.BAD_REQUEST).json({ message: error.message });
-  }
-};
-
-// Update a gig
 export const updateGig = async (req, res) => {
   try {
     const gig = await Gig.findByIdAndUpdate(
@@ -48,23 +41,70 @@ export const updateGig = async (req, res) => {
       { new: true, runValidators: true }
     );
     if (!gig) {
-      return res.status(StatusCodes.NOT_FOUND).json({ message: 'Gig not found' });
+      return res.status(StatusCodes.NOT_FOUND).json({ error: 'Gig not found' });
     }
     res.status(StatusCodes.OK).json(gig);
   } catch (error) {
-    res.status(StatusCodes.BAD_REQUEST).json({ message: error.message });
+    res.status(StatusCodes.BAD_REQUEST).json({ error: error.message });
   }
 };
 
-// Delete a gig
 export const deleteGig = async (req, res) => {
   try {
     const gig = await Gig.findByIdAndDelete(req.params.id);
     if (!gig) {
-      return res.status(StatusCodes.NOT_FOUND).json({ message: 'Gig not found' });
+      return res.status(StatusCodes.NOT_FOUND).json({ error: 'Gig not found' });
     }
     res.status(StatusCodes.OK).json({ message: 'Gig deleted successfully' });
   } catch (error) {
-    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: error.message });
   }
 };
+
+// Trouver des gigs correspondants pour un agent
+export const findGigsForAgent = async (req, res) => {
+  try {
+    const { agentId, weights } = req.body;
+    
+    // Récupérer l'agent
+    const agent = await Agent.findById(agentId);
+    if (!agent) {
+      return res.status(404).json({ message: 'Agent not found' });
+    }
+    
+    // Récupérer tous les gigs actifs
+    const gigs = await Gig.find({ status: 'active' });
+    
+    // Trouver les gigs correspondants
+    const result = await findMatches(agent, gigs, weights);
+    
+    res.json(result);
+  } catch (error) {
+    console.error('Error finding gigs for agent:', error);
+    res.status(500).json({ message: 'Error finding matching gigs', error: error.message });
+  }
+};
+
+// Trouver des agents correspondants pour un gig
+export const findAgentsForGig = async (req, res) => {
+  try {
+    const { gigId, weights } = req.body;
+    
+    // Récupérer le gig
+    const gig = await Gig.findById(gigId);
+    if (!gig) {
+      return res.status(404).json({ message: 'Gig not found' });
+    }
+    
+    // Récupérer tous les agents actifs
+    const agents = await Agent.find({ status: 'active' });
+    
+    // Trouver les agents correspondants
+    const result = await findMatches(gig, agents, weights);
+    
+    res.json(result);
+  } catch (error) {
+    console.error('Error finding agents for gig:', error);
+    res.status(500).json({ message: 'Error finding matching agents', error: error.message });
+  }
+}; 
