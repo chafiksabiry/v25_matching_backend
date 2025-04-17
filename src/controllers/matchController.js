@@ -131,10 +131,11 @@ export const findMatchesForGigById = async (req, res) => {
 
     // Poids par défaut pour le matching
     const defaultWeights = {
-      skills: 0.4,
-      languages: 0.3,
-      experience: 0.2,
-      industries: 0.1
+      industry: 0.9,
+      skills: 0.7,
+      language: 0.6,
+      experience: 0.5,
+      availability: 0.4
     };
 
     const weights = req.body.weights || defaultWeights;
@@ -198,10 +199,11 @@ export const findMatchesForAgentById = async (req, res) => {
 
     // Poids par défaut pour le matching
     const defaultWeights = {
-      skills: 0.4,
-      languages: 0.3,
-      experience: 0.2,
-      industries: 0.1
+      industry: 0.9,
+      skills: 0.7,
+      language: 0.6,
+      experience: 0.5,
+      availability: 0.4
     };
 
     const weights = req.body.weights || defaultWeights;
