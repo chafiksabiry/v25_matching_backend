@@ -11,8 +11,21 @@ dotenv.config();
 
 const app = express();
 
+// Set up trust proxy for secure handling of headers
+app.set('trust proxy', true);
+
+const corsOptions = {
+  origin: [
+    'https://v25.harx.ai'
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  optionsSuccessStatus: 200
+};
+app.use(cors(corsOptions));
+
 // Middleware
-app.use(cors());
 app.use(express.json());
 
 // Routes
