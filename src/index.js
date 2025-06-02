@@ -11,7 +11,10 @@ dotenv.config();
 const app = express();
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: [process.env.QIANKUN_FRONT_URL],
+  credentials: true
+}));
 app.use(express.json());
 
 // Routes
