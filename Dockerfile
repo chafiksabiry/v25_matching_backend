@@ -8,7 +8,7 @@ RUN npm install
 
 COPY . .
 
-ENV MONGODB_URI=mongodb://harx:gcZ62rl8hoME@185.137.122.3:27017/V25_CompanySearchWizard
+ENV MONGODB_URI=mongodb://harx:gcZ62rl8hoME@38.242.208.242:27018/V25_CompanySearchWizard
 ENV PORT=5011
 
 
