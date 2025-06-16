@@ -105,6 +105,31 @@ const contactCenterAssessmentSchema = new mongoose.Schema({
   evaluator: String
 });
 
+// Schema for schedule hours
+const scheduleHoursSchema = new mongoose.Schema({
+  start: {
+    type: String,
+    required: true
+  },
+  end: {
+    type: String,
+    required: true
+  }
+});
+
+// Schema for schedule
+const scheduleSchema = new mongoose.Schema({
+  day: {
+    type: String,
+    required: true,
+    enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+  },
+  hours: {
+    type: scheduleHoursSchema,
+    required: true
+  }
+});
+
 // Main Agent schema
 const agentSchema = new mongoose.Schema({
   firstName: {
@@ -153,11 +178,17 @@ const agentSchema = new mongoose.Schema({
       iso639_1: String,
     }]
   },
-  availability: [{
-    day: String,
-    startTime: String,
-    endTime: String
-  }],
+  availability: {
+    schedule: [scheduleSchema],
+    timeZone: {
+      type: String,
+      required: true
+    },
+    flexibility: [{
+      type: String,
+      enum: ['Remote Work Available', 'Part-Time Options', 'Flexible Hours', 'Weekend Work']
+    }]
+  },
   status: {
     type: String,
     enum: ['active', 'inactive'],

@@ -49,17 +49,21 @@ const gigSchema = new mongoose.Schema({
       iso639_1: { type: String, required: true }
     }]
   },
-  schedule: {
-    days: [{ type: String }],
-    timeZones: [{ type: String }],
+  availability: {
+    schedule: [{
+      day: { type: String, required: true },
+      hours: {
+        start: { type: String, required: true },
+        end: { type: String, required: true }
+      }
+    }],
+    timeZone: { type: String, required: true },
     flexibility: [{ type: String }],
     minimumHours: {
-      daily: Number,
-      weekly: Number,
-      monthly: Number,
-    },
-    starttime: { type: String, required: false },
-    endtime: { type: String, required: false },
+      daily: { type: Number },
+      weekly: { type: Number },
+      monthly: { type: Number }
+    }
   },
   commission: {
     base: { type: String, required: false },

@@ -5,6 +5,31 @@ import { StatusCodes } from 'http-status-codes';
 import { findMatches } from '../utils/matchingUtils.js';
 import { findLanguageMatches, getLanguageLevelScore } from '../utils/matchingAlgorithm.js';
 
+// Language normalization function
+const normalizeLanguage = (language) => {
+  if (!language) return '';
+  const languageMap = {
+    'french': 'french',
+    'français': 'french',
+    'english': 'english',
+    'anglais': 'english',
+    'spanish': 'spanish',
+    'espagnol': 'spanish',
+    'arabic': 'arabic',
+    'arabe': 'arabic',
+    'natif': 'native',
+    'native': 'native',
+    'fluent': 'fluent',
+    'avancé': 'advanced',
+    'advanced': 'advanced',
+    'intermediate': 'intermediate',
+    'intermédiaire': 'intermediate',
+    'beginner': 'beginner',
+    'débutant': 'beginner'
+  };
+  return languageMap[language.toLowerCase()] || language.toLowerCase();
+};
+
 // Get all matches
 export const getAllMatches = async (req, res) => {
   try {
@@ -118,6 +143,134 @@ export const deleteMatch = async (req, res) => {
   }
 };
 
+// Add schedule comparison function
+const compareSchedules = (gigSchedule, agentAvailability) => {
+  // Si l'agent n'a pas de disponibilité, on considère qu'il n'est pas disponible
+  if (!agentAvailability) {
+    return {
+      score: 0,
+      status: "no_match",
+      details: {
+        matchingDays: [],
+        missingDays: gigSchedule.map(day => day.day),
+        insufficientHours: []
+      }
+    };
+  }
+
+  // Normaliser la structure de disponibilité de l'agent
+  let normalizedAgentSchedule = [];
+  
+  if (agentAvailability.schedule && Array.isArray(agentAvailability.schedule)) {
+    // Utiliser la structure détaillée si elle existe
+    normalizedAgentSchedule = agentAvailability.schedule;
+  } else if (agentAvailability.days && Array.isArray(agentAvailability.days) && agentAvailability.hours) {
+    // Convertir la structure simple en structure détaillée
+    normalizedAgentSchedule = agentAvailability.days.map(day => ({
+      day: day,
+      hours: {
+        start: agentAvailability.hours.start,
+        end: agentAvailability.hours.end
+      }
+    }));
+  } else {
+    // Aucune disponibilité valide
+    return {
+      score: 0,
+      status: "no_match",
+      details: {
+        matchingDays: [],
+        missingDays: gigSchedule.map(day => day.day),
+        insufficientHours: []
+      }
+    };
+  }
+
+  let matchingDays = 0;
+  let totalDays = gigSchedule.length;
+  let scheduleDetails = {
+    matchingDays: [],
+    missingDays: [],
+    insufficientHours: []
+  };
+
+  // Vérifier si l'agent a des flexibilités
+  const hasFlexibility = agentAvailability.flexibility && agentAvailability.flexibility.length > 0;
+  const isFlexible = hasFlexibility && (
+    agentAvailability.flexibility.includes('Flexible Hours') ||
+    agentAvailability.flexibility.includes('Split Shifts')
+  );
+
+  // Vérifier si tous les jours du gig sont couverts par l'agent
+  const agentDays = normalizedAgentSchedule.map(day => day.day);
+  const missingDays = gigSchedule
+    .filter(gigDay => !agentDays.includes(gigDay.day))
+    .map(gigDay => gigDay.day);
+
+  if (missingDays.length > 0) {
+    return {
+      score: 0,
+      status: "no_match",
+      details: {
+        matchingDays: [],
+        missingDays: missingDays,
+        insufficientHours: []
+      }
+    };
+  }
+
+  gigSchedule.forEach(gigDay => {
+    if (!gigDay || !gigDay.day || !gigDay.hours) {
+      console.log('Invalid gig day data:', gigDay);
+      return;
+    }
+
+    const agentDay = normalizedAgentSchedule.find(day => day && day.day === gigDay.day);
+    
+    if (!agentDay || !agentDay.hours) {
+      scheduleDetails.missingDays.push(gigDay.day);
+      return;
+    }
+
+    const convertToMinutes = (timeStr) => {
+      if (!timeStr) return 0;
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      return hours * 60 + minutes;
+    };
+
+    const gigStart = convertToMinutes(gigDay.hours.start);
+    const gigEnd = convertToMinutes(gigDay.hours.end);
+    const agentStart = convertToMinutes(agentDay.hours.start);
+    const agentEnd = convertToMinutes(agentDay.hours.end);
+
+    // Vérifier si l'agent couvre complètement les heures du gig
+    if (agentStart <= gigStart && agentEnd >= gigEnd) {
+      matchingDays++;
+      scheduleDetails.matchingDays.push({
+        day: gigDay.day,
+        gigHours: gigDay.hours,
+        agentHours: agentDay.hours
+      });
+    } else {
+      scheduleDetails.insufficientHours.push({
+        day: gigDay.day,
+        gigHours: gigDay.hours,
+        agentHours: agentDay.hours
+      });
+    }
+  });
+
+  const scheduleScore = matchingDays / totalDays;
+  const scheduleStatus = scheduleScore === 1 ? "perfect_match" :
+                       scheduleScore > 0 ? "partial_match" : "no_match";
+
+  return {
+    score: scheduleScore,
+    status: scheduleStatus,
+    details: scheduleDetails
+  };
+};
+
 /**
  * Trouve les correspondances linguistiques pour un gig spécifique
  * Cette fonction recherche les agents dont les compétences linguistiques correspondent aux exigences du gig
@@ -132,92 +285,69 @@ export const findMatchesForGigById = async (req, res) => {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Gig not found' });
     }
 
-    // Get weights from request body or use defaults
-    const weights = req.body.weights || { skills: 0.5, languages: 0.5 };
-    console.log('Using weights:', weights);
-
-    const agents = await Agent.find({
-      $or: [
-        { 'personalInfo.languages': { $exists: true, $ne: [] } },
-        { 'skills.technical': { $exists: true, $ne: [] } },
-        { 'skills.professional': { $exists: true, $ne: [] } },
-        { 'skills.soft': { $exists: true, $ne: [] } }
-      ]
-    }).select('personalInfo skills');
-
-    console.log('Found agents:', agents.length);
-    agents.forEach(agent => {
-      console.log('Agent:', {
-        id: agent._id,
-        name: agent.personalInfo?.name,
-        skills: {
-          technical: agent.skills?.technical,
-          professional: agent.skills?.professional,
-          soft: agent.skills?.soft
-        }
-      });
+    console.log('Gig data:', {
+      id: gig._id,
+      title: gig.title,
+      skills: gig.skills,
+      languages: gig.skills?.languages,
+      schedule: gig.availability?.schedule
     });
 
-    if (!agents || agents.length === 0) {
-      return res.status(StatusCodes.OK).json([]);
-    }
+    // Get weights from request body or use defaults
+    const weights = req.body.weights || { skills: 0.4, languages: 0.3, schedule: 0.3 };
+    console.log('Using weights:', weights);
 
-    const normalizeLanguage = (language) => {
-      if (!language) return '';
-      const languageMap = {
-        'french': 'french',
-        'français': 'french',
-        'english': 'english',
-        'anglais': 'english',
-        'spanish': 'spanish',
-        'espagnol': 'spanish',
-        'arabic': 'arabic',
-        'arabe': 'arabic'
-      };
-      return languageMap[language.toLowerCase()] || language.toLowerCase();
-    };
+    console.log('Recherche des agents avec les critères suivants:', {
+      'personalInfo.languages': { $exists: true, $ne: [] }
+    });
 
-    const normalizeSkill = (skill) => {
-      if (!skill) return '';
-      return skill.toLowerCase().trim();
-    };
+    const agents = await Agent.find({})
+      .select('personalInfo skills availability');
 
-    const getLanguageLevelScore = (proficiency) => {
-      if (!proficiency) return 0;
-      const levels = {
-        'a1': 0.2,
-        'a2': 0.3,
-        'b1': 0.5,
-        'b2': 0.6,
-        'c1': 0.8,
-        'c2': 1.0,
-        'native': 1.0,
-        'native or bilingual': 1.0,
-        'fluent': 0.9,
-        'advanced': 0.8,
-        'intermediate': 0.6,
-        'beginner': 0.4,
-        'professional working': 0.7,
-        'bonne maîtrise': 0.7,
-        'langue maternelle': 1.0
-      };
-      return levels[proficiency.toLowerCase()] || 0;
-    };
+    console.log('Nombre total d\'agents trouvés:', agents.length);
+    console.log('Liste complète des agents:', agents.map(agent => ({
+      id: agent._id,
+      name: agent.personalInfo?.name,
+      languages: agent.personalInfo?.languages?.map(lang => ({
+        language: lang.language,
+        proficiency: lang.proficiency
+      })),
+      schedule: agent.availability?.schedule
+    })));
 
-    const matches = agents.map(agent => {
-      console.log('Processing agent:', {
+    // Filtrer les agents qui ont des langues
+    const agentsWithLanguages = agents.filter(agent => 
+      agent.personalInfo?.languages && 
+      agent.personalInfo.languages.length > 0
+    );
+
+    console.log('Nombre d\'agents avec des langues:', agentsWithLanguages.length);
+    console.log('Agents avec des langues:', agentsWithLanguages.map(agent => ({
+      id: agent._id,
+      name: agent.personalInfo?.name,
+      languages: agent.personalInfo?.languages?.map(lang => ({
+        language: lang.language,
+        proficiency: lang.proficiency
+      }))
+    })));
+
+    const matches = agentsWithLanguages.map(agent => {
+      console.log('Traitement de l\'agent:', {
         id: agent._id,
         name: agent.personalInfo?.name,
-        skills: {
-          technical: agent.skills?.technical,
-          professional: agent.skills?.professional,
-          soft: agent.skills?.soft
-        }
+        languages: agent.personalInfo?.languages,
+        schedule: agent.availability?.schedule
       });
 
       // Language matching
       const requiredLanguages = gig.skills?.languages || [];
       const agentLanguages = agent.personalInfo?.languages || [];
+      
+      console.log('Correspondance des langues pour', agent.personalInfo?.name, ':', {
+        required: requiredLanguages,
+        agent: agentLanguages
+      });
+
       let matchingLanguages = [];
       let missingLanguages = [];
       let insufficientLanguages = [];
@@ -226,14 +356,31 @@ export const findMatchesForGigById = async (req, res) => {
         if (!reqLang?.language) return;
         
         const normalizedReqLang = normalizeLanguage(reqLang.language);
+        console.log('Recherche de correspondance pour la langue:', {
+          required: reqLang.language,
+          normalized: normalizedReqLang
+        });
+
         const agentLang = agentLanguages.find(
           lang => lang?.language && normalizeLanguage(lang.language) === normalizedReqLang
         );
 
         if (agentLang) {
+          console.log('Langue trouvée pour', agent.personalInfo?.name, ':', {
+            language: agentLang.language,
+            proficiency: agentLang.proficiency
+          });
           const langScore = getLanguageLevelScore(agentLang.proficiency);
           const requiredScore = getLanguageLevelScore(reqLang.proficiency);
           
+          console.log('Language score comparison:', {
+            language: reqLang.language,
+            agentProficiency: agentLang.proficiency,
+            requiredProficiency: reqLang.proficiency,
+            agentScore: langScore,
+            requiredScore: requiredScore
+          });
+
           if (langScore >= requiredScore) {
             matchingLanguages.push({
               language: reqLang.language,
@@ -265,6 +412,11 @@ export const findMatchesForGigById = async (req, res) => {
         ...(agent.skills?.soft || []).map(s => ({ skill: s.skill, level: s.level, type: 'soft' }))
       ];
 
+      console.log('Skills matching:', {
+        required: requiredSkills,
+        agent: agentSkills
+      });
+
       let matchingSkills = [];
       let missingSkills = [];
       let insufficientSkills = [];
@@ -279,6 +431,12 @@ export const findMatchesForGigById = async (req, res) => {
         );
 
         if (agentSkill) {
+          console.log('Skill level comparison:', {
+            skill: reqSkill.skill,
+            agentLevel: agentSkill.level,
+            requiredLevel: reqSkill.level
+          });
+
           if (agentSkill.level >= reqSkill.level) {
             matchingSkills.push({
               skill: reqSkill.skill,
@@ -305,6 +463,10 @@ export const findMatchesForGigById = async (req, res) => {
         }
       });
 
+      // Schedule matching
+      const scheduleMatch = compareSchedules(gig.availability?.schedule, agent.availability);
+      console.log('Schedule match result:', scheduleMatch);
+
       // Determine match status based on direct matches
       const languageMatchStatus = matchingLanguages.length === requiredLanguages.length ? "perfect_match" : 
                                  matchingLanguages.length > 0 ? "partial_match" : "no_match";
@@ -312,9 +474,19 @@ export const findMatchesForGigById = async (req, res) => {
       // Skills match status is now based on having ALL required skills
       const skillsMatchStatus = hasAllRequiredSkills ? "perfect_match" : "no_match";
 
-      // Overall match status is perfect only if both language and skills are perfect
-      const overallMatchStatus = (languageMatchStatus === "perfect_match" && skillsMatchStatus === "perfect_match") ? "perfect_match" :
-                                (languageMatchStatus === "no_match" && skillsMatchStatus === "no_match") ? "no_match" :
+      console.log('Match statuses:', {
+        language: languageMatchStatus,
+        skills: skillsMatchStatus,
+        schedule: scheduleMatch.status
+      });
+
+      // Overall match status is perfect only if all criteria are perfect
+      const overallMatchStatus = (languageMatchStatus === "perfect_match" && 
+                                skillsMatchStatus === "perfect_match" && 
+                                scheduleMatch.status === "perfect_match") ? "perfect_match" :
+                                (languageMatchStatus === "no_match" && 
+                                 skillsMatchStatus === "no_match" && 
+                                 scheduleMatch.status === "no_match") ? "no_match" :
                                 "partial_match";
 
       return {
@@ -346,89 +518,92 @@ export const findMatchesForGigById = async (req, res) => {
             matchStatus: skillsMatchStatus
           }
         },
+        scheduleMatch: {
+          score: scheduleMatch.score,
+          details: scheduleMatch.details,
+          matchStatus: scheduleMatch.status
+        },
         matchStatus: overallMatchStatus
       };
     });
 
-    // Sort matches by overall score
-    matches.sort((a, b) => b.overallScore - a.overallScore);
+    // Trouver le critère avec le poids le plus élevé
+    const sortedWeights = Object.entries(weights)
+      .filter(([, weight]) => weight > 0) // Ignorer les critères avec poids 0
+      .sort(([, a], [, b]) => b - a);
+    console.log('Sorted weights for sequential filtering:', sortedWeights);
 
-    // Filter matches based on weights
     let filteredMatches = matches;
-    if (weights.skills > 0.5 && weights.languages < 0.5) {
-      // Priorité aux skills
-      filteredMatches = matches
-        .filter(match => match.skillsMatch.details.matchStatus === "perfect_match" && match.languageMatch.details.matchStatus === "perfect_match")
-        .sort((a, b) => {
-          const aCount = a.skillsMatch.details.matchingSkills.length;
-          const bCount = b.skillsMatch.details.matchingSkills.length;
-          if (bCount !== aCount) return bCount - aCount;
-          return 0;
-        });
-    } else if (weights.skills < 0.5 && weights.languages > 0.5) {
-      // Priorité aux langues
-      filteredMatches = matches.filter(match => 
-        match.languageMatch.details.matchStatus === "perfect_match"
-      );
-    } else if (weights.skills < 0.5 && weights.languages < 0.5) {
-      // Si les deux critères sont < 0.5, on prend le critère avec le poids le plus élevé
-      if (weights.skills > weights.languages) {
-        filteredMatches = matches.filter(match => 
-          match.skillsMatch.details.matchStatus === "perfect_match"
+
+    // Appliquer le filtrage séquentiel basé sur les poids
+    for (const [criterion, weight] of sortedWeights) {
+      console.log(`Filtering by ${criterion} with weight ${weight}`);
+      
+      if (criterion === 'languages') {
+        filteredMatches = filteredMatches.filter(
+          match => match.languageMatch.details.matchStatus === "perfect_match"
         );
-      } else {
-        filteredMatches = matches.filter(match => 
-          match.languageMatch.details.matchStatus === "perfect_match"
+      } else if (criterion === 'skills') {
+        filteredMatches = filteredMatches.filter(
+          match => match.skillsMatch.details.matchStatus === "perfect_match"
+        );
+      } else if (criterion === 'schedule' || criterion === 'availability') {
+        filteredMatches = filteredMatches.filter(
+          match => match.scheduleMatch.matchStatus === "perfect_match"
         );
       }
-    } else {
-      // Les deux faibles ou égaux
-      filteredMatches = matches.filter(match => 
-        match.matchStatus === "perfect_match"
-      );
+
+      console.log(`After ${criterion} filtering: ${filteredMatches.length} matches remaining`);
     }
 
-    // Calculate language match statistics
-    const languageStats = {
-      perfectMatches: filteredMatches.filter(m => m.languageMatch.details.matchStatus === "perfect_match").length,
-      partialMatches: filteredMatches.filter(m => m.languageMatch.details.matchStatus === "partial_match").length,
-      noMatches: filteredMatches.filter(m => m.languageMatch.details.matchStatus === "no_match").length,
-      totalMatches: filteredMatches.length
-    };
-
-    // Calculate skills match statistics
-    const skillsStats = {
-      perfectMatches: filteredMatches.filter(m => m.skillsMatch.details.matchStatus === "perfect_match").length,
-      partialMatches: filteredMatches.filter(m => m.skillsMatch.details.matchStatus === "partial_match").length,
-      noMatches: filteredMatches.filter(m => m.skillsMatch.details.matchStatus === "no_match").length,
-      totalMatches: filteredMatches.length,
-      byType: {
-        technical: {
-          perfectMatches: filteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'technical')).length,
-          partialMatches: filteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'technical')).length,
-          noMatches: filteredMatches.length - filteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'technical')).length
-        },
-        professional: {
-          perfectMatches: filteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'professional')).length,
-          partialMatches: filteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'professional')).length,
-          noMatches: filteredMatches.length - filteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'professional')).length
-        },
-        soft: {
-          perfectMatches: filteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'soft')).length,
-          partialMatches: filteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'soft')).length,
-          noMatches: filteredMatches.length - filteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'soft')).length
-        }
-      }
-    };
-
-    res.json({
-      preferedmatches: filteredMatches,
+    // Calculer les statistiques après le filtrage séquentiel
+    const stats = {
       totalMatches: filteredMatches.length,
       perfectMatches: filteredMatches.filter(m => m.matchStatus === "perfect_match").length,
       partialMatches: filteredMatches.filter(m => m.matchStatus === "partial_match").length,
       noMatches: filteredMatches.filter(m => m.matchStatus === "no_match").length,
-      languageStats,
-      skillsStats
+      languageStats: {
+        perfectMatches: filteredMatches.filter(m => m.languageMatch.details.matchStatus === "perfect_match").length,
+        partialMatches: filteredMatches.filter(m => m.languageMatch.details.matchStatus === "partial_match").length,
+        noMatches: filteredMatches.filter(m => m.languageMatch.details.matchStatus === "no_match").length,
+        totalMatches: filteredMatches.length
+      },
+      skillsStats: {
+        perfectMatches: filteredMatches.filter(m => m.skillsMatch.details.matchStatus === "perfect_match").length,
+        partialMatches: filteredMatches.filter(m => m.skillsMatch.details.matchStatus === "partial_match").length,
+        noMatches: filteredMatches.filter(m => m.skillsMatch.details.matchStatus === "no_match").length,
+        totalMatches: filteredMatches.length,
+        byType: {
+          technical: {
+            perfectMatches: filteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'technical')).length,
+            partialMatches: filteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'technical')).length,
+            noMatches: filteredMatches.length - filteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'technical')).length
+          },
+          professional: {
+            perfectMatches: filteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'professional')).length,
+            partialMatches: filteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'professional')).length,
+            noMatches: filteredMatches.length - filteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'professional')).length
+          },
+          soft: {
+            perfectMatches: filteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'soft')).length,
+            partialMatches: filteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'soft')).length,
+            noMatches: filteredMatches.length - filteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'soft')).length
+          }
+        }
+      },
+      scheduleStats: {
+        perfectMatches: filteredMatches.filter(m => m.scheduleMatch.matchStatus === "perfect_match").length,
+        partialMatches: filteredMatches.filter(m => m.scheduleMatch.matchStatus === "partial_match").length,
+        noMatches: filteredMatches.filter(m => m.scheduleMatch.matchStatus === "no_match").length,
+        totalMatches: filteredMatches.length
+      }
+    };
+
+    console.log('Statistiques après filtrage:', stats);
+    
+    res.json({
+      preferedmatches: filteredMatches,
+      ...stats
     });
   } catch (error) {
     console.error("Error in findMatchesForGigById:", error);
@@ -631,14 +806,19 @@ export const findSkillsMatchesForGig = async (req, res) => {
      */
     const getSkillLevelScore = (level) => {
       const levels = {
-        'expert': 1.0,
-        'advanced': 0.8,
-        'intermediate': 0.6,
-        'beginner': 0.4,
-        'novice': 0.2,
-        'master': 1.0,
-        'senior': 0.9,
-        'junior': 0.5
+        'native or bilingual': 1.0,
+        'native': 1.0,
+        'c2': 1.0,
+        'c1': 0.8,
+        'b2': 0.6,
+        'b1': 0.4,
+        'a2': 0.2,
+        'a1': 0.1,
+        'langue maternelle': 1.0,
+        'bonne maîtrise': 0.8,
+        'maîtrise professionnelle': 0.6,
+        'maîtrise limitée': 0.4,
+        'maîtrise élémentaire': 0.2
       };
       return levels[level.toLowerCase()] || 0;
     };
