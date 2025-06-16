@@ -370,18 +370,20 @@ export const findMatchesForGigById = async (req, res) => {
             language: agentLang.language,
             proficiency: agentLang.proficiency
           });
-          const langScore = getLanguageLevelScore(agentLang.proficiency);
-          const requiredScore = getLanguageLevelScore(reqLang.proficiency);
           
-          console.log('Language score comparison:', {
-            language: reqLang.language,
-            agentProficiency: agentLang.proficiency,
-            requiredProficiency: reqLang.proficiency,
-            agentScore: langScore,
-            requiredScore: requiredScore
-          });
+          // Normalize proficiency levels for comparison
+          const normalizedReqLevel = normalizeLanguage(reqLang.proficiency);
+          const normalizedAgentLevel = normalizeLanguage(agentLang.proficiency);
+          
+          // Check if the required level is native
+          const isNativeRequired = ['native', 'natif'].includes(normalizedReqLevel);
+          
+          // For native level, only accept native or C2 proficiency
+          const isLevelMatch = isNativeRequired 
+            ? ['native', 'natif', 'c2'].includes(normalizedAgentLevel)
+            : getLanguageLevelScore(normalizedAgentLevel) >= getLanguageLevelScore(normalizedReqLevel);
 
-          if (langScore >= requiredScore) {
+          if (isLevelMatch) {
             matchingLanguages.push({
               language: reqLang.language,
               requiredLevel: reqLang.proficiency,
@@ -806,8 +808,9 @@ export const findSkillsMatchesForGig = async (req, res) => {
      */
     const getSkillLevelScore = (level) => {
       const levels = {
-        'native or bilingual': 1.0,
         'native': 1.0,
+        'natif': 1.0,
+        'native or bilingual': 1.0,
         'c2': 1.0,
         'c1': 0.8,
         'b2': 0.6,
@@ -818,9 +821,14 @@ export const findSkillsMatchesForGig = async (req, res) => {
         'bonne maîtrise': 0.8,
         'maîtrise professionnelle': 0.6,
         'maîtrise limitée': 0.4,
-        'maîtrise élémentaire': 0.2
+        'maîtrise élémentaire': 0.2,
+        'conversational': 0.5,
+        'professional': 0.8
       };
-      return levels[level.toLowerCase()] || 0;
+      const normalized = (level || '').toLowerCase().trim();
+      const score = levels[normalized] || 0;
+      console.log('getLanguageLevelScore:', { level, normalized, score });
+      return score;
     };
 
     /**
