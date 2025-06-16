@@ -21,10 +21,40 @@ const skillSchema = new mongoose.Schema({
   level: {
     type: Number,
     required: true,
-    min: 0,
-    max: 1
+    min: 1,
+    max: 5
+  }
+});
+
+// Schema for contact center skills
+const contactCenterSkillSchema = new mongoose.Schema({
+  skill: {
+    type: String,
+    required: true
   },
-  details: String
+  category: {
+    type: String,
+    required: true,
+    enum: ['Problem Solving', 'Communication', 'Customer Service', 'Technical Knowledge']
+  },
+  proficiency: {
+    type: String,
+    required: true,
+    enum: ['Novice', 'Intermediate', 'Advanced', 'Expert']
+  },
+  assessmentResults: {
+    score: Number,
+    strengths: [String],
+    improvements: [String],
+    feedback: String,
+    tips: [String],
+    keyMetrics: {
+      professionalism: Number,
+      effectiveness: Number,
+      customerFocus: Number
+    },
+    completedAt: Date
+  }
 });
 
 // Schema for achievements
@@ -95,13 +125,32 @@ const agentSchema = new mongoose.Schema({
     required: true
   },
   skills: {
-    type: [String],
-    required: true
+    technical: [skillSchema],
+    professional: [skillSchema],
+    soft: [skillSchema],
+    contactCenter: [contactCenterSkillSchema]
   },
   personalInfo: {
+    name: {
+      type: String,
+      required: true
+    },
+    location: {
+      type: String,
+      required: true
+    },
+    email: {
+      type: String,
+      required: true
+    },
+    photo: {
+      type: String,
+      required: true
+    },
     languages: [{
-      name: String,
-      level: String
+      language: String,
+      proficiency: String,
+      iso639_1: String,
     }]
   },
   availability: [{

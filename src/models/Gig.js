@@ -1,25 +1,56 @@
 import mongoose from 'mongoose';
+import countries from 'i18n-iso-countries';
+import fr from 'i18n-iso-countries/langs/fr.json' assert { type: "json" };
+
+// Initialiser les pays en français
+countries.registerLocale(fr);
+
+// Fonction de validation pour les codes pays alpha-2
+const validateCountryCode = (value) => {
+  return countries.isValid(value) && value.length === 2;
+};
 
 const gigSchema = new mongoose.Schema({
   title: { type: String, required: false },
   description: { type: String, required: false },
   category: { type: String, required: false },
+  userId: { type: mongoose.Schema.Types.ObjectId, default: null },
+  companyId: { type: mongoose.Schema.Types.ObjectId, default: null },
+  destination_zone: { 
+    type: String,
+    validate: {
+      validator: validateCountryCode,
+      message: 'Le code pays doit être un code alpha-2 valide (ex: FR, US, DE)'
+    }
+  },
   seniority: {
     level: { type: String, required: false },
     yearsExperience: { type: String, required: false },
   },
   skills: {
-    professional: [{ type: String }],
-    technical: [{ type: String }],
-    soft: [{ type: String }],
+    professional: [{
+      skill: { type: String, required: true },
+      level: { type: Number, required: true },
+      details: { type: String, required: false }
+    }],
+    technical: [{
+      skill: { type: String, required: true },
+      level: { type: Number, required: true },
+      details: { type: String, required: false }
+    }],
+    soft: [{
+      skill: { type: String, required: true },
+      level: { type: Number, required: true },
+      details: { type: String, required: false }
+    }],
     languages: [{
-      name: { type: String, required: true },
-      level: { type: String, required: true }
+      language: { type: String, required: true },
+      proficiency: { type: String, required: true },
+      iso639_1: { type: String, required: true }
     }]
   },
   schedule: {
     days: [{ type: String }],
-    hours: { type: String, required: false },
     timeZones: [{ type: String }],
     flexibility: [{ type: String }],
     minimumHours: {
@@ -27,6 +58,8 @@ const gigSchema = new mongoose.Schema({
       weekly: Number,
       monthly: Number,
     },
+    starttime: { type: String, required: false },
+    endtime: { type: String, required: false },
   },
   commission: {
     base: { type: String, required: false },
