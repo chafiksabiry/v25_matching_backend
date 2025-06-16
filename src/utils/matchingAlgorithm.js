@@ -1084,7 +1084,8 @@ export const getLanguageLevelScore = (level) => {
     'B2': 0.6,  // Intermédiaire avancé
     'C1': 0.8,  // Avancé
     'C2': 1.0,  // Maîtrise
-    'Native': 1.0  // Langue maternelle
+    'Native': 1.0,  // Langue maternelle
+    
   };
   return levelMap[level] || 0;
 };
