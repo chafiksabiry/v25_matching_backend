@@ -1070,3 +1070,135 @@ export const findMatches = async (
     throw error;
   }
 };
+
+/**
+ * Convertit les niveaux de langue en scores numériques
+ * @param {string} level - Niveau de langue (A1, A2, B1, B2, C1, C2, Native)
+ * @returns {number} Score entre 0 et 1
+ */
+export const getLanguageLevelScore = (level) => {
+  const levelMap = {
+    'A1': 0.1,  // Débutant
+    'A2': 0.2,  // Élémentaire
+    'B1': 0.4,  // Intermédiaire
+    'B2': 0.6,  // Intermédiaire avancé
+    'C1': 0.8,  // Avancé
+    'C2': 1.0,  // Maîtrise
+    'Native': 1.0,  // Langue maternelle
+    
+  };
+  return levelMap[level] || 0;
+};
+
+/**
+ * Trouve les agents qui matchent les langues requises pour un gig
+ * Cette fonction compare les langues requises par le gig avec les langues maîtrisées par chaque agent
+ * et retourne uniquement les agents qui satisfont tous les critères linguistiques.
+ * 
+ * @param {Object} gig - Le gig avec ses langues requises dans gig.skills.languages
+ * @param {Array} agents - Liste des agents à évaluer, chacun avec ses langues dans personalInfo.languages
+ * @returns {Array} Liste des agents qui matchent avec leurs scores et détails de matching
+ */
+export const findLanguageMatches = (gig, agents) => {
+  // Vérification des paramètres d'entrée
+  if (!gig?.skills?.languages || !Array.isArray(agents)) return [];
+
+  /**
+   * Normalise une chaîne de caractères pour la comparaison
+   * - Convertit en minuscules
+   * - Supprime les espaces
+   * - Supprime les caractères spéciaux
+   * @param {string} str - La chaîne à normaliser
+   * @returns {string} La chaîne normalisée
+   */
+  const normalizeString = (str) => {
+    if (!str) return "";
+    return str.toLowerCase().trim().replace(/[^a-z0-9]/g, "").replace(/\s+/g, "");
+  };
+
+  // Évaluation de chaque agent
+  return agents.map(agent => {
+    // Cas où l'agent n'a pas de langues définies
+    if (!agent?.personalInfo?.languages) {
+      return {
+        agent,
+        score: 0,
+        details: {
+          matchingLanguages: [],
+          missingLanguages: gig.skills.languages,
+          insufficientLanguages: [],
+          matchStatus: "missing_data"
+        }
+      };
+    }
+
+    // Initialisation des tableaux pour stocker les résultats du matching
+    const matchingLanguages = [];    // Langues qui correspondent parfaitement
+    const missingLanguages = [];     // Langues manquantes chez l'agent
+    const insufficientLanguages = []; // Langues présentes mais niveau insuffisant
+
+    // Vérification de chaque langue requise par le gig
+    const allLanguagesMatch = gig.skills.languages.every(gigLang => {
+      const normalizedGigLang = normalizeString(gigLang.language);
+      const gigLevel = gigLang.proficiency.toLowerCase();
+
+      // Recherche de la langue chez l'agent
+      const agentLang = agent.personalInfo.languages.find(agentLang => 
+        normalizeString(agentLang.language) === normalizedGigLang
+      );
+
+      // Si la langue n'est pas trouvée chez l'agent
+      if (!agentLang) {
+        missingLanguages.push({
+          language: gigLang.language,
+          requiredLevel: gigLang.proficiency
+        });
+        return false;
+      }
+
+      const agentLevel = agentLang.proficiency.toLowerCase();
+
+      // Définition des niveaux acceptables pour chaque niveau requis
+      const isLevelMatch = 
+        // Niveau "conversational" : accepte les niveaux professionnels et avancés
+        (gigLevel === "conversational" && 
+          ["professional working", "native or bilingual", "c1", "c2", "b2"].includes(agentLevel)) ||
+        // Niveau "professional" : accepte uniquement les niveaux professionnels et natifs
+        (gigLevel === "professional" && 
+          ["professional working", "native or bilingual", "c1", "c2"].includes(agentLevel)) ||
+        // Niveau "native" : accepte uniquement les niveaux natifs
+        (gigLevel === "native" && 
+          ["native or bilingual", "c2"].includes(agentLevel));
+
+      // Si le niveau correspond, ajouter aux langues matching
+      if (isLevelMatch) {
+        matchingLanguages.push({
+          language: gigLang.language,
+          requiredLevel: gigLang.proficiency,
+          agentLevel: agentLang.proficiency
+        });
+        return true;
+      } else {
+        // Si le niveau ne correspond pas, ajouter aux langues insuffisantes
+        insufficientLanguages.push({
+          language: gigLang.language,
+          requiredLevel: gigLang.proficiency,
+          agentLevel: agentLang.proficiency
+        });
+        return false;
+      }
+    });
+
+    // Retourner le résultat pour cet agent
+    return {
+      agent,
+      score: allLanguagesMatch ? 1 : 0, // Score 1 si toutes les langues matchent, 0 sinon
+      details: {
+        matchingLanguages,
+        missingLanguages,
+        insufficientLanguages,
+        matchStatus: allLanguagesMatch ? "perfect_match" : "no_match"
+      }
+    };
+  }).filter(match => match.score === 1); // Ne garder que les agents avec un score de 1
+};
