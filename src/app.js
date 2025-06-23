@@ -16,7 +16,8 @@ app.set('trust proxy', true);
 
 const corsOptions = {
   origin: [
-    'https://v25.harx.ai'
+    'https://v25.harx.ai',
+    'https://v25-preprod.harx.ai'
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
