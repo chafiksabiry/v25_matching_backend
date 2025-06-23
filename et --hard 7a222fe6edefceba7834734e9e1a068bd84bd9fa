@@ -1,0 +1,105 @@
+[33mcommit 7a222fe6edefceba7834734e9e1a068bd84bd9fa[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/matching-10[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmatching-10[m[33m)[m
+Merge: b863f56 074e66b
+Author: El Houcine Qara <elhoucine.qara@harx.ai>
+Date:   Mon Jun 16 13:30:48 2025 +0000
+
+    Merge branch 'matching-b3' into 'main'
+    
+    update matching
+    
+    See merge request h3763/v25_matching_backend!5
+
+[33mcommit 074e66b1ff88c435b8d5a43036bb5e488822cd2e[m[33m ([m[1;31morigin/matching-b3[m[33m)[m
+Author: El Houcine Qara <elhoucine.qara@harx.ai>
+Date:   Mon Jun 16 14:28:14 2025 +0100
+
+    update matching
+
+[33mcommit b863f5665832c473dc7f05e5878de38c651f421f[m
+Merge: 415c490 9c34963
+Author: El Houcine Qara <elhoucine.qara@harx.ai>
+Date:   Mon Jun 16 11:54:30 2025 +0000
+
+    Merge branch 'matching-v2' into 'main'
+    
+    Update matching
+    
+    See merge request h3763/v25_matching_backend!4
+
+[33mcommit 9c34963d745b929114503bedd7712d031543a752[m[33m ([m[1;31morigin/matching-v2[m[33m)[m
+Merge: a4438de 415c490
+Author: El Houcine Qara <elhoucine.qara@harx.ai>
+Date:   Mon Jun 16 11:54:18 2025 +0000
+
+    Merge branch 'main' into 'matching-v2'
+    
+    # Conflicts:
+    #   src/controllers/matchController.js
+    #   src/models/Agent.js
+    #   src/models/Gig.js
+
+[33mcommit a4438de672ac1c0f7e11009405dc1bddc338e144[m
+Author: El Houcine Qara <elhoucine.qara@harx.ai>
+Date:   Mon Jun 16 12:47:40 2025 +0100
+
+    Update matching
+
+[33mcommit 415c4902601bc615bc86d911a02b20b085fede44[m
+Author: El Houcine Qara <elhoucine.qara@harx.ai>
+Date:   Mon Jun 16 12:46:40 2025 +0100
+
+    Update gigModel schema
+
+[33mcommit b404cfdc333bed5d98a0f1dc06e0d02159db9468[m
+Author: El Houcine Qara <elhoucine.qara@harx.ai>
+Date:   Tue Jun 10 14:17:33 2025 +0100
+
+    Update
+
+[33mcommit 008e89a475a6e99b4c0b73d9036de809088eb67c[m
+Author: El Houcine Qara <elhoucine.qara@harx.ai>
+Date:   Thu May 22 15:47:55 2025 +0100
+
+    Add cors config
+
+[33mcommit b88532cdf47b8d94e30f9f5e277f9d109f96cd42[m
+Author: El Houcine Qara <elhoucine.qara@harx.ai>
+Date:   Thu Apr 17 14:49:41 2025 +0100
+
+    Update matchController
+
+[33mcommit 1191e61886db0f0ceaefc6a4afbff1ae69b6a699[m
+Author: El Houcine Qara <elhoucine.qara@harx.ai>
+Date:   Thu Apr 17 08:51:31 2025 +0100
+
+    Changer la logic de matching
+
+[33mcommit 86e9d86338a5ae28a2df946a036e3b8290744d0d[m
+Author: El Houcine Qara <elhoucine.qara@harx.ai>
+Date:   Fri Mar 28 10:02:20 2025 +0000
+
+    Update matching functions
+
+[33mcommit a660f2d73759d14845c112676df2ad96635b10a7[m
+Author: El Houcine Qara <elhoucine.qara@harx.ai>
+Date:   Mon Mar 24 04:25:51 2025 +0000
+
+    Update
+
+[33mcommit 618c907aca5aea4af158f2bf11387b0dc620d6ad[m
+Author: El Houcine Qara <elhoucine.qara@harx.ai>
+Date:   Mon Mar 24 03:08:17 2025 +0000
+
+    Update reps database
+
+[33mcommit b2921c86b49d4264b484f46ae1d11a32faaf00c5[m
+Author: El Houcine Qara <elhoucine.qara@harx.ai>
+Date:   Fri Mar 21 15:16:23 2025 +0000
+
+    First commit
+
+[33mcommit e3b44c0035aad498e46bf1f594ae738a07fc586a[m
+Author: Zineb Rihane <zineb.rihane@harx.ai>
+Date:   Wed Mar 5 00:26:05 2025 +0000
+
+    Initial commit
