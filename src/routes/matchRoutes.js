@@ -7,7 +7,8 @@ import {
   deleteMatch,
   findMatchesForGigById,
   findMatchesForAgentById,
-  generateOptimalMatches
+  generateOptimalMatches,
+  findLanguageMatchesForGig
 } from '../controllers/matchController.js';
 
 const router = express.Router();
@@ -17,6 +18,9 @@ router.get('/', getAllMatches);
 
 // Get a specific match by ID
 router.get('/:id', getMatchById);
+
+// Get matches for a specific gig
+router.get('/gig/:id', findMatchesForGigById);
 
 // Create a new match
 router.post('/', createMatch);
@@ -41,6 +45,9 @@ router.post('/rep/:id', (req, res) => {
 
 // Generate optimal matches
 router.post('/optimize', generateOptimalMatches);
+
+// Find language matches for a specific gig
+router.post('/language/gig/:id', findLanguageMatchesForGig);
 
 // Error handling for this router
 router.use((req, res) => {
