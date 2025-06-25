@@ -345,7 +345,9 @@ export const findMatchesForGigById = async (req, res) => {
       
       console.log('Correspondance des langues pour', agent.personalInfo?.name, ':', {
         required: requiredLanguages,
-        agent: agentLanguages
+        agent: agentLanguages,
+        requiredCount: requiredLanguages.length,
+        agentCount: agentLanguages.length
       });
 
       let matchingLanguages = [];
@@ -371,17 +373,26 @@ export const findMatchesForGigById = async (req, res) => {
             proficiency: agentLang.proficiency
           });
           
-          // Normalize proficiency levels for comparison
-          const normalizedReqLevel = normalizeLanguage(reqLang.proficiency);
-          const normalizedAgentLevel = normalizeLanguage(agentLang.proficiency);
+          // Don't normalize proficiency levels - keep them as is for comparison
+          const reqLevel = reqLang.proficiency;
+          const agentLevel = agentLang.proficiency;
           
           // Check if the required level is native
-          const isNativeRequired = ['native', 'natif'].includes(normalizedReqLevel);
+          const isNativeRequired = ['native', 'natif'].includes(reqLevel.toLowerCase());
           
           // For native level, only accept native or C2 proficiency
           const isLevelMatch = isNativeRequired 
-            ? ['native', 'natif', 'c2'].includes(normalizedAgentLevel)
-            : getLanguageLevelScore(normalizedAgentLevel) >= getLanguageLevelScore(normalizedReqLevel);
+            ? ['native', 'natif', 'c2'].includes(agentLevel.toLowerCase())
+            : getLanguageLevelScore(agentLevel) >= getLanguageLevelScore(reqLevel);
+
+          console.log('Language level comparison:', {
+            required: reqLevel,
+            agent: agentLevel,
+            isNativeRequired,
+            isLevelMatch,
+            reqScore: getLanguageLevelScore(reqLevel),
+            agentScore: getLanguageLevelScore(agentLevel)
+          });
 
           if (isLevelMatch) {
             matchingLanguages.push({
@@ -401,6 +412,12 @@ export const findMatchesForGigById = async (req, res) => {
         }
       });
 
+      console.log('Language matching result:', {
+        matchingLanguages: matchingLanguages.length,
+        missingLanguages: missingLanguages.length,
+        insufficientLanguages: insufficientLanguages.length
+      });
+
       // Skills matching
       const requiredSkills = [
         ...(gig.skills?.technical || []).map(s => ({ skill: s.skill, level: s.level, type: 'technical' })),
@@ -416,7 +433,9 @@ export const findMatchesForGigById = async (req, res) => {
 
       console.log('Skills matching:', {
         required: requiredSkills,
-        agent: agentSkills
+        agent: agentSkills,
+        requiredCount: requiredSkills.length,
+        agentCount: agentSkills.length
       });
 
       let matchingSkills = [];
@@ -424,45 +443,56 @@ export const findMatchesForGigById = async (req, res) => {
       let insufficientSkills = [];
 
       // Check if agent has all required skills
-      const hasAllRequiredSkills = requiredSkills.every(reqSkill => {
-        if (!reqSkill?.skill) return true;
-        
-        const normalizedReqSkill = reqSkill.skill.toLowerCase().trim();
-        const agentSkill = agentSkills.find(
-          skill => skill?.skill && skill.skill.toLowerCase().trim() === normalizedReqSkill && skill.type === reqSkill.type
-        );
+      const hasAllRequiredSkills = requiredSkills.length === 0 ? 
+        // If no required skills, check if agent also has no skills
+        agentSkills.length === 0 :
+        // If there are required skills, check if agent has all of them
+        requiredSkills.every(reqSkill => {
+          if (!reqSkill?.skill) return true;
+          
+          const normalizedReqSkill = reqSkill.skill.toLowerCase().trim();
+          const agentSkill = agentSkills.find(
+            skill => skill?.skill && skill.skill.toLowerCase().trim() === normalizedReqSkill && skill.type === reqSkill.type
+          );
 
-        if (agentSkill) {
-          console.log('Skill level comparison:', {
-            skill: reqSkill.skill,
-            agentLevel: agentSkill.level,
-            requiredLevel: reqSkill.level
-          });
-
-          if (agentSkill.level >= reqSkill.level) {
-            matchingSkills.push({
+          if (agentSkill) {
+            console.log('Skill level comparison:', {
               skill: reqSkill.skill,
-              requiredLevel: reqSkill.level,
               agentLevel: agentSkill.level,
-              type: reqSkill.type
+              requiredLevel: reqSkill.level
             });
-            return true;
+
+            if (agentSkill.level >= reqSkill.level) {
+              matchingSkills.push({
+                skill: reqSkill.skill,
+                requiredLevel: reqSkill.level,
+                agentLevel: agentSkill.level,
+                type: reqSkill.type
+              });
+              return true;
+            } else {
+              insufficientSkills.push({
+                skill: reqSkill.skill,
+                requiredLevel: reqSkill.level,
+                agentLevel: agentSkill.level,
+                type: reqSkill.type
+              });
+              return false;
+            }
           } else {
-            insufficientSkills.push({
+            missingSkills.push({
               skill: reqSkill.skill,
-              requiredLevel: reqSkill.level,
-              agentLevel: agentSkill.level,
               type: reqSkill.type
             });
             return false;
           }
-        } else {
-          missingSkills.push({
-            skill: reqSkill.skill,
-            type: reqSkill.type
-          });
-          return false;
-        }
+        });
+
+      console.log('Skills matching result:', {
+        hasAllRequiredSkills,
+        matchingSkills: matchingSkills.length,
+        missingSkills: missingSkills.length,
+        insufficientSkills: insufficientSkills.length
       });
 
       // Schedule matching
@@ -556,6 +586,26 @@ export const findMatchesForGigById = async (req, res) => {
       }
 
       console.log(`After ${criterion} filtering: ${filteredMatches.length} matches remaining`);
+    }
+
+    // Filtrage supplémentaire : exclure les agents qui ont "no_match" pour des critères critiques
+    // même s'ils ont "perfect_match" pour d'autres critères
+    const criticalCriteria = ['schedule', 'availability'];
+    const hasCriticalCriteria = criticalCriteria.some(criterion => 
+      Object.keys(weights).includes(criterion) && weights[criterion] > 0
+    );
+
+    if (hasCriticalCriteria) {
+      const beforeCriticalFilter = filteredMatches.length;
+      filteredMatches = filteredMatches.filter(match => {
+        // Si l'agent a "no_match" pour le schedule/availability, l'exclure complètement
+        if (match.scheduleMatch.matchStatus === "no_match") {
+          console.log(`Excluding agent ${match.agentId} due to no schedule match`);
+          return false;
+        }
+        return true;
+      });
+      console.log(`Critical filter: ${beforeCriticalFilter} -> ${filteredMatches.length} matches`);
     }
 
     // Calculer les statistiques après le filtrage séquentiel
