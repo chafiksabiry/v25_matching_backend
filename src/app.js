@@ -19,7 +19,8 @@ const corsOptions = {
   origin: [
     'https://v25.harx.ai',
     'https://v25-preprod.harx.ai',
-    'https://matching.harx.ai/'
+    'https://matching.harx.ai/',
+    'https://preprod-matching.harx.ai/',
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
