@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import gigRoutes from './routes/gigRoutes.js';
 import agentRoutes from './routes/agentRoutes.js';
 import matchRoutes from './routes/matchRoutes.js';
+import gigAgentRoutes from './routes/gigAgentRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -16,7 +17,8 @@ app.set('trust proxy', true);
 
 const corsOptions = {
   origin: [
-    'https://v25.harx.ai'
+    'https://v25.harx.ai',
+    'https://v25-preprod.harx.ai'
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -32,6 +34,7 @@ app.use(express.json());
 app.use('/api/gigs', gigRoutes);
 app.use('/api/agents', agentRoutes);
 app.use('/api/matches', matchRoutes);
+app.use('/api/gig-agents', gigAgentRoutes);
 
 // MongoDB connection
 mongoose.connect(process.env.MONGODB_URI)

@@ -5,19 +5,24 @@ import dotenv from 'dotenv';
 import gigRoutes from './routes/gigRoutes.js';
 import matchRoutes from './routes/matchRoutes.js';
 import agentRoutes from './routes/agentRoutes.js';
+import gigAgentRoutes from './routes/gigAgentRoutes.js';
 
 dotenv.config();
 
 const app = express();
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: [process.env.QIANKUN_FRONT_URL],
+  credentials: true
+}));
 app.use(express.json());
 
 // Routes
 app.use('/api/gigs', gigRoutes);
 app.use('/api/matches', matchRoutes);
 app.use('/api/reps', agentRoutes);
+app.use('/api/gig-agents', gigAgentRoutes);
 
 // MongoDB Connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/matching';

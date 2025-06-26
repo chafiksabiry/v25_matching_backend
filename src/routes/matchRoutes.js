@@ -8,7 +8,8 @@ import {
   findMatchesForGigById,
   findMatchesForAgentById,
   generateOptimalMatches,
-  findLanguageMatchesForGig
+  findLanguageMatchesForGig,
+  createGigAgentFromMatch
 } from '../controllers/matchController.js';
 
 const router = express.Router();
@@ -36,6 +37,9 @@ router.post('/gig/:id', findMatchesForGigById);
 
 // Find matches for a specific agent
 router.post('/rep/:id', findMatchesForAgentById);
+
+// Create GigAgent from matching results
+router.post('/create-gig-agent', createGigAgentFromMatch);
 
 // Redirection pour l'ancienne route /rep/:id
 router.post('/rep/:id', (req, res) => {
