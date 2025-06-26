@@ -11,12 +11,12 @@ dotenv.config();
 
 const app = express();
 
-// Middleware
 const corsOptions = {
   origin: [
     'https://v25.harx.ai',
     'https://v25-preprod.harx.ai',
-    'https://matching.harx.ai/'
+    'https://matching.harx.ai/',
+    'https://preprod-matching.harx.ai/'
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -24,6 +24,7 @@ const corsOptions = {
   optionsSuccessStatus: 200
 };
 app.use(cors(corsOptions));
+
 app.use(express.json());
 
 // Routes
