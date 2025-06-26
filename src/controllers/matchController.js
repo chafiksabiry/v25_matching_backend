@@ -1,9 +1,11 @@
 import Match from '../models/Match.js';
 import Agent from '../models/Agent.js';
 import Gig from '../models/Gig.js';
+import GigAgent from '../models/GigAgent.js';
 import { StatusCodes } from 'http-status-codes';
 import { findMatches } from '../utils/matchingUtils.js';
 import { findLanguageMatches, getLanguageLevelScore } from '../utils/matchingAlgorithm.js';
+import { sendMatchingNotification } from '../services/emailService.js';
 
 // Language normalization function
 const normalizeLanguage = (language) => {
@@ -345,9 +347,7 @@ export const findMatchesForGigById = async (req, res) => {
       
       console.log('Correspondance des langues pour', agent.personalInfo?.name, ':', {
         required: requiredLanguages,
-        agent: agentLanguages,
-        requiredCount: requiredLanguages.length,
-        agentCount: agentLanguages.length
+        agent: agentLanguages
       });
 
       let matchingLanguages = [];
@@ -373,26 +373,17 @@ export const findMatchesForGigById = async (req, res) => {
             proficiency: agentLang.proficiency
           });
           
-          // Don't normalize proficiency levels - keep them as is for comparison
-          const reqLevel = reqLang.proficiency;
-          const agentLevel = agentLang.proficiency;
+          // Normalize proficiency levels for comparison
+          const normalizedReqLevel = normalizeLanguage(reqLang.proficiency);
+          const normalizedAgentLevel = normalizeLanguage(agentLang.proficiency);
           
           // Check if the required level is native
-          const isNativeRequired = ['native', 'natif'].includes(reqLevel.toLowerCase());
+          const isNativeRequired = ['native', 'natif'].includes(normalizedReqLevel);
           
           // For native level, only accept native or C2 proficiency
           const isLevelMatch = isNativeRequired 
-            ? ['native', 'natif', 'c2'].includes(agentLevel.toLowerCase())
-            : getLanguageLevelScore(agentLevel) >= getLanguageLevelScore(reqLevel);
-
-          console.log('Language level comparison:', {
-            required: reqLevel,
-            agent: agentLevel,
-            isNativeRequired,
-            isLevelMatch,
-            reqScore: getLanguageLevelScore(reqLevel),
-            agentScore: getLanguageLevelScore(agentLevel)
-          });
+            ? ['native', 'natif', 'c2'].includes(normalizedAgentLevel)
+            : getLanguageLevelScore(normalizedAgentLevel) >= getLanguageLevelScore(normalizedReqLevel);
 
           if (isLevelMatch) {
             matchingLanguages.push({
@@ -412,12 +403,6 @@ export const findMatchesForGigById = async (req, res) => {
         }
       });
 
-      console.log('Language matching result:', {
-        matchingLanguages: matchingLanguages.length,
-        missingLanguages: missingLanguages.length,
-        insufficientLanguages: insufficientLanguages.length
-      });
-
       // Skills matching
       const requiredSkills = [
         ...(gig.skills?.technical || []).map(s => ({ skill: s.skill, level: s.level, type: 'technical' })),
@@ -433,9 +418,7 @@ export const findMatchesForGigById = async (req, res) => {
 
       console.log('Skills matching:', {
         required: requiredSkills,
-        agent: agentSkills,
-        requiredCount: requiredSkills.length,
-        agentCount: agentSkills.length
+        agent: agentSkills
       });
 
       let matchingSkills = [];
@@ -443,56 +426,45 @@ export const findMatchesForGigById = async (req, res) => {
       let insufficientSkills = [];
 
       // Check if agent has all required skills
-      const hasAllRequiredSkills = requiredSkills.length === 0 ? 
-        // If no required skills, check if agent also has no skills
-        agentSkills.length === 0 :
-        // If there are required skills, check if agent has all of them
-        requiredSkills.every(reqSkill => {
-          if (!reqSkill?.skill) return true;
-          
-          const normalizedReqSkill = reqSkill.skill.toLowerCase().trim();
-          const agentSkill = agentSkills.find(
-            skill => skill?.skill && skill.skill.toLowerCase().trim() === normalizedReqSkill && skill.type === reqSkill.type
-          );
+      const hasAllRequiredSkills = requiredSkills.every(reqSkill => {
+        if (!reqSkill?.skill) return true;
+        
+        const normalizedReqSkill = reqSkill.skill.toLowerCase().trim();
+        const agentSkill = agentSkills.find(
+          skill => skill?.skill && skill.skill.toLowerCase().trim() === normalizedReqSkill && skill.type === reqSkill.type
+        );
 
-          if (agentSkill) {
-            console.log('Skill level comparison:', {
+        if (agentSkill) {
+          console.log('Skill level comparison:', {
+            skill: reqSkill.skill,
+            agentLevel: agentSkill.level,
+            requiredLevel: reqSkill.level
+          });
+
+          if (agentSkill.level >= reqSkill.level) {
+            matchingSkills.push({
               skill: reqSkill.skill,
+              requiredLevel: reqSkill.level,
               agentLevel: agentSkill.level,
-              requiredLevel: reqSkill.level
+              type: reqSkill.type
             });
-
-            if (agentSkill.level >= reqSkill.level) {
-              matchingSkills.push({
-                skill: reqSkill.skill,
-                requiredLevel: reqSkill.level,
-                agentLevel: agentSkill.level,
-                type: reqSkill.type
-              });
-              return true;
-            } else {
-              insufficientSkills.push({
-                skill: reqSkill.skill,
-                requiredLevel: reqSkill.level,
-                agentLevel: agentSkill.level,
-                type: reqSkill.type
-              });
-              return false;
-            }
+            return true;
           } else {
-            missingSkills.push({
+            insufficientSkills.push({
               skill: reqSkill.skill,
+              requiredLevel: reqSkill.level,
+              agentLevel: agentSkill.level,
               type: reqSkill.type
             });
             return false;
           }
-        });
-
-      console.log('Skills matching result:', {
-        hasAllRequiredSkills,
-        matchingSkills: matchingSkills.length,
-        missingSkills: missingSkills.length,
-        insufficientSkills: insufficientSkills.length
+        } else {
+          missingSkills.push({
+            skill: reqSkill.skill,
+            type: reqSkill.type
+          });
+          return false;
+        }
       });
 
       // Schedule matching
@@ -586,26 +558,6 @@ export const findMatchesForGigById = async (req, res) => {
       }
 
       console.log(`After ${criterion} filtering: ${filteredMatches.length} matches remaining`);
-    }
-
-    // Filtrage supplémentaire : exclure les agents qui ont "no_match" pour des critères critiques
-    // même s'ils ont "perfect_match" pour d'autres critères
-    const criticalCriteria = ['schedule', 'availability'];
-    const hasCriticalCriteria = criticalCriteria.some(criterion => 
-      Object.keys(weights).includes(criterion) && weights[criterion] > 0
-    );
-
-    if (hasCriticalCriteria) {
-      const beforeCriticalFilter = filteredMatches.length;
-      filteredMatches = filteredMatches.filter(match => {
-        // Si l'agent a "no_match" pour le schedule/availability, l'exclure complètement
-        if (match.scheduleMatch.matchStatus === "no_match") {
-          console.log(`Excluding agent ${match.agentId} due to no schedule match`);
-          return false;
-        }
-        return true;
-      });
-      console.log(`Critical filter: ${beforeCriticalFilter} -> ${filteredMatches.length} matches`);
     }
 
     // Calculer les statistiques après le filtrage séquentiel
@@ -973,5 +925,86 @@ export const findSkillsMatchesForGig = async (req, res) => {
   } catch (error) {
     console.error("Error in findSkillsMatchesForGig:", error);
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+// Create a new GigAgent from matching results
+export const createGigAgentFromMatch = async (req, res) => {
+  try {
+    const { gigId, agentId, matchDetails, notes } = req.body;
+    
+    // Vérifier que le gig et l'agent existent
+    const gig = await Gig.findById(gigId);
+    if (!gig) {
+      return res.status(StatusCodes.NOT_FOUND).json({ message: 'Gig not found' });
+    }
+
+    const agent = await Agent.findById(agentId);
+    if (!agent) {
+      return res.status(StatusCodes.NOT_FOUND).json({ message: 'Agent not found' });
+    }
+
+    // Vérifier si une assignation existe déjà
+    const existingAssignment = await GigAgent.findOne({ agentId, gigId });
+    if (existingAssignment) {
+      return res.status(StatusCodes.CONFLICT).json({ 
+        message: 'Une assignation existe déjà pour cet agent et ce gig' 
+      });
+    }
+
+    // Calculer le score global de matching
+    const languageScore = matchDetails.languageMatch?.score || 0;
+    const skillsScore = matchDetails.skillsMatch?.details?.matchStatus === 'perfect_match' ? 1 : 0;
+    const scheduleScore = matchDetails.scheduleMatch?.score || 0;
+    
+    const matchScore = (languageScore + skillsScore + scheduleScore) / 3;
+
+    // Créer la nouvelle assignation
+    const gigAgent = new GigAgent({
+      agentId,
+      gigId,
+      matchScore,
+      matchDetails,
+      notes,
+      status: 'pending'
+    });
+
+    const savedGigAgent = await gigAgent.save();
+
+    // Envoyer l'email de notification
+    try {
+      const emailResult = await sendMatchingNotification(agent, gig, matchDetails);
+      
+      // Marquer l'email comme envoyé
+      await savedGigAgent.markEmailSent();
+      
+      console.log('Email de notification envoyé avec succès:', emailResult);
+    } catch (emailError) {
+      console.error('Erreur lors de l\'envoi de l\'email:', emailError);
+      // Ne pas échouer la création si l'email échoue
+    }
+
+    // Retourner la réponse avec les détails
+    const populatedGigAgent = await GigAgent.findById(savedGigAgent._id)
+      .populate('agentId')
+      .populate('gigId');
+
+    res.status(StatusCodes.CREATED).json({
+      message: 'Assignation créée avec succès',
+      gigAgent: populatedGigAgent,
+      emailSent: true,
+      matchScore: matchScore
+    });
+
+  } catch (error) {
+    console.error('Error in createGigAgentFromMatch:', error);
+    
+    if (error.code === 11000) {
+      return res.status(StatusCodes.CONFLICT).json({ 
+        message: 'Une assignation existe déjà pour cet agent et ce gig' 
+      });
+    }
+    
+    res.status(StatusCodes.BAD_REQUEST).json({ message: error.message });
   }
 };
