@@ -12,10 +12,18 @@ dotenv.config();
 const app = express();
 
 // Middleware
-app.use(cors({
-  origin: [process.env.QIANKUN_FRONT_URL],
-  credentials: true
-}));
+const corsOptions = {
+  origin: [
+    'https://v25.harx.ai',
+    'https://v25-preprod.harx.ai',
+    'https://matching.harx.ai/'
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  optionsSuccessStatus: 200
+};
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Routes
