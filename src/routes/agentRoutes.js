@@ -9,7 +9,6 @@ import {
 
 const router = express.Router();
 
-// Get all agents
 router.get('/', getAllAgents);
 
 // Get a specific agent by ID
