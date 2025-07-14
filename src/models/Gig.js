@@ -53,7 +53,7 @@ const gigSchema = new mongoose.Schema({
         end: { type: String, required: true }
       }
     }],
-    timeZone: { type: String, required: true },
+    time_zone: { type: String, required: true },
     flexibility: [{ type: String }],
     minimumHours: {
       daily: { type: Number },

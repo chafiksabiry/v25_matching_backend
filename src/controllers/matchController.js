@@ -6,6 +6,37 @@ import { StatusCodes } from 'http-status-codes';
 import { findMatches } from '../utils/matchingUtils.js';
 import { findLanguageMatches, getLanguageLevelScore } from '../utils/matchingAlgorithm.js';
 import { sendMatchingNotification } from '../services/emailService.js';
+import mongoose from 'mongoose';
+
+// Skill models (pour récupérer les noms des skills)
+const TechnicalSkill = mongoose.model('TechnicalSkill', new mongoose.Schema({
+  name: String,
+  description: String,
+  category: String,
+  isActive: Boolean
+}));
+
+const ProfessionalSkill = mongoose.model('ProfessionalSkill', new mongoose.Schema({
+  name: String,
+  description: String,
+  category: String,
+  isActive: Boolean
+}));
+
+const SoftSkill = mongoose.model('SoftSkill', new mongoose.Schema({
+  name: String,
+  description: String,
+  category: String,
+  isActive: Boolean
+}));
+
+// Timezone model (pour récupérer les données de timezone)
+const Timezone = mongoose.model('Timezone', new mongoose.Schema({
+  countryCode: String,
+  countryName: String,
+  zoneName: String,
+  gmtOffset: Number
+}));
 
 // Language normalization function
 const normalizeLanguage = (language) => {
@@ -13,6 +44,7 @@ const normalizeLanguage = (language) => {
   const languageMap = {
     'french': 'french',
     'français': 'french',
+    'frensh': 'french', // Correction de la faute de frappe
     'english': 'english',
     'anglais': 'english',
     'spanish': 'spanish',
@@ -30,6 +62,43 @@ const normalizeLanguage = (language) => {
     'débutant': 'beginner'
   };
   return languageMap[language.toLowerCase()] || language.toLowerCase();
+};
+
+// Function to get skill names from IDs
+const getSkillNames = async (skillIds, skillType) => {
+  try {
+    if (!skillIds || skillIds.length === 0) return [];
+    
+    let SkillModel;
+    switch (skillType) {
+      case 'technical':
+        SkillModel = TechnicalSkill;
+        break;
+      case 'professional':
+        SkillModel = ProfessionalSkill;
+        break;
+      case 'soft':
+        SkillModel = SoftSkill;
+        break;
+      default:
+        return skillIds.map(id => ({ id, name: 'Unknown Skill' }));
+    }
+    
+    const skills = await SkillModel.find({ _id: { $in: skillIds } });
+    const skillMap = {};
+    
+    skills.forEach(skill => {
+      skillMap[skill._id.toString()] = skill.name;
+    });
+    
+    return skillIds.map(id => ({
+      id: id,
+      name: skillMap[id.toString()] || 'Unknown Skill'
+    }));
+  } catch (error) {
+    console.error(`Error getting ${skillType} skill names:`, error);
+    return skillIds.map(id => ({ id, name: 'Unknown Skill' }));
+  }
 };
 
 // Get all matches
@@ -142,6 +211,290 @@ export const deleteMatch = async (req, res) => {
     res.status(StatusCodes.OK).json({ message: 'Match deleted successfully' });
   } catch (error) {
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+// Add timezone comparison function
+const compareTimezones = async (gigTimezoneId, agentTimezoneId) => {
+  try {
+    console.log('🔍 Comparing timezones:', {
+      gigTimezoneId,
+      agentTimezoneId,
+      gigType: typeof gigTimezoneId,
+      agentType: typeof agentTimezoneId
+    });
+
+    // Gestion des différents formats de timezone
+    let gigTimezone = null;
+    let agentTimezone = null;
+
+    // Pour le gig
+    if (gigTimezoneId) {
+      try {
+        if (typeof gigTimezoneId === 'object' && gigTimezoneId.$oid) {
+          // C'est un ObjectId MongoDB
+          gigTimezone = await Timezone.findById(gigTimezoneId.$oid);
+        } else if (typeof gigTimezoneId === 'string' && gigTimezoneId.match(/^[0-9a-fA-F]{24}$/)) {
+          // C'est un ObjectId valide
+          gigTimezone = await Timezone.findById(gigTimezoneId);
+        } else if (typeof gigTimezoneId === 'string') {
+          // C'est une chaîne de timezone (ex: "America/Chicago")
+          gigTimezone = await Timezone.findOne({ zoneName: gigTimezoneId });
+        }
+      } catch (error) {
+        console.log('❌ Error finding gig timezone in compareTimezones:', error.message);
+      }
+    }
+
+    // Pour l'agent
+    if (agentTimezoneId) {
+      try {
+        if (typeof agentTimezoneId === 'object' && agentTimezoneId.$oid) {
+          // C'est un ObjectId MongoDB
+          agentTimezone = await Timezone.findById(agentTimezoneId.$oid);
+        } else if (typeof agentTimezoneId === 'string' && agentTimezoneId.match(/^[0-9a-fA-F]{24}$/)) {
+          // C'est un ObjectId valide
+          agentTimezone = await Timezone.findById(agentTimezoneId);
+        } else if (typeof agentTimezoneId === 'string') {
+          // C'est une chaîne de timezone
+          agentTimezone = await Timezone.findOne({ zoneName: agentTimezoneId });
+        }
+      } catch (error) {
+        console.log('❌ Error finding agent timezone in compareTimezones:', error.message);
+      }
+    }
+    
+    if (!gigTimezone || !agentTimezone) {
+      console.log('❌ Timezone data not found:', {
+        gigTimezoneId,
+        agentTimezoneId,
+        gigTimezoneFound: !!gigTimezone,
+        agentTimezoneFound: !!agentTimezone,
+        gigTimezoneData: gigTimezone || 'Not found',
+        agentTimezoneData: agentTimezone || 'Not found',
+        gigTimezoneIdType: typeof gigTimezoneId,
+        agentTimezoneIdType: typeof agentTimezoneId
+      });
+      
+      // Si aucune timezone n'est trouvée, retourner un score neutre au lieu d'un no_match
+      return {
+        score: 0.5, // Score neutre
+        status: "partial_match", // Permettre le matching
+        details: {
+          gigTimezone: gigTimezone?.zoneName || 'Unknown',
+          agentTimezone: agentTimezone?.zoneName || 'Unknown',
+          gmtOffsetDifference: null,
+          reason: 'Timezone data not found - using neutral score'
+        }
+      };
+    }
+
+    const gmtOffsetDifference = Math.abs(gigTimezone.gmtOffset - agentTimezone.gmtOffset);
+    
+    console.log('🌍 Timezone comparison details:', {
+      gigTimezone: {
+        id: gigTimezoneId,
+        zoneName: gigTimezone.zoneName,
+        countryCode: gigTimezone.countryCode,
+        countryName: gigTimezone.countryName,
+        gmtOffset: gigTimezone.gmtOffset
+      },
+      agentTimezone: {
+        id: agentTimezoneId,
+        zoneName: agentTimezone.zoneName,
+        countryCode: agentTimezone.countryCode,
+        countryName: agentTimezone.countryName,
+        gmtOffset: agentTimezone.gmtOffset
+      },
+      difference: {
+        gmtOffsetDifference,
+        hoursDifference: Math.round(gmtOffsetDifference / 3600 * 100) / 100
+      }
+    });
+
+    // Définir les seuils de compatibilité
+    let score = 0;
+    let status = "no_match";
+    let reason = "";
+
+    if (gmtOffsetDifference === 0) {
+      // Même timezone - match parfait
+      score = 1.0;
+      status = "perfect_match";
+      reason = "Same timezone";
+    } else if (gmtOffsetDifference <= 3600) {
+      // Différence de 1 heure ou moins - compatible
+      score = 0.7;
+      status = "partial_match";
+      reason = "Compatible timezone (≤1 hour difference)";
+    } else if (gmtOffsetDifference <= 7200) {
+      // Différence de 2 heures - partiellement compatible
+      score = 0.5;
+      status = "partial_match";
+      reason = "Partially compatible timezone (≤2 hours difference)";
+    } else if (gmtOffsetDifference <= 10800) {
+      // Différence de 3 heures - difficile mais possible
+      score = 0.3;
+      status = "partial_match";
+      reason = "Difficult but possible timezone (≤3 hours difference)";
+    } else if (gmtOffsetDifference <= 14400) {
+      // Différence de 4 heures - très difficile
+      score = 0.1;
+      status = "partial_match";
+      reason = "Very difficult timezone (≤4 hours difference)";
+    } else {
+      // Différence de plus de 4 heures - pas compatible
+      score = 0.0;
+      status = "no_match";
+      reason = "Incompatible timezone (>4 hours difference)";
+    }
+
+    return {
+      score,
+      status,
+      details: {
+        gigTimezone: gigTimezone.zoneName,
+        agentTimezone: agentTimezone.zoneName,
+        gigGmtOffset: gigTimezone.gmtOffset,
+        agentGmtOffset: agentTimezone.gmtOffset,
+        gmtOffsetDifference,
+        reason
+      }
+    };
+  } catch (error) {
+    console.error('Error comparing timezones:', error);
+    return {
+      score: 0,
+      status: "no_match",
+      details: {
+        gigTimezone: 'Unknown',
+        agentTimezone: 'Unknown',
+        gmtOffsetDifference: null,
+        reason: 'Error comparing timezones'
+      }
+    };
+  }
+};
+
+// Add region comparison function
+const compareRegions = async (gigDestinationZone, agentTimezoneId) => {
+  try {
+    console.log('🌍 Comparing regions:', {
+      gigDestinationZone,
+      agentTimezoneId,
+      gigType: typeof gigDestinationZone,
+      agentType: typeof agentTimezoneId
+    });
+
+    // Si le gig n'a pas de destination_zone, retourner un score neutre
+    if (!gigDestinationZone) {
+      console.log('❌ Gig destination zone not found');
+      return {
+        score: 0.5, // Score neutre
+        status: "partial_match",
+        details: {
+          gigDestinationZone: 'Unknown',
+          agentCountryCode: 'Unknown',
+          reason: 'Gig destination zone not found - using neutral score'
+        }
+      };
+    }
+
+    // Récupérer le countryCode de l'agent à partir de son timezone
+    let agentTimezone = null;
+    let agentCountryCode = null;
+
+    if (agentTimezoneId) {
+      try {
+        if (typeof agentTimezoneId === 'object' && agentTimezoneId.$oid) {
+          // C'est un ObjectId MongoDB
+          agentTimezone = await Timezone.findById(agentTimezoneId.$oid);
+        } else if (typeof agentTimezoneId === 'string' && agentTimezoneId.match(/^[0-9a-fA-F]{24}$/)) {
+          // C'est un ObjectId valide
+          agentTimezone = await Timezone.findById(agentTimezoneId);
+        } else if (typeof agentTimezoneId === 'string') {
+          // C'est une chaîne de timezone
+          agentTimezone = await Timezone.findOne({ zoneName: agentTimezoneId });
+        }
+      } catch (error) {
+        console.log('❌ Error finding agent timezone in compareRegions:', error.message);
+      }
+    }
+
+    if (agentTimezone) {
+      agentCountryCode = agentTimezone.countryCode;
+    }
+
+    console.log('🌍 Region comparison details:', {
+      gigDestinationZone,
+      agentCountryCode,
+      agentTimezone: agentTimezone ? {
+        id: agentTimezoneId,
+        zoneName: agentTimezone.zoneName,
+        countryCode: agentTimezone.countryCode,
+        countryName: agentTimezone.countryName
+      } : 'Not found'
+    });
+
+    // Si on ne peut pas récupérer le countryCode de l'agent, retourner un score neutre
+    if (!agentCountryCode) {
+      console.log('❌ Agent country code not found');
+      return {
+        score: 0.5, // Score neutre
+        status: "partial_match",
+        details: {
+          gigDestinationZone,
+          agentCountryCode: 'Unknown',
+          reason: 'Agent country code not found - using neutral score'
+        }
+      };
+    }
+
+    // Comparer les codes de pays
+    const isSameRegion = gigDestinationZone.toUpperCase() === agentCountryCode.toUpperCase();
+    
+    console.log('🌍 Region match result:', {
+      gigDestinationZone: gigDestinationZone.toUpperCase(),
+      agentCountryCode: agentCountryCode.toUpperCase(),
+      isSameRegion
+    });
+
+    let score = 0;
+    let status = "no_match";
+    let reason = "";
+
+    if (isSameRegion) {
+      // Même région - match parfait
+      score = 1.0;
+      status = "perfect_match";
+      reason = "Same region/country";
+    } else {
+      // Régions différentes - pas de match
+      score = 0.0;
+      status = "no_match";
+      reason = "Different regions/countries";
+    }
+
+    return {
+      score,
+      status,
+      details: {
+        gigDestinationZone,
+        agentCountryCode,
+        reason
+      }
+    };
+  } catch (error) {
+    console.error('Error comparing regions:', error);
+    return {
+      score: 0,
+      status: "no_match",
+      details: {
+        gigDestinationZone: 'Unknown',
+        agentCountryCode: 'Unknown',
+        reason: 'Error comparing regions'
+      }
+    };
   }
 };
 
@@ -292,11 +645,16 @@ export const findMatchesForGigById = async (req, res) => {
       title: gig.title,
       skills: gig.skills,
       languages: gig.skills?.languages,
-      schedule: gig.availability?.schedule
+      schedule: gig.availability?.schedule,
+      timezone: {
+        time_zone: gig.availability?.time_zone,
+        timeZone: gig.availability?.timeZone,
+        timezoneType: typeof gig.availability?.time_zone || typeof gig.availability?.timeZone
+      }
     });
 
     // Get weights from request body or use defaults
-    const weights = req.body.weights || { skills: 0.4, languages: 0.3, schedule: 0.3 };
+    const weights = req.body.weights || { skills: 0.25, languages: 0.25, schedule: 0.2, timezone: 0.15, region: 0.15 };
     console.log('Using weights:', weights);
 
     console.log('Recherche des agents avec les critères suivants:', {
@@ -333,7 +691,7 @@ export const findMatchesForGigById = async (req, res) => {
       }))
     })));
 
-    const matches = agentsWithLanguages.map(agent => {
+    const matches = await Promise.all(agentsWithLanguages.map(async agent => {
       console.log('Traitement de l\'agent:', {
         id: agent._id,
         name: agent.personalInfo?.name,
@@ -467,17 +825,129 @@ export const findMatchesForGigById = async (req, res) => {
         }
       });
 
-      // Skills matching
+      // Skills matching - récupérer les noms des skills
+      const gigTechnicalSkillIds = (gig.skills?.technical || []).map(s => s.skill);
+      const gigProfessionalSkillIds = (gig.skills?.professional || []).map(s => s.skill);
+      const gigSoftSkillIds = (gig.skills?.soft || []).map(s => s.skill);
+      
+      const agentTechnicalSkillIds = (agent.skills?.technical || []).map(s => s.skill);
+      const agentProfessionalSkillIds = (agent.skills?.professional || []).map(s => s.skill);
+      const agentSoftSkillIds = (agent.skills?.soft || []).map(s => s.skill);
+      
+      // Récupérer les noms des skills
+      const [gigTechnicalSkills, gigProfessionalSkills, gigSoftSkills, 
+             agentTechnicalSkills, agentProfessionalSkills, agentSoftSkills] = await Promise.all([
+        getSkillNames(gigTechnicalSkillIds, 'technical'),
+        getSkillNames(gigProfessionalSkillIds, 'professional'),
+        getSkillNames(gigSoftSkillIds, 'soft'),
+        getSkillNames(agentTechnicalSkillIds, 'technical'),
+        getSkillNames(agentProfessionalSkillIds, 'professional'),
+        getSkillNames(agentSoftSkillIds, 'soft')
+      ]);
+      
+      // Créer les mappings pour faciliter la recherche
+      const gigTechnicalSkillMap = {};
+      const gigProfessionalSkillMap = {};
+      const gigSoftSkillMap = {};
+      
+      gig.skills?.technical?.forEach((s, index) => {
+        if (gigTechnicalSkills[index]) {
+          gigTechnicalSkillMap[s.skill.toString()] = {
+            ...s,
+            name: gigTechnicalSkills[index].name
+          };
+        }
+      });
+      
+      gig.skills?.professional?.forEach((s, index) => {
+        if (gigProfessionalSkills[index]) {
+          gigProfessionalSkillMap[s.skill.toString()] = {
+            ...s,
+            name: gigProfessionalSkills[index].name
+          };
+        }
+      });
+      
+      gig.skills?.soft?.forEach((s, index) => {
+        if (gigSoftSkills[index]) {
+          gigSoftSkillMap[s.skill.toString()] = {
+            ...s,
+            name: gigSoftSkills[index].name
+          };
+        }
+      });
+      
+      const agentTechnicalSkillMap = {};
+      const agentProfessionalSkillMap = {};
+      const agentSoftSkillMap = {};
+      
+      agent.skills?.technical?.forEach((s, index) => {
+        if (agentTechnicalSkills[index]) {
+          agentTechnicalSkillMap[s.skill.toString()] = {
+            ...s,
+            name: agentTechnicalSkills[index].name
+          };
+        }
+      });
+      
+      agent.skills?.professional?.forEach((s, index) => {
+        if (agentProfessionalSkills[index]) {
+          agentProfessionalSkillMap[s.skill.toString()] = {
+            ...s,
+            name: agentProfessionalSkills[index].name
+          };
+        }
+      });
+      
+      agent.skills?.soft?.forEach((s, index) => {
+        if (agentSoftSkills[index]) {
+          agentSoftSkillMap[s.skill.toString()] = {
+            ...s,
+            name: agentSoftSkills[index].name
+          };
+        }
+      });
+
       const requiredSkills = [
-        ...(gig.skills?.technical || []).map(s => ({ skill: s.skill, level: s.level, type: 'technical' })),
-        ...(gig.skills?.professional || []).map(s => ({ skill: s.skill, level: s.level, type: 'professional' })),
-        ...(gig.skills?.soft || []).map(s => ({ skill: s.skill, level: s.level, type: 'soft' }))
+        ...(gig.skills?.technical || []).map(s => ({ 
+          skill: s.skill, 
+          level: s.level, 
+          type: 'technical',
+          name: gigTechnicalSkillMap[s.skill.toString()]?.name || 'Unknown Skill'
+        })),
+        ...(gig.skills?.professional || []).map(s => ({ 
+          skill: s.skill, 
+          level: s.level, 
+          type: 'professional',
+          name: gigProfessionalSkillMap[s.skill.toString()]?.name || 'Unknown Skill'
+        })),
+        ...(gig.skills?.soft || []).map(s => ({ 
+          skill: s.skill, 
+          level: s.level, 
+          type: 'soft',
+          name: gigSoftSkillMap[s.skill.toString()]?.name || 'Unknown Skill'
+        }))
       ];
 
       const agentSkills = [
-        ...(agent.skills?.technical || []).map(s => ({ skill: s.skill, level: s.level, type: 'technical' })),
-        ...(agent.skills?.professional || []).map(s => ({ skill: s.skill, level: s.level, type: 'professional' })),
-        ...(agent.skills?.soft || []).map(s => ({ skill: s.skill, level: s.level, type: 'soft' }))
+        ...(agent.skills?.technical || []).map(s => ({ 
+          skill: s.skill, 
+          level: s.level, 
+          type: 'technical',
+          name: agentTechnicalSkillMap[s.skill.toString()]?.name || 'Unknown Skill'
+        })),
+        ...(agent.skills?.professional || []).map(s => ({ 
+          skill: s.skill, 
+          level: s.level, 
+          type: 'professional',
+          name: agentProfessionalSkillMap[s.skill.toString()]?.name || 'Unknown Skill'
+        })),
+        ...(agent.skills?.soft || []).map(s => ({ 
+          skill: s.skill, 
+          level: s.level, 
+          type: 'soft',
+          name: agentSoftSkillMap[s.skill.toString()]?.name || 'Unknown Skill'
+        }))
       ];
 
       console.log('Skills matching:', {
@@ -493,47 +963,122 @@ export const findMatchesForGigById = async (req, res) => {
       const hasAllRequiredSkills = requiredSkills.every(reqSkill => {
         if (!reqSkill?.skill) return true;
         
-        const normalizedReqSkill = reqSkill.skill.toLowerCase().trim();
+        // Comparer uniquement les IDs des skills, pas les niveaux
         const agentSkill = agentSkills.find(
-          skill => skill?.skill && skill.skill.toLowerCase().trim() === normalizedReqSkill && skill.type === reqSkill.type
+          skill => skill?.skill && skill.skill.toString() === reqSkill.skill.toString() && skill.type === reqSkill.type
         );
 
         if (agentSkill) {
-          console.log('Skill level comparison:', {
+          console.log('Skill found (ID-based matching):', {
             skill: reqSkill.skill,
+            skillName: reqSkill.name,
             agentLevel: agentSkill.level,
-            requiredLevel: reqSkill.level
+            requiredLevel: reqSkill.level,
+            skillType: reqSkill.type
           });
 
-          if (agentSkill.level >= reqSkill.level) {
-            matchingSkills.push({
-              skill: reqSkill.skill,
-              requiredLevel: reqSkill.level,
-              agentLevel: agentSkill.level,
-              type: reqSkill.type
-            });
-            return true;
-          } else {
-            insufficientSkills.push({
-              skill: reqSkill.skill,
-              requiredLevel: reqSkill.level,
-              agentLevel: agentSkill.level,
-              type: reqSkill.type
-            });
-            return false;
-          }
+          // Si l'agent a la skill (même ID), c'est un match, peu importe le niveau
+          matchingSkills.push({
+            skill: reqSkill.skill,
+            skillName: reqSkill.name,
+            requiredLevel: reqSkill.level,
+            agentLevel: agentSkill.level,
+            type: reqSkill.type,
+            agentSkillName: agentSkill.name
+          });
+          return true;
         } else {
+          console.log('Skill not found:', {
+            skill: reqSkill.skill,
+            skillName: reqSkill.name,
+            skillType: reqSkill.type
+          });
           missingSkills.push({
             skill: reqSkill.skill,
-            type: reqSkill.type
+            skillName: reqSkill.name,
+            type: reqSkill.type,
+            requiredLevel: reqSkill.level
           });
           return false;
         }
       });
 
-      // Schedule matching
-      const scheduleMatch = compareSchedules(gig.availability?.schedule, agent.availability);
-      console.log('Schedule match result:', scheduleMatch);
+          // Timezone matching
+    console.log('🔍 Timezone matching for agent:', {
+      agentName: agent.personalInfo?.name,
+      agentTimezoneId: agent.availability?.timeZone,
+      gigTimezoneId: gig.availability?.time_zone || gig.availability?.timeZone
+    });
+    
+    // Récupérer et afficher les données de timezone
+    const gigTimezoneId = gig.availability?.time_zone || gig.availability?.timeZone;
+    const agentTimezoneId = agent.availability?.timeZone;
+    
+    console.log('🔍 Timezone IDs:', {
+      gigTimezoneId,
+      agentTimezoneId,
+      gigTimezoneIdType: typeof gigTimezoneId,
+      agentTimezoneIdType: typeof agentTimezoneId
+    });
+    
+    // Récupérer les données de timezone avec gestion d'erreur
+    let gigTimezoneData = null;
+    let agentTimezoneData = null;
+    
+    try {
+      if (gigTimezoneId) {
+        if (typeof gigTimezoneId === 'object' && gigTimezoneId.$oid) {
+          gigTimezoneData = await Timezone.findById(gigTimezoneId.$oid);
+        } else if (typeof gigTimezoneId === 'string' && gigTimezoneId.match(/^[0-9a-fA-F]{24}$/)) {
+          gigTimezoneData = await Timezone.findById(gigTimezoneId);
+        } else if (typeof gigTimezoneId === 'string') {
+          gigTimezoneData = await Timezone.findOne({ zoneName: gigTimezoneId });
+        }
+      }
+    } catch (error) {
+      console.log('❌ Error finding gig timezone:', error.message);
+    }
+    
+    try {
+      if (agentTimezoneId) {
+        if (typeof agentTimezoneId === 'object' && agentTimezoneId.$oid) {
+          agentTimezoneData = await Timezone.findById(agentTimezoneId.$oid);
+        } else if (typeof agentTimezoneId === 'string' && agentTimezoneId.match(/^[0-9a-fA-F]{24}$/)) {
+          agentTimezoneData = await Timezone.findById(agentTimezoneId);
+        } else if (typeof agentTimezoneId === 'string') {
+          agentTimezoneData = await Timezone.findOne({ zoneName: agentTimezoneId });
+        }
+      }
+    } catch (error) {
+      console.log('❌ Error finding agent timezone:', error.message);
+    }
+    
+    console.log('🌍 Gig timezone data:', {
+      id: gig.availability?.time_zone || gig.availability?.timeZone,
+      zoneName: gigTimezoneData?.zoneName || 'Not found',
+      countryCode: gigTimezoneData?.countryCode || 'Not found',
+      countryName: gigTimezoneData?.countryName || 'Not found',
+      gmtOffset: gigTimezoneData?.gmtOffset || 'Not found'
+    });
+    
+    console.log('🌍 Agent timezone data:', {
+      id: agent.availability?.timeZone,
+      zoneName: agentTimezoneData?.zoneName || 'Not found',
+      countryCode: agentTimezoneData?.countryCode || 'Not found',
+      countryName: agentTimezoneData?.countryName || 'Not found',
+      gmtOffset: agentTimezoneData?.gmtOffset || 'Not found'
+    });
+    
+    const timezoneMatch = await compareTimezones(gigTimezoneId, agentTimezoneId);
+    console.log('✅ Timezone match result for', agent.personalInfo?.name, ':', timezoneMatch);
+
+    // Region matching
+    const regionMatch = await compareRegions(gig.destination_zone, agentTimezoneId);
+    console.log('🌍 Region match result for', agent.personalInfo?.name, ':', regionMatch);
+
+    // Schedule matching
+    const scheduleMatch = compareSchedules(gig.availability?.schedule, agent.availability);
+    console.log('Schedule match result:', scheduleMatch);
 
       // Determine match status based on direct matches
       const languageMatchStatus = matchingLanguages.length === requiredLanguages.length ? "perfect_match" : 
@@ -557,15 +1102,21 @@ export const findMatchesForGigById = async (req, res) => {
       console.log('Match statuses:', {
         language: languageMatchStatus,
         skills: skillsMatchStatus,
+        timezone: timezoneMatch.status,
+        region: regionMatch.status,
         schedule: scheduleMatch.status
       });
 
       // Overall match status - être moins strict et permettre des correspondances partielles
       const overallMatchStatus = (languageMatchStatus === "perfect_match" && 
                                 skillsMatchStatus === "perfect_match" && 
+                                timezoneMatch.status === "perfect_match" &&
+                                regionMatch.status === "perfect_match" &&
                                 scheduleMatch.status === "perfect_match") ? "perfect_match" :
                                 (languageMatchStatus === "no_match" && 
                                  skillsMatchStatus === "no_match" && 
+                                 timezoneMatch.status === "no_match" &&
+                                 regionMatch.status === "no_match" &&
                                  scheduleMatch.status === "no_match") ? "no_match" :
                                 "partial_match";
 
@@ -577,9 +1128,37 @@ export const findMatchesForGigById = async (req, res) => {
           photo: agent.personalInfo?.photo || null,
           location: agent.personalInfo?.location || '',
           phone: agent.personalInfo?.phone || '',
-          languages: agent.personalInfo?.languages || [],
+          languages: agent.personalInfo?.languages?.map(lang => ({
+            _id: lang._id,
+            language: lang.language,
+            proficiency: lang.proficiency,
+            iso639_1: lang.iso639_1
+          })) || [],
           professionalSummary: agent.professionalSummary || {},
-          skills: agent.skills || {},
+          skills: {
+            technical: agent.skills?.technical?.map(s => ({
+              _id: s._id,
+              skill: s.skill,
+              level: s.level,
+              details: s.details,
+              name: agentTechnicalSkillMap[s.skill.toString()]?.name || 'Unknown Skill'
+            })) || [],
+            professional: agent.skills?.professional?.map(s => ({
+              _id: s._id,
+              skill: s.skill,
+              level: s.level,
+              details: s.details,
+              name: agentProfessionalSkillMap[s.skill.toString()]?.name || 'Unknown Skill'
+            })) || [],
+            soft: agent.skills?.soft?.map(s => ({
+              _id: s._id,
+              skill: s.skill,
+              level: s.level,
+              details: s.details,
+              name: agentSoftSkillMap[s.skill.toString()]?.name || 'Unknown Skill'
+            })) || [],
+            contactCenter: agent.skills?.contactCenter || []
+          },
           experience: agent.experience || []
         },
         languageMatch: {
@@ -598,6 +1177,16 @@ export const findMatchesForGigById = async (req, res) => {
             matchStatus: skillsMatchStatus
           }
         },
+        timezoneMatch: {
+          score: timezoneMatch.score,
+          details: timezoneMatch.details,
+          matchStatus: timezoneMatch.status
+        },
+        regionMatch: {
+          score: regionMatch.score,
+          details: regionMatch.details,
+          matchStatus: regionMatch.status
+        },
         scheduleMatch: {
           score: scheduleMatch.score,
           details: scheduleMatch.details,
@@ -605,7 +1194,7 @@ export const findMatchesForGigById = async (req, res) => {
         },
         matchStatus: overallMatchStatus
       };
-    });
+    }));
 
     // Trouver le critère avec le poids le plus élevé
     const sortedWeights = Object.entries(weights)
@@ -629,6 +1218,16 @@ export const findMatchesForGigById = async (req, res) => {
         filteredMatches = filteredMatches.filter(match => {
           return match.skillsMatch.details.matchStatus === "perfect_match";
         });
+      } else if (criterion === 'timezone') {
+        // Pour les timezones, accepter uniquement les perfect_match
+        filteredMatches = filteredMatches.filter(
+          match => match.timezoneMatch.matchStatus === "perfect_match"
+        );
+      } else if (criterion === 'region') {
+        // Pour les régions, accepter uniquement les perfect_match
+        filteredMatches = filteredMatches.filter(
+          match => match.regionMatch.matchStatus === "perfect_match"
+        );
       } else if (criterion === 'schedule' || criterion === 'availability') {
         // Pour les horaires, accepter uniquement les perfect_match
         filteredMatches = filteredMatches.filter(
@@ -645,10 +1244,12 @@ export const findMatchesForGigById = async (req, res) => {
     const finalFilteredMatches = filteredMatches.filter(match => {
       const hasLanguageMatch = match.languageMatch.details.matchStatus === "perfect_match";
       const hasSkillsMatch = match.skillsMatch.details.matchStatus === "perfect_match";
+      const hasTimezoneMatch = match.timezoneMatch.matchStatus === "perfect_match";
+      const hasRegionMatch = match.regionMatch.matchStatus === "perfect_match";
       const hasScheduleMatch = match.scheduleMatch.matchStatus === "perfect_match";
       
       // Un agent doit avoir au moins un perfect_match pour être considéré
-      return hasLanguageMatch || hasSkillsMatch || hasScheduleMatch;
+      return hasLanguageMatch || hasSkillsMatch || hasTimezoneMatch || hasRegionMatch || hasScheduleMatch;
     });
 
     console.log('Filtrage global appliqué:', {
@@ -691,6 +1292,18 @@ export const findMatchesForGigById = async (req, res) => {
             noMatches: finalFilteredMatches.length - finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'soft')).length
           }
         }
+      },
+      timezoneStats: {
+        perfectMatches: finalFilteredMatches.filter(m => m.timezoneMatch.matchStatus === "perfect_match").length,
+        partialMatches: finalFilteredMatches.filter(m => m.timezoneMatch.matchStatus === "partial_match").length,
+        noMatches: finalFilteredMatches.filter(m => m.timezoneMatch.matchStatus === "no_match").length,
+        totalMatches: finalFilteredMatches.length
+      },
+      regionStats: {
+        perfectMatches: finalFilteredMatches.filter(m => m.regionMatch.matchStatus === "perfect_match").length,
+        partialMatches: finalFilteredMatches.filter(m => m.regionMatch.matchStatus === "partial_match").length,
+        noMatches: finalFilteredMatches.filter(m => m.regionMatch.matchStatus === "no_match").length,
+        totalMatches: finalFilteredMatches.length
       },
       scheduleStats: {
         perfectMatches: finalFilteredMatches.filter(m => m.scheduleMatch.matchStatus === "perfect_match").length,
@@ -948,9 +1561,9 @@ export const findSkillsMatchesForGig = async (req, res) => {
         let insufficientSkills = [];
 
         requiredSkills.forEach(reqSkill => {
-          const normalizedReqSkill = normalizeSkill(reqSkill.name);
+          // Comparer par ID au lieu du nom
           const agentSkill = agentSkills.find(
-            skill => normalizeSkill(skill.name) === normalizedReqSkill
+            skill => skill.skill.toString() === reqSkill.skill.toString()
           );
 
           if (agentSkill) {
@@ -959,7 +1572,7 @@ export const findSkillsMatchesForGig = async (req, res) => {
             
             if (skillScore >= requiredScore) {
               matchingSkills.push({
-                skill: reqSkill.name,
+                skill: reqSkill.skill,
                 requiredLevel: reqSkill.level,
                 agentLevel: agentSkill.level,
                 score: skillScore
@@ -967,14 +1580,14 @@ export const findSkillsMatchesForGig = async (req, res) => {
               totalScore += skillScore;
             } else {
               insufficientSkills.push({
-                skill: reqSkill.name,
+                skill: reqSkill.skill,
                 requiredLevel: reqSkill.level,
                 agentLevel: agentSkill.level,
                 score: skillScore
               });
             }
           } else {
-            missingSkills.push(reqSkill.name);
+            missingSkills.push(reqSkill.skill);
           }
         });
 
@@ -1001,10 +1614,21 @@ export const findSkillsMatchesForGig = async (req, res) => {
 
     const skillsMatches = findSkillsMatches(gig, agents);
 
+    // Récupérer les noms des skills pour les agents
+    const agentSkillIds = skillsMatches.flatMap(match => 
+      match.agent.skills?.technical?.map(s => s.skill) || []
+    );
+    const agentSkillNames = await getSkillNames([...new Set(agentSkillIds)], 'technical');
+    const agentSkillMap = {};
+    agentSkillNames.forEach(skill => {
+      agentSkillMap[skill.id.toString()] = skill.name;
+    });
+
     const matches = skillsMatches.map(match => ({
       agentId: match.agent._id,
       agentSkills: match.agent.skills?.technical?.map(skill => ({
-        skill: skill.name,
+        skill: skill.skill,
+        skillName: agentSkillMap[skill.skill.toString()] || 'Unknown Skill',
         level: skill.level,
         score: getSkillLevelScore(skill.level)
       })) || [],
@@ -1052,9 +1676,11 @@ export const createGigAgentFromMatch = async (req, res) => {
     // Calculer le score global de matching
     const languageScore = matchDetails.languageMatch?.score || 0;
     const skillsScore = matchDetails.skillsMatch?.details?.matchStatus === 'perfect_match' ? 1 : 0;
+    const timezoneScore = matchDetails.timezoneMatch?.score || 0;
+    const regionScore = matchDetails.regionMatch?.score || 0;
     const scheduleScore = matchDetails.scheduleMatch?.score || 0;
     
-    const matchScore = (languageScore + skillsScore + scheduleScore) / 3;
+    const matchScore = (languageScore + skillsScore + timezoneScore + regionScore + scheduleScore) / 5;
 
     // Créer la nouvelle assignation
     const gigAgent = new GigAgent({
