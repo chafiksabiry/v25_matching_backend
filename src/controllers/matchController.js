@@ -1220,7 +1220,15 @@ export const findMatchesForGigById = async (req, res) => {
             })) || [],
             contactCenter: agent.skills?.contactCenter || []
           },
-          experience: agent.experience || []
+          experience: agent.experience || [],
+          timezone: {
+            timezoneId: agent.availability?.timeZone,
+            timezoneName: agentTimezoneData?.zoneName || 'Unknown',
+            gmtOffset: agentTimezoneData?.gmtOffset || null,
+            gmtDisplay: agentTimezoneData?.gmtOffset ? `GMT ${agentTimezoneData.gmtOffset >= 0 ? '+' : ''}${Math.round(agentTimezoneData.gmtOffset / 3600)}` : 'Unknown',
+            countryCode: agentTimezoneData?.countryCode || 'Unknown',
+            countryName: agentTimezoneData?.countryName || 'Unknown'
+          }
         },
         languageMatch: {
           details: {
