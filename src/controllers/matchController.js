@@ -136,12 +136,29 @@ export const getMatchById = async (req, res) => {
       }
     };
 
-    // Ajouter les détails du matching des langues à la réponse
+    // Calculer les correspondances de timezone et région
+    const gigTimezoneId = match.gigId.availability?.time_zone || match.gigId.availability?.timeZone;
+    const agentTimezoneId = match.agentId.availability?.timeZone;
+    
+    const timezoneMatch = await compareTimezones(gigTimezoneId, agentTimezoneId);
+    const regionMatch = await compareRegions(match.gigId.destination_zone, agentTimezoneId);
+
+    // Ajouter les détails du matching à la réponse
     const response = {
       ...match.toObject(),
       languageMatch: {
         score: languageMatch.score,
         details: languageMatch.details
+      },
+      timezoneMatch: {
+        score: timezoneMatch.score,
+        details: timezoneMatch.details,
+        matchStatus: timezoneMatch.status
+      },
+      regionMatch: {
+        score: regionMatch.score,
+        details: regionMatch.details,
+        matchStatus: regionMatch.status
       }
     };
 
@@ -214,7 +231,7 @@ export const deleteMatch = async (req, res) => {
   }
 };
 
-// Add timezone comparison function
+    // Add timezone comparison function
 const compareTimezones = async (gigTimezoneId, agentTimezoneId) => {
   try {
     console.log('🔍 Comparing timezones:', {
@@ -283,6 +300,10 @@ const compareTimezones = async (gigTimezoneId, agentTimezoneId) => {
         details: {
           gigTimezone: gigTimezone?.zoneName || 'Unknown',
           agentTimezone: agentTimezone?.zoneName || 'Unknown',
+          gigGmtOffset: gigTimezone?.gmtOffset || null,
+          agentGmtOffset: agentTimezone?.gmtOffset || null,
+          gigGmtDisplay: gigTimezone?.gmtOffset ? `GMT ${gigTimezone.gmtOffset >= 0 ? '+' : ''}${Math.round(gigTimezone.gmtOffset / 3600)}` : 'Unknown',
+          agentGmtDisplay: agentTimezone?.gmtOffset ? `GMT ${agentTimezone.gmtOffset >= 0 ? '+' : ''}${Math.round(agentTimezone.gmtOffset / 3600)}` : 'Unknown',
           gmtOffsetDifference: null,
           reason: 'Timezone data not found - using neutral score'
         }
@@ -291,20 +312,28 @@ const compareTimezones = async (gigTimezoneId, agentTimezoneId) => {
 
     const gmtOffsetDifference = Math.abs(gigTimezone.gmtOffset - agentTimezone.gmtOffset);
     
+    // Formater les décalages GMT pour l'affichage
+    const formatGmtOffset = (offset) => {
+      const hours = Math.round(offset / 3600);
+      return `GMT ${hours >= 0 ? '+' : ''}${hours}`;
+    };
+    
     console.log('🌍 Timezone comparison details:', {
       gigTimezone: {
         id: gigTimezoneId,
         zoneName: gigTimezone.zoneName,
         countryCode: gigTimezone.countryCode,
         countryName: gigTimezone.countryName,
-        gmtOffset: gigTimezone.gmtOffset
+        gmtOffset: gigTimezone.gmtOffset,
+        gmtDisplay: formatGmtOffset(gigTimezone.gmtOffset)
       },
       agentTimezone: {
         id: agentTimezoneId,
         zoneName: agentTimezone.zoneName,
         countryCode: agentTimezone.countryCode,
         countryName: agentTimezone.countryName,
-        gmtOffset: agentTimezone.gmtOffset
+        gmtOffset: agentTimezone.gmtOffset,
+        gmtDisplay: formatGmtOffset(agentTimezone.gmtOffset)
       },
       difference: {
         gmtOffsetDifference,
@@ -357,6 +386,8 @@ const compareTimezones = async (gigTimezoneId, agentTimezoneId) => {
         agentTimezone: agentTimezone.zoneName,
         gigGmtOffset: gigTimezone.gmtOffset,
         agentGmtOffset: agentTimezone.gmtOffset,
+        gigGmtDisplay: formatGmtOffset(gigTimezone.gmtOffset),
+        agentGmtDisplay: formatGmtOffset(agentTimezone.gmtOffset),
         gmtOffsetDifference,
         reason
       }
@@ -369,6 +400,10 @@ const compareTimezones = async (gigTimezoneId, agentTimezoneId) => {
       details: {
         gigTimezone: 'Unknown',
         agentTimezone: 'Unknown',
+        gigGmtOffset: null,
+        agentGmtOffset: null,
+        gigGmtDisplay: 'Unknown',
+        agentGmtDisplay: 'Unknown',
         gmtOffsetDifference: null,
         reason: 'Error comparing timezones'
       }
@@ -395,6 +430,7 @@ const compareRegions = async (gigDestinationZone, agentTimezoneId) => {
         details: {
           gigDestinationZone: 'Unknown',
           agentCountryCode: 'Unknown',
+          agentCountryName: 'Unknown',
           reason: 'Gig destination zone not found - using neutral score'
         }
       };
@@ -403,6 +439,7 @@ const compareRegions = async (gigDestinationZone, agentTimezoneId) => {
     // Récupérer le countryCode de l'agent à partir de son timezone
     let agentTimezone = null;
     let agentCountryCode = null;
+    let agentCountryName = null;
 
     if (agentTimezoneId) {
       try {
@@ -423,11 +460,13 @@ const compareRegions = async (gigDestinationZone, agentTimezoneId) => {
 
     if (agentTimezone) {
       agentCountryCode = agentTimezone.countryCode;
+      agentCountryName = agentTimezone.countryName;
     }
 
     console.log('🌍 Region comparison details:', {
       gigDestinationZone,
       agentCountryCode,
+      agentCountryName,
       agentTimezone: agentTimezone ? {
         id: agentTimezoneId,
         zoneName: agentTimezone.zoneName,
@@ -445,6 +484,7 @@ const compareRegions = async (gigDestinationZone, agentTimezoneId) => {
         details: {
           gigDestinationZone,
           agentCountryCode: 'Unknown',
+          agentCountryName: 'Unknown',
           reason: 'Agent country code not found - using neutral score'
         }
       };
@@ -456,6 +496,7 @@ const compareRegions = async (gigDestinationZone, agentTimezoneId) => {
     console.log('🌍 Region match result:', {
       gigDestinationZone: gigDestinationZone.toUpperCase(),
       agentCountryCode: agentCountryCode.toUpperCase(),
+      agentCountryName,
       isSameRegion
     });
 
@@ -481,6 +522,7 @@ const compareRegions = async (gigDestinationZone, agentTimezoneId) => {
       details: {
         gigDestinationZone,
         agentCountryCode,
+        agentCountryName,
         reason
       }
     };
@@ -492,6 +534,7 @@ const compareRegions = async (gigDestinationZone, agentTimezoneId) => {
       details: {
         gigDestinationZone: 'Unknown',
         agentCountryCode: 'Unknown',
+        agentCountryName: 'Unknown',
         reason: 'Error comparing regions'
       }
     };
