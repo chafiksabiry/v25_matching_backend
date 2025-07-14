@@ -877,36 +877,22 @@ export const findMatchesForGigById = async (req, res) => {
         }
       });
       
-      const agentTechnicalSkillMap = {};
-      const agentProfessionalSkillMap = {};
-      const agentSoftSkillMap = {};
-      
-      agent.skills?.technical?.forEach((s, index) => {
-        if (agentTechnicalSkills[index]) {
-          agentTechnicalSkillMap[s.skill.toString()] = {
-            ...s,
-            name: agentTechnicalSkills[index].name
-          };
-        }
-      });
-      
-      agent.skills?.professional?.forEach((s, index) => {
-        if (agentProfessionalSkills[index]) {
-          agentProfessionalSkillMap[s.skill.toString()] = {
-            ...s,
-            name: agentProfessionalSkills[index].name
-          };
-        }
-      });
-      
-      agent.skills?.soft?.forEach((s, index) => {
-        if (agentSoftSkills[index]) {
-          agentSoftSkillMap[s.skill.toString()] = {
-            ...s,
-            name: agentSoftSkills[index].name
-          };
-        }
-      });
+      // Pour la réponse frontend, injecte le champ 'name' dans chaque skill du gig
+      const gigSkillsWithNames = {
+        technical: (gig.skills?.technical || []).map(s => ({
+          ...s,
+          name: gigTechnicalSkillMap[s.skill.toString()]?.name || 'Unknown Skill'
+        })),
+        professional: (gig.skills?.professional || []).map(s => ({
+          ...s,
+          name: gigProfessionalSkillMap[s.skill.toString()]?.name || 'Unknown Skill'
+        })),
+        soft: (gig.skills?.soft || []).map(s => ({
+          ...s,
+          name: gigSoftSkillMap[s.skill.toString()]?.name || 'Unknown Skill'
+        })),
+        languages: gig.skills?.languages || []
+      };
 
       const requiredSkills = [
         ...(gig.skills?.technical || []).map(s => ({ 
@@ -1271,45 +1257,19 @@ export const findMatchesForGigById = async (req, res) => {
         totalMatches: finalFilteredMatches.length
       },
       skillsStats: {
-        perfectMatches: finalFilteredMatches.filter(m => m.skillsMatch.details.matchStatus === "perfect_match").length,
-        partialMatches: finalFilteredMatches.filter(m => m.skillsMatch.details.matchStatus === "partial_match").length,
-        noMatches: finalFilteredMatches.filter(m => m.skillsMatch.details.matchStatus === "no_match").length,
-        totalMatches: finalFilteredMatches.length,
-        byType: {
-          technical: {
-            perfectMatches: finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'technical')).length,
-            partialMatches: finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'technical')).length,
-            noMatches: finalFilteredMatches.length - finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'technical')).length
-          },
-          professional: {
-            perfectMatches: finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'professional')).length,
-            partialMatches: finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'professional')).length,
-            noMatches: finalFilteredMatches.length - finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'professional')).length
-          },
-          soft: {
-            perfectMatches: finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'soft')).length,
-            partialMatches: finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'soft')).length,
-            noMatches: finalFilteredMatches.length - finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'soft')).length
-          }
-        }
+        perfectMatches: finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'technical')).length,
+        partialMatches: finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'technical')).length,
+        noMatches: finalFilteredMatches.length - finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'technical')).length
       },
-      timezoneStats: {
-        perfectMatches: finalFilteredMatches.filter(m => m.timezoneMatch.matchStatus === "perfect_match").length,
-        partialMatches: finalFilteredMatches.filter(m => m.timezoneMatch.matchStatus === "partial_match").length,
-        noMatches: finalFilteredMatches.filter(m => m.timezoneMatch.matchStatus === "no_match").length,
-        totalMatches: finalFilteredMatches.length
+      professional: {
+        perfectMatches: finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'professional')).length,
+        partialMatches: finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'professional')).length,
+        noMatches: finalFilteredMatches.length - finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'professional')).length
       },
-      regionStats: {
-        perfectMatches: finalFilteredMatches.filter(m => m.regionMatch.matchStatus === "perfect_match").length,
-        partialMatches: finalFilteredMatches.filter(m => m.regionMatch.matchStatus === "partial_match").length,
-        noMatches: finalFilteredMatches.filter(m => m.regionMatch.matchStatus === "no_match").length,
-        totalMatches: finalFilteredMatches.length
-      },
-      scheduleStats: {
-        perfectMatches: finalFilteredMatches.filter(m => m.scheduleMatch.matchStatus === "perfect_match").length,
-        partialMatches: finalFilteredMatches.filter(m => m.scheduleMatch.matchStatus === "partial_match").length,
-        noMatches: finalFilteredMatches.filter(m => m.scheduleMatch.matchStatus === "no_match").length,
-        totalMatches: finalFilteredMatches.length
+      soft: {
+        perfectMatches: finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'soft')).length,
+        partialMatches: finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'soft')).length,
+        noMatches: finalFilteredMatches.length - finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'soft')).length
       }
     };
 
