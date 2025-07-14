@@ -845,7 +845,7 @@ export const findMatchesForGigById = async (req, res) => {
         getSkillNames(agentSoftSkillIds, 'soft')
       ]);
       
-      // Créer les mappings pour faciliter la recherche
+      // Créer les mappings pour faciliter la recherche (GIG)
       const gigTechnicalSkillMap = {};
       const gigProfessionalSkillMap = {};
       const gigSoftSkillMap = {};
@@ -873,6 +873,38 @@ export const findMatchesForGigById = async (req, res) => {
           gigSoftSkillMap[s.skill.toString()] = {
             ...s,
             name: gigSoftSkills[index].name
+          };
+        }
+      });
+
+      // Créer les mappings pour faciliter la recherche (AGENT)
+      const agentTechnicalSkillMap = {};
+      const agentProfessionalSkillMap = {};
+      const agentSoftSkillMap = {};
+      
+      agent.skills?.technical?.forEach((s, index) => {
+        if (agentTechnicalSkills[index]) {
+          agentTechnicalSkillMap[s.skill.toString()] = {
+            ...s,
+            name: agentTechnicalSkills[index].name
+          };
+        }
+      });
+      
+      agent.skills?.professional?.forEach((s, index) => {
+        if (agentProfessionalSkills[index]) {
+          agentProfessionalSkillMap[s.skill.toString()] = {
+            ...s,
+            name: agentProfessionalSkills[index].name
+          };
+        }
+      });
+      
+      agent.skills?.soft?.forEach((s, index) => {
+        if (agentSoftSkills[index]) {
+          agentSoftSkillMap[s.skill.toString()] = {
+            ...s,
+            name: agentSoftSkills[index].name
           };
         }
       });
