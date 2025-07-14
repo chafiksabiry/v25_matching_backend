@@ -1079,13 +1079,34 @@ export const findMatches = async (
 export const getLanguageLevelScore = (level) => {
   const levelMap = {
     'A1': 0.1,  // Débutant
+    'a1': 0.1,  // Débutant
     'A2': 0.2,  // Élémentaire
+    'a2': 0.2,  // Élémentaire
     'B1': 0.4,  // Intermédiaire
+    'b1': 0.4,  // Intermédiaire
     'B2': 0.6,  // Intermédiaire avancé
+    'b2': 0.6,  // Intermédiaire avancé
     'C1': 0.8,  // Avancé
+    'c1': 0.8,  // Avancé
     'C2': 1.0,  // Maîtrise
+    'c2': 1.0,  // Maîtrise
     'Native': 1.0,  // Langue maternelle
-    
+    'native': 1.0,  // Langue maternelle
+    'natif': 1.0,  // Langue maternelle
+    'fluent': 0.9,  // Courant
+    'avancé': 0.8,  // Avancé
+    'advanced': 0.8,  // Avancé
+    'intermediate': 0.5,  // Intermédiaire
+    'intermédiaire': 0.5,  // Intermédiaire
+    'beginner': 0.2,  // Débutant
+    'débutant': 0.2,  // Débutant
+    'conversational': 0.5,  // Conversationnel
+    'professional': 0.8,  // Professionnel
+    'langue maternelle': 1.0,  // Langue maternelle
+    'bonne maîtrise': 0.8,  // Bonne maîtrise
+    'maîtrise professionnelle': 0.6,  // Maîtrise professionnelle
+    'maîtrise limitée': 0.4,  // Maîtrise limitée
+    'maîtrise élémentaire': 0.2,  // Maîtrise élémentaire
   };
   return levelMap[level] || 0;
 };

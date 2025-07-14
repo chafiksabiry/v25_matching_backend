@@ -377,21 +377,85 @@ export const findMatchesForGigById = async (req, res) => {
           const normalizedReqLevel = normalizeLanguage(reqLang.proficiency);
           const normalizedAgentLevel = normalizeLanguage(agentLang.proficiency);
           
-          // Check if the required level is native
-          const isNativeRequired = ['native', 'natif'].includes(normalizedReqLevel);
+          // Check if the required level is native or C2
+          const isNativeRequired = ['native', 'natif', 'c2'].includes(normalizedReqLevel);
           
-          // For native level, only accept native or C2 proficiency
-          const isLevelMatch = isNativeRequired 
+          // For native/C2 level, only accept native, natif or C2 proficiency
+          let isLevelMatch = isNativeRequired 
             ? ['native', 'natif', 'c2'].includes(normalizedAgentLevel)
             : getLanguageLevelScore(normalizedAgentLevel) >= getLanguageLevelScore(normalizedReqLevel);
 
+          // Vérification de sécurité : forcer la logique correcte
+          const agentScore = getLanguageLevelScore(normalizedAgentLevel);
+          const requiredScore = getLanguageLevelScore(normalizedReqLevel);
+          
+          console.log('🔍 DEBUG - Language scores:', {
+            agent: agent.personalInfo?.name,
+            agentLevel: agentLang.proficiency,
+            normalizedAgentLevel,
+            agentScore,
+            requiredLevel: reqLang.proficiency,
+            normalizedReqLevel,
+            requiredScore,
+            comparison: `${agentScore} >= ${requiredScore}`,
+            result: agentScore >= requiredScore
+          });
+          
+          // Si l'agent a un niveau inférieur, c'est forcément un no_match
+          if (agentScore < requiredScore) {
+            isLevelMatch = false;
+            console.log('🔒 Forced no_match due to insufficient level:', {
+              agent: agent.personalInfo?.name,
+              agentLevel: agentLang.proficiency,
+              agentScore,
+              requiredLevel: reqLang.proficiency,
+              requiredScore
+            });
+          } else {
+            // Si l'agent a un niveau suffisant, confirmer le match
+            isLevelMatch = true;
+            console.log('✅ Confirmed match due to sufficient level:', {
+              agent: agent.personalInfo?.name,
+              agentLevel: agentLang.proficiency,
+              agentScore,
+              requiredLevel: reqLang.proficiency,
+              requiredScore
+            });
+          }
+
+          console.log('Language level comparison:', {
+            agent: agent.personalInfo?.name,
+            language: reqLang.language,
+            requiredLevel: reqLang.proficiency,
+            normalizedReqLevel,
+            agentLevel: agentLang.proficiency,
+            normalizedAgentLevel,
+            isNativeRequired,
+            agentScore: getLanguageLevelScore(normalizedAgentLevel),
+            requiredScore: getLanguageLevelScore(normalizedReqLevel),
+            isLevelMatch,
+            comparison: `${getLanguageLevelScore(normalizedAgentLevel)} >= ${getLanguageLevelScore(normalizedReqLevel)}`
+          });
+
           if (isLevelMatch) {
+            console.log('✅ Language match accepted:', {
+              agent: agent.personalInfo?.name,
+              language: reqLang.language,
+              requiredLevel: reqLang.proficiency,
+              agentLevel: agentLang.proficiency
+            });
             matchingLanguages.push({
               language: reqLang.language,
               requiredLevel: reqLang.proficiency,
               agentLevel: agentLang.proficiency
             });
           } else {
+            console.log('❌ Language match rejected:', {
+              agent: agent.personalInfo?.name,
+              language: reqLang.language,
+              requiredLevel: reqLang.proficiency,
+              agentLevel: agentLang.proficiency
+            });
             insufficientLanguages.push({
               language: reqLang.language,
               requiredLevel: reqLang.proficiency,
@@ -475,8 +539,20 @@ export const findMatchesForGigById = async (req, res) => {
       const languageMatchStatus = matchingLanguages.length === requiredLanguages.length ? "perfect_match" : 
                                  matchingLanguages.length > 0 ? "partial_match" : "no_match";
       
-      // Skills match status is now based on having ALL required skills
-      const skillsMatchStatus = hasAllRequiredSkills ? "perfect_match" : "no_match";
+      // Skills match status - être plus flexible si l'agent n'a pas de compétences définies
+      let skillsMatchStatus;
+      const agentSkillsData = agent.skills || {};
+      const hasNoSkills = (!agentSkillsData.technical || agentSkillsData.technical.length === 0) &&
+                         (!agentSkillsData.professional || agentSkillsData.professional.length === 0) &&
+                         (!agentSkillsData.soft || agentSkillsData.soft.length === 0);
+      
+      if (hasNoSkills) {
+        // Si l'agent n'a pas de compétences définies, on considère que c'est un no_match
+        skillsMatchStatus = "no_match";
+      } else {
+        // Sinon, on utilise la logique normale
+        skillsMatchStatus = hasAllRequiredSkills ? "perfect_match" : "no_match";
+      }
 
       console.log('Match statuses:', {
         language: languageMatchStatus,
@@ -484,7 +560,7 @@ export const findMatchesForGigById = async (req, res) => {
         schedule: scheduleMatch.status
       });
 
-      // Overall match status is perfect only if all criteria are perfect
+      // Overall match status - être moins strict et permettre des correspondances partielles
       const overallMatchStatus = (languageMatchStatus === "perfect_match" && 
                                 skillsMatchStatus === "perfect_match" && 
                                 scheduleMatch.status === "perfect_match") ? "perfect_match" :
@@ -544,14 +620,17 @@ export const findMatchesForGigById = async (req, res) => {
       console.log(`Filtering by ${criterion} with weight ${weight}`);
       
       if (criterion === 'languages') {
+        // Pour les langues, accepter uniquement les perfect_match
         filteredMatches = filteredMatches.filter(
           match => match.languageMatch.details.matchStatus === "perfect_match"
         );
       } else if (criterion === 'skills') {
-        filteredMatches = filteredMatches.filter(
-          match => match.skillsMatch.details.matchStatus === "perfect_match"
-        );
+        // Pour les compétences, accepter uniquement les perfect_match
+        filteredMatches = filteredMatches.filter(match => {
+          return match.skillsMatch.details.matchStatus === "perfect_match";
+        });
       } else if (criterion === 'schedule' || criterion === 'availability') {
+        // Pour les horaires, accepter uniquement les perfect_match
         filteredMatches = filteredMatches.filter(
           match => match.scheduleMatch.matchStatus === "perfect_match"
         );
@@ -560,53 +639,71 @@ export const findMatchesForGigById = async (req, res) => {
       console.log(`After ${criterion} filtering: ${filteredMatches.length} matches remaining`);
     }
 
-    // Calculer les statistiques après le filtrage séquentiel
+
+
+    // Filtrage global obligatoire - rejeter tous les agents qui ont des no_match
+    const finalFilteredMatches = filteredMatches.filter(match => {
+      const hasLanguageMatch = match.languageMatch.details.matchStatus === "perfect_match";
+      const hasSkillsMatch = match.skillsMatch.details.matchStatus === "perfect_match";
+      const hasScheduleMatch = match.scheduleMatch.matchStatus === "perfect_match";
+      
+      // Un agent doit avoir au moins un perfect_match pour être considéré
+      return hasLanguageMatch || hasSkillsMatch || hasScheduleMatch;
+    });
+
+    console.log('Filtrage global appliqué:', {
+      before: filteredMatches.length,
+      after: finalFilteredMatches.length,
+      removed: filteredMatches.length - finalFilteredMatches.length
+    });
+
+    // Calculer les statistiques après le filtrage global
     const stats = {
-      totalMatches: filteredMatches.length,
-      perfectMatches: filteredMatches.filter(m => m.matchStatus === "perfect_match").length,
-      partialMatches: filteredMatches.filter(m => m.matchStatus === "partial_match").length,
-      noMatches: filteredMatches.filter(m => m.matchStatus === "no_match").length,
+      totalMatches: finalFilteredMatches.length,
+      perfectMatches: finalFilteredMatches.filter(m => m.matchStatus === "perfect_match").length,
+      partialMatches: finalFilteredMatches.filter(m => m.matchStatus === "partial_match").length,
+      noMatches: finalFilteredMatches.filter(m => m.matchStatus === "no_match").length,
       languageStats: {
-        perfectMatches: filteredMatches.filter(m => m.languageMatch.details.matchStatus === "perfect_match").length,
-        partialMatches: filteredMatches.filter(m => m.languageMatch.details.matchStatus === "partial_match").length,
-        noMatches: filteredMatches.filter(m => m.languageMatch.details.matchStatus === "no_match").length,
-        totalMatches: filteredMatches.length
+        perfectMatches: finalFilteredMatches.filter(m => m.languageMatch.details.matchStatus === "perfect_match").length,
+        partialMatches: finalFilteredMatches.filter(m => m.languageMatch.details.matchStatus === "partial_match").length,
+        noMatches: finalFilteredMatches.filter(m => m.languageMatch.details.matchStatus === "no_match").length,
+        totalMatches: finalFilteredMatches.length
       },
       skillsStats: {
-        perfectMatches: filteredMatches.filter(m => m.skillsMatch.details.matchStatus === "perfect_match").length,
-        partialMatches: filteredMatches.filter(m => m.skillsMatch.details.matchStatus === "partial_match").length,
-        noMatches: filteredMatches.filter(m => m.skillsMatch.details.matchStatus === "no_match").length,
-        totalMatches: filteredMatches.length,
+        perfectMatches: finalFilteredMatches.filter(m => m.skillsMatch.details.matchStatus === "perfect_match").length,
+        partialMatches: finalFilteredMatches.filter(m => m.skillsMatch.details.matchStatus === "partial_match").length,
+        noMatches: finalFilteredMatches.filter(m => m.skillsMatch.details.matchStatus === "no_match").length,
+        totalMatches: finalFilteredMatches.length,
         byType: {
           technical: {
-            perfectMatches: filteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'technical')).length,
-            partialMatches: filteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'technical')).length,
-            noMatches: filteredMatches.length - filteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'technical')).length
+            perfectMatches: finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'technical')).length,
+            partialMatches: finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'technical')).length,
+            noMatches: finalFilteredMatches.length - finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'technical')).length
           },
           professional: {
-            perfectMatches: filteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'professional')).length,
-            partialMatches: filteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'professional')).length,
-            noMatches: filteredMatches.length - filteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'professional')).length
+            perfectMatches: finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'professional')).length,
+            partialMatches: finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'professional')).length,
+            noMatches: finalFilteredMatches.length - finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'professional')).length
           },
           soft: {
-            perfectMatches: filteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'soft')).length,
-            partialMatches: filteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'soft')).length,
-            noMatches: filteredMatches.length - filteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'soft')).length
+            perfectMatches: finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'soft')).length,
+            partialMatches: finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'soft')).length,
+            noMatches: finalFilteredMatches.length - finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'soft')).length
           }
         }
       },
       scheduleStats: {
-        perfectMatches: filteredMatches.filter(m => m.scheduleMatch.matchStatus === "perfect_match").length,
-        partialMatches: filteredMatches.filter(m => m.scheduleMatch.matchStatus === "partial_match").length,
-        noMatches: filteredMatches.filter(m => m.scheduleMatch.matchStatus === "no_match").length,
-        totalMatches: filteredMatches.length
+        perfectMatches: finalFilteredMatches.filter(m => m.scheduleMatch.matchStatus === "perfect_match").length,
+        partialMatches: finalFilteredMatches.filter(m => m.scheduleMatch.matchStatus === "partial_match").length,
+        noMatches: finalFilteredMatches.filter(m => m.scheduleMatch.matchStatus === "no_match").length,
+        totalMatches: finalFilteredMatches.length
       }
     };
 
-    console.log('Statistiques après filtrage:', stats);
+    console.log('Statistiques après filtrage global:', stats);
     
     res.json({
-      preferedmatches: filteredMatches,
+      preferedmatches: finalFilteredMatches,
       ...stats
     });
   } catch (error) {
