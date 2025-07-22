@@ -196,6 +196,7 @@ const agentSchema = new mongoose.Schema({
   },
   professionalSummary: {
     industries: [String],
+    activities: [String],
     yearsOfExperience: String
   },
   completionSteps: {
