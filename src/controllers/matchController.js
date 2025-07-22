@@ -55,6 +55,14 @@ const Industry = mongoose.model('Industry', new mongoose.Schema({
   isActive: Boolean
 }));
 
+// Activity model (pour récupérer les noms des activités)
+const Activity = mongoose.model('Activity', new mongoose.Schema({
+  name: String,
+  description: String,
+  category: String,
+  isActive: Boolean
+}));
+
 // Function to get language names from IDs
 const getLanguageNames = async (languageIds) => {
   try {
@@ -96,6 +104,28 @@ const getIndustryNames = async (industryIds) => {
   } catch (error) {
     console.error('Error getting industry names:', error);
     return industryIds.map(id => ({ id, name: 'Unknown Industry' }));
+  }
+};
+
+// Function to get activity names from IDs
+const getActivityNames = async (activityIds) => {
+  try {
+    if (!activityIds || activityIds.length === 0) return [];
+    
+    const activities = await Activity.find({ _id: { $in: activityIds } });
+    const activityMap = {};
+    
+    activities.forEach(activity => {
+      activityMap[activity._id.toString()] = activity.name;
+    });
+    
+    return activityIds.map(id => ({
+      id: id,
+      name: activityMap[id.toString()] || 'Unknown Activity'
+    }));
+  } catch (error) {
+    console.error('Error getting activity names:', error);
+    return activityIds.map(id => ({ id, name: 'Unknown Activity' }));
   }
 };
 
@@ -793,7 +823,8 @@ export const findMatchesForGigById = async (req, res) => {
       schedule: 0.10, 
       timezone: 0.10, 
       industry: 0.10,
-      weight: 0.10
+      weight: 0.10,
+      activity: 0.10
     };
 
     // Normaliser les poids pour supporter les deux noms (industry et weight)
@@ -807,6 +838,13 @@ export const findMatchesForGigById = async (req, res) => {
 
     const agents = await Agent.find({})
       .select('personalInfo skills availability professionalSummary');
+
+    console.log('🔍 Agents found:', agents.map(agent => ({
+      name: agent.personalInfo?.name,
+      hasActivities: !!agent.professionalSummary?.activities,
+      activitiesCount: agent.professionalSummary?.activities?.length || 0,
+      activities: agent.professionalSummary?.activities
+    })));
 
 
     
@@ -834,9 +872,20 @@ export const findMatchesForGigById = async (req, res) => {
       agentsWithIndustries = agentsWithLanguages;
     }
 
+    // Filtrer les agents qui ont des activités seulement si le poids des activités > 0
+    let agentsWithActivities = agentsWithIndustries;
+    if (weights.activity > 0) {
+      agentsWithActivities = agentsWithIndustries.filter(agent => {
+        const hasActivities = agent.professionalSummary?.activities && agent.professionalSummary.activities.length > 0;
+        return hasActivities;
+      });
+    } else {
+      agentsWithActivities = agentsWithIndustries;
+    }
 
 
-    const matches = await Promise.all(agentsWithIndustries.map(async agent => {
+
+    const matches = await Promise.all(agentsWithActivities.map(async agent => {
 
 
       // Language matching - utiliser les IDs et récupérer les noms
@@ -1045,6 +1094,110 @@ export const findMatchesForGigById = async (req, res) => {
           gigIndustryIds,
           agentIndustryIds,
           matchingIndustriesDetails: matchingIndustries
+        });
+      }
+
+      // Activity matching - comparer les IDs des activités
+      // Extraire les IDs des activités (gérer les formats $oid et ObjectId)
+      const gigActivityIds = (gig.activities || []).map(activity => {
+        if (typeof activity === 'object' && activity.$oid) {
+          return activity.$oid;
+        } else if (typeof activity === 'object' && activity._id) {
+          return activity._id;
+        } else {
+          return activity;
+        }
+      });
+      
+      const agentActivityIds = (agent.professionalSummary?.activities || []).map(activity => {
+        if (typeof activity === 'object' && activity.$oid) {
+          return activity.$oid;
+        } else if (typeof activity === 'object' && activity._id) {
+          return activity._id;
+        } else {
+          return activity;
+        }
+      });
+      
+      console.log('🎯 Activity comparison for', agent.personalInfo?.name, ':', {
+        gigActivities: gigActivityIds,
+        agentActivities: agentActivityIds,
+        activityWeight: weights.activity,
+        gigRaw: gig.activities,
+        agentRaw: agent.professionalSummary?.activities
+      });
+
+      // Récupérer les noms des activités pour l'affichage
+      const [gigActivityNames, agentActivityNames] = await Promise.all([
+        getActivityNames(gigActivityIds),
+        getActivityNames(agentActivityIds)
+      ]);
+      
+      // Créer les mappings pour les activités
+      const gigActivityMap = {};
+      const agentActivityMap = {};
+      
+      gigActivityNames.forEach(activity => {
+        gigActivityMap[activity.id.toString()] = activity.name;
+      });
+      
+      agentActivityNames.forEach(activity => {
+        agentActivityMap[activity.id.toString()] = activity.name;
+      });
+
+      let matchingActivities = [];
+      let missingActivities = [];
+      let activityMatchStatus;
+
+      // Gérer le cas où le gig n'a pas d'activités définies
+      if (gigActivityIds.length === 0) {
+        // Si le gig n'a pas d'activités, considérer comme un match neutre
+        activityMatchStatus = "neutral_match";
+        
+        console.log('✅ Activity match result (no gig activities):', {
+          agent: agent.personalInfo?.name,
+          status: activityMatchStatus,
+          reason: 'Gig has no activities defined - using neutral match'
+        });
+      } else {
+        // Vérifier si l'agent a au moins une des activités requises par le gig
+        gigActivityIds.forEach(gigActivityId => {
+          if (!gigActivityId) return;
+          
+          const gigActivityIdStr = gigActivityId.toString();
+          const gigActivityName = gigActivityMap[gigActivityIdStr] || 'Unknown Activity';
+          
+          const agentHasActivity = agentActivityIds.some(
+            agentActivityId => agentActivityId && agentActivityId.toString() === gigActivityIdStr
+          );
+
+          if (agentHasActivity) {
+            const agentActivityName = agentActivityMap[gigActivityIdStr] || 'Unknown Activity';
+            matchingActivities.push({
+              activity: gigActivityId,
+              activityName: gigActivityName,
+              agentActivityName: agentActivityName
+            });
+          } else {
+            missingActivities.push({
+              activity: gigActivityId,
+              activityName: gigActivityName
+            });
+          }
+        });
+
+        // Déterminer le statut du matching des activités
+        activityMatchStatus = matchingActivities.length === gigActivityIds.length ? "perfect_match" : 
+                             matchingActivities.length > 0 ? "partial_match" : "no_match";
+
+        console.log('✅ Activity match result:', {
+          agent: agent.personalInfo?.name,
+          matchingActivities: matchingActivities.length,
+          missingActivities: missingActivities.length,
+          status: activityMatchStatus,
+          gigActivityIds,
+          agentActivityIds,
+          matchingActivitiesDetails: matchingActivities
         });
       }
 
@@ -1370,6 +1523,7 @@ export const findMatchesForGigById = async (req, res) => {
       const overallMatchStatus = (languageMatchStatus === "perfect_match" && 
                                 skillsMatchStatus === "perfect_match" && 
                                 industryMatchStatus === "perfect_match" &&
+                                activityMatchStatus === "perfect_match" &&
                                 experienceMatch.status === "perfect_match" &&
                                 timezoneMatch.status === "perfect_match" &&
                                 regionMatch.status === "perfect_match" &&
@@ -1377,6 +1531,7 @@ export const findMatchesForGigById = async (req, res) => {
                                 (languageMatchStatus === "no_match" && 
                                  skillsMatchStatus === "no_match" && 
                                  industryMatchStatus === "no_match" &&
+                                 activityMatchStatus === "no_match" &&
                                  experienceMatch.status === "no_match" &&
                                  timezoneMatch.status === "no_match" &&
                                  regionMatch.status === "no_match" &&
@@ -1459,6 +1614,13 @@ export const findMatchesForGigById = async (req, res) => {
             matchStatus: industryMatchStatus
           }
         },
+        activityMatch: {
+          details: {
+            matchingActivities,
+            missingActivities,
+            matchStatus: activityMatchStatus
+          }
+        },
         experienceMatch: {
           score: experienceMatch.score,
           details: experienceMatch.details,
@@ -1492,6 +1654,10 @@ export const findMatchesForGigById = async (req, res) => {
 
     console.log('🔍 Starting filtering with weights:', weights);
     console.log('🔍 Total agents before filtering:', matches.length);
+    console.log('🔍 Agents with activities:', matches.filter(m => m.activityMatch).map(m => ({
+      name: m.agentInfo.name,
+      activityMatch: m.activityMatch.details.matchStatus
+    })));
     
     // Appliquer le filtrage séquentiel basé sur les poids
     for (const [criterion, weight] of sortedWeights) {
@@ -1523,6 +1689,19 @@ export const findMatchesForGigById = async (req, res) => {
         console.log('🔍 Industry match statuses:', filteredMatches.map(m => ({
           agent: m.agentInfo.name,
           status: m.industryMatch.details.matchStatus
+        })));
+      } else if (criterion === 'activity') {
+        // Pour les activités, accepter les perfect_match et neutral_match
+        const beforeCount = filteredMatches.length;
+        filteredMatches = filteredMatches.filter(
+          match => match.activityMatch.details.matchStatus === "perfect_match" || 
+                   match.activityMatch.details.matchStatus === "neutral_match"
+        );
+        const afterCount = filteredMatches.length;
+        console.log(`🔍 Activity filtering: ${beforeCount} -> ${afterCount} agents (criterion: ${criterion}, weight: ${weight})`);
+        console.log('🔍 Activity match statuses:', filteredMatches.map(m => ({
+          agent: m.agentInfo.name,
+          status: m.activityMatch.details.matchStatus
         })));
       } else if (criterion === 'experience') {
         // Pour l'expérience, accepter uniquement les perfect_match
@@ -1557,6 +1736,7 @@ export const findMatchesForGigById = async (req, res) => {
       const hasLanguageWeight = weights.languages > 0;
       const hasSkillsWeight = weights.skills > 0;
       const hasIndustryWeight = (weights.industry > 0 || weights.weight > 0);
+      const hasActivityWeight = weights.activity > 0;
       const hasExperienceWeight = weights.experience > 0;
       const hasTimezoneWeight = weights.timezone > 0;
       const hasRegionWeight = weights.region > 0;
@@ -1566,14 +1746,15 @@ export const findMatchesForGigById = async (req, res) => {
       const hasLanguageMatch = !hasLanguageWeight || match.languageMatch.details.matchStatus === "perfect_match";
       const hasSkillsMatch = !hasSkillsWeight || match.skillsMatch.details.matchStatus === "perfect_match";
       const hasIndustryMatch = !hasIndustryWeight || match.industryMatch.details.matchStatus === "perfect_match" || match.industryMatch.details.matchStatus === "neutral_match";
+      const hasActivityMatch = !hasActivityWeight || match.activityMatch.details.matchStatus === "perfect_match" || match.activityMatch.details.matchStatus === "neutral_match";
       const hasExperienceMatch = !hasExperienceWeight || match.experienceMatch.matchStatus === "perfect_match";
       const hasTimezoneMatch = !hasTimezoneWeight || match.timezoneMatch.matchStatus === "perfect_match";
       const hasRegionMatch = !hasRegionWeight || match.regionMatch.matchStatus === "perfect_match";
       const hasScheduleMatch = !hasScheduleWeight || match.scheduleMatch.matchStatus === "perfect_match";
       
       // Un agent doit avoir au moins un perfect_match pour les critères avec un poids > 0
-      const activeCriteria = [hasLanguageWeight, hasSkillsWeight, hasIndustryWeight, hasExperienceWeight, hasTimezoneWeight, hasRegionWeight, hasScheduleWeight];
-      const activeMatches = [hasLanguageMatch, hasSkillsMatch, hasIndustryMatch, hasExperienceMatch, hasTimezoneMatch, hasRegionMatch, hasScheduleMatch];
+      const activeCriteria = [hasLanguageWeight, hasSkillsWeight, hasIndustryWeight, hasActivityWeight, hasExperienceWeight, hasTimezoneWeight, hasRegionWeight, hasScheduleWeight];
+      const activeMatches = [hasLanguageMatch, hasSkillsMatch, hasIndustryMatch, hasActivityMatch, hasExperienceMatch, hasTimezoneMatch, hasRegionMatch, hasScheduleMatch];
       
       // Si aucun critère n'est actif (tous les poids à 0), accepter tous les agents
       if (!activeCriteria.some(c => c)) {
@@ -1622,6 +1803,13 @@ export const findMatchesForGigById = async (req, res) => {
         noMatches: finalFilteredMatches.filter(m => m.industryMatch.details.matchStatus === "no_match").length,
         totalMatches: finalFilteredMatches.length
       },
+      activityStats: {
+        perfectMatches: finalFilteredMatches.filter(m => m.activityMatch.details.matchStatus === "perfect_match").length,
+        partialMatches: finalFilteredMatches.filter(m => m.activityMatch.details.matchStatus === "partial_match").length,
+        neutralMatches: finalFilteredMatches.filter(m => m.activityMatch.details.matchStatus === "neutral_match").length,
+        noMatches: finalFilteredMatches.filter(m => m.activityMatch.details.matchStatus === "no_match").length,
+        totalMatches: finalFilteredMatches.length
+      },
       professional: {
         perfectMatches: finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'professional')).length,
         partialMatches: finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'professional')).length,
@@ -1647,6 +1835,7 @@ export const findMatchesForGigById = async (req, res) => {
       skillsStats: stats.skillsStats,
       experienceStats: stats.experienceStats,
       industryStats: stats.industryStats,
+      activityStats: stats.activityStats,
       timezoneStats: stats.timezoneStats,
       regionStats: stats.regionStats,
       scheduleStats: stats.scheduleStats
