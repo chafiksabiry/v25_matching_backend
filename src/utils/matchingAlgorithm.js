@@ -112,53 +112,110 @@ function calculateExperienceScore(agent, gig) {
  * @returns {number} Score entre 0 et 1
  */
 function calculateSkillsScore(agent, gig) {
-  if (!gig.requiredSkills || !agent.skills || gig.requiredSkills.length === 0) {
+  if (!gig.skills || !agent.skills) {
     console.log("Missing skills data:", { agent: agent._id, gig: gig._id });
     return 0.5;
   }
 
-  const normalizeString = (str) => {
-    if (!str) return "";
-    return str
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9]/g, "")
-      .replace(/\s+/g, "");
-  };
-
-  // Combiner toutes les compétences de toutes les catégories
-  const allSkills = [
-    ...(agent.skills.technical || []),
-    ...(agent.skills.professional || []),
-    ...(agent.skills.soft || []),
+  // Extraire tous les skills du gig (professional, technical, soft)
+  const gigSkills = [
+    ...(gig.skills.professional || []),
+    ...(gig.skills.technical || []),
+    ...(gig.skills.soft || [])
   ];
 
-  const matchingSkills = gig.requiredSkills.filter((requiredSkill) => {
-    const normalizedRequiredSkill = normalizeString(requiredSkill);
-    return allSkills.some((agentSkill) => {
-      const normalizedAgentSkill = normalizeString(agentSkill.name);
-      const isExactMatch = normalizedAgentSkill === normalizedRequiredSkill;
-      const isPartialMatch =
-        normalizedAgentSkill.includes(normalizedRequiredSkill) ||
-        normalizedRequiredSkill.includes(normalizedAgentSkill);
+  // Extraire tous les skills de l'agent (professional, technical, soft)
+  const agentSkills = [
+    ...(agent.skills.professional || []),
+    ...(agent.skills.technical || []),
+    ...(agent.skills.soft || [])
+  ];
 
-      console.log("Comparing skills:", {
+  if (gigSkills.length === 0) {
+    console.log("No skills required for gig:", gig._id);
+    return 1.0; // Si aucun skill requis, score parfait
+  }
+
+  if (agentSkills.length === 0) {
+    console.log("No skills found for agent:", agent._id);
+    return 0.0; // Si l'agent n'a pas de skills, score nul
+  }
+
+  // Compter les skills qui matchent par ID
+  let matchingSkills = 0;
+  const skillMatches = [];
+
+  gigSkills.forEach(gigSkill => {
+    // Normaliser l'ID du skill du gig
+    const gigSkillId = gigSkill.skill?.toString();
+    
+    if (!gigSkillId) {
+      console.log("Invalid gig skill ID:", gigSkill);
+      return;
+    }
+
+    // Chercher le skill correspondant chez l'agent par ID
+    const agentSkill = agentSkills.find(agentSkill => {
+      const agentSkillId = agentSkill.skill?.toString();
+      return agentSkillId === gigSkillId;
+    });
+
+    if (agentSkill) {
+      console.log("Skill match found by ID:", {
         agentId: agent._id,
         gigId: gig._id,
-        requiredSkill,
-        agentSkill: agentSkill.name,
-        isExactMatch,
-        isPartialMatch,
+        skillId: gigSkillId,
+        gigLevel: gigSkill.level,
+        agentLevel: agentSkill.level
       });
 
-      return (
-        (isExactMatch || isPartialMatch) &&
-        ["Advanced", "Expert"].includes(agentSkill.level)
-      );
-    });
+      // Vérifier le niveau de compétence
+      const agentLevel = parseInt(agentSkill.level) || 0;
+      const gigLevel = parseInt(gigSkill.level) || 0;
+
+      if (agentLevel >= gigLevel) {
+        matchingSkills++;
+        skillMatches.push({
+          skillId: gigSkillId,
+          gigLevel: gigLevel,
+          agentLevel: agentLevel,
+          matchType: 'perfect'
+        });
+      } else {
+        skillMatches.push({
+          skillId: gigSkillId,
+          gigLevel: gigLevel,
+          agentLevel: agentLevel,
+          matchType: 'insufficient_level'
+        });
+      }
+    } else {
+      console.log("Skill not found for agent:", {
+        agentId: agent._id,
+        gigId: gig._id,
+        requiredSkillId: gigSkillId
+      });
+      skillMatches.push({
+        skillId: gigSkillId,
+        gigLevel: gigSkill.level,
+        agentLevel: null,
+        matchType: 'missing'
+      });
+    }
   });
 
-  return matchingSkills.length / gig.requiredSkills.length;
+  const score = matchingSkills / gigSkills.length;
+
+  console.log("Skills matching result:", {
+    agentId: agent._id,
+    gigId: gig._id,
+    totalRequiredSkills: gigSkills.length,
+    matchingSkills: matchingSkills,
+    score: score,
+    skillMatches: skillMatches
+  });
+
+  return score;
 }
 
 /**
@@ -177,15 +234,6 @@ function calculateLanguageScore(agent, gig) {
     return 0.5;
   }
 
-  const normalizeString = (str) => {
-    if (!str) return "";
-    return str
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9]/g, "")
-      .replace(/\s+/g, "");
-  };
-
   console.log("Language matching details:", {
     agentId: agent._id,
     agentLanguages: agent.personalInfo.languages,
@@ -193,57 +241,96 @@ function calculateLanguageScore(agent, gig) {
   });
 
   // Vérifier si l'agent a au moins une des langues requises avec le bon niveau
-  return gig.skills.languages.some((gigLang) => {
-    const normalizedGigLang = normalizeString(gigLang.name);
-    const gigLevel = gigLang.level.toLowerCase();
+  const languageMatches = gig.skills.languages.map(gigLang => {
+    const gigLangId = gigLang.language?.toString();
+    const gigLevel = gigLang.proficiency?.toLowerCase();
 
     console.log("Checking gig language:", {
       gigId: gig._id,
-      gigLanguage: gigLang.name,
-      normalizedGigLang,
-      gigLevel,
+      gigLanguageId: gigLangId,
+      gigLevel: gigLevel,
     });
 
-    return agent.personalInfo.languages.some((agentLang) => {
-      const normalizedAgentLang = normalizeString(agentLang.language);
-      const agentLevel = agentLang.proficiency.toLowerCase();
+    // Chercher la langue correspondante chez l'agent par ID
+    const agentLang = agent.personalInfo.languages.find(agentLang => {
+      const agentLangId = agentLang.language?.toString();
+      return agentLangId === gigLangId;
+    });
 
-      // Vérifier la correspondance de la langue
-      const isLanguageMatch = normalizedAgentLang === normalizedGigLang;
-
-      // Vérifier le niveau de compétence
-      const isLevelMatch =
-        (gigLevel === "conversational" &&
-          [
-            "professional working",
-            "native or bilingual",
-            "c1",
-            "c2",
-            "b2",
-          ].includes(agentLevel)) ||
-        (gigLevel === "professional" &&
-          ["professional working", "native or bilingual", "c1", "c2"].includes(
-            agentLevel
-          )) ||
-        (gigLevel === "native" &&
-          ["native or bilingual", "c2"].includes(agentLevel));
-
-      console.log("Language comparison details:", {
+    if (!agentLang) {
+      console.log("Language not found for agent:", {
         agentId: agent._id,
         gigId: gig._id,
-        gigLanguage: gigLang.name,
-        agentLanguage: agentLang.language,
-        normalizedGigLang,
-        normalizedAgentLang,
-        gigLevel,
-        agentLevel,
-        isLanguageMatch,
-        isLevelMatch,
+        requiredLanguageId: gigLangId
       });
+      return {
+        languageId: gigLangId,
+        gigLevel: gigLevel,
+        agentLevel: null,
+        matchType: 'missing'
+      };
+    }
 
-      return isLanguageMatch && isLevelMatch;
+    const agentLevel = agentLang.proficiency?.toLowerCase();
+
+    // Vérifier le niveau de compétence
+    const isLevelMatch =
+      (gigLevel === "conversational" &&
+        [
+          "professional working",
+          "native or bilingual",
+          "c1",
+          "c2",
+          "b2",
+        ].includes(agentLevel)) ||
+      (gigLevel === "professional" &&
+        ["professional working", "native or bilingual", "c1", "c2"].includes(
+          agentLevel
+        )) ||
+      (gigLevel === "native" &&
+        ["native or bilingual", "c2"].includes(agentLevel));
+
+    console.log("Language comparison details:", {
+      agentId: agent._id,
+      gigId: gig._id,
+      gigLanguageId: gigLangId,
+      agentLanguageId: agentLang.language?.toString(),
+      gigLevel: gigLevel,
+      agentLevel: agentLevel,
+      isLevelMatch: isLevelMatch,
     });
+
+    if (isLevelMatch) {
+      return {
+        languageId: gigLangId,
+        gigLevel: gigLevel,
+        agentLevel: agentLevel,
+        matchType: 'perfect'
+      };
+    } else {
+      return {
+        languageId: gigLangId,
+        gigLevel: gigLevel,
+        agentLevel: agentLevel,
+        matchType: 'insufficient_level'
+      };
+    }
   });
+
+  // Calculer le score basé sur les matches parfaits
+  const perfectMatches = languageMatches.filter(match => match.matchType === 'perfect');
+  const score = perfectMatches.length / gig.skills.languages.length;
+
+  console.log("Language matching result:", {
+    agentId: agent._id,
+    gigId: gig._id,
+    totalRequiredLanguages: gig.skills.languages.length,
+    perfectMatches: perfectMatches.length,
+    score: score,
+    languageMatches: languageMatches
+  });
+
+  return score;
 }
 
 /**
@@ -1124,19 +1211,6 @@ export const findLanguageMatches = (gig, agents) => {
   // Vérification des paramètres d'entrée
   if (!gig?.skills?.languages || !Array.isArray(agents)) return [];
 
-  /**
-   * Normalise une chaîne de caractères pour la comparaison
-   * - Convertit en minuscules
-   * - Supprime les espaces
-   * - Supprime les caractères spéciaux
-   * @param {string} str - La chaîne à normaliser
-   * @returns {string} La chaîne normalisée
-   */
-  const normalizeString = (str) => {
-    if (!str) return "";
-    return str.toLowerCase().trim().replace(/[^a-z0-9]/g, "").replace(/\s+/g, "");
-  };
-
   // Évaluation de chaque agent
   return agents.map(agent => {
     // Cas où l'agent n'a pas de langues définies
@@ -1160,24 +1234,25 @@ export const findLanguageMatches = (gig, agents) => {
 
     // Vérification de chaque langue requise par le gig
     const allLanguagesMatch = gig.skills.languages.every(gigLang => {
-      const normalizedGigLang = normalizeString(gigLang.language);
-      const gigLevel = gigLang.proficiency.toLowerCase();
+      const gigLangId = gigLang.language?.toString();
+      const gigLevel = gigLang.proficiency?.toLowerCase();
 
-      // Recherche de la langue chez l'agent
-      const agentLang = agent.personalInfo.languages.find(agentLang => 
-        normalizeString(agentLang.language) === normalizedGigLang
-      );
+      // Recherche de la langue chez l'agent par ID
+      const agentLang = agent.personalInfo.languages.find(agentLang => {
+        const agentLangId = agentLang.language?.toString();
+        return agentLangId === gigLangId;
+      });
 
       // Si la langue n'est pas trouvée chez l'agent
       if (!agentLang) {
         missingLanguages.push({
-          language: gigLang.language,
+          languageId: gigLangId,
           requiredLevel: gigLang.proficiency
         });
         return false;
       }
 
-      const agentLevel = agentLang.proficiency.toLowerCase();
+      const agentLevel = agentLang.proficiency?.toLowerCase();
 
       // Définition des niveaux acceptables pour chaque niveau requis
       const isLevelMatch = 
@@ -1194,7 +1269,7 @@ export const findLanguageMatches = (gig, agents) => {
       // Si le niveau correspond, ajouter aux langues matching
       if (isLevelMatch) {
         matchingLanguages.push({
-          language: gigLang.language,
+          languageId: gigLangId,
           requiredLevel: gigLang.proficiency,
           agentLevel: agentLang.proficiency
         });
@@ -1202,7 +1277,7 @@ export const findLanguageMatches = (gig, agents) => {
       } else {
         // Si le niveau ne correspond pas, ajouter aux langues insuffisantes
         insufficientLanguages.push({
-          language: gigLang.language,
+          languageId: gigLangId,
           requiredLevel: gigLang.proficiency,
           agentLevel: agentLang.proficiency
         });

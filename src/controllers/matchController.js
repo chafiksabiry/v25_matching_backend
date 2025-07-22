@@ -38,6 +38,37 @@ const Timezone = mongoose.model('Timezone', new mongoose.Schema({
   gmtOffset: Number
 }));
 
+// Language model (pour récupérer les noms des langues)
+const Language = mongoose.model('Language', new mongoose.Schema({
+  name: String,
+  iso639_1: String,
+  iso639_2: String,
+  nativeName: String,
+  isActive: Boolean
+}));
+
+// Function to get language names from IDs
+const getLanguageNames = async (languageIds) => {
+  try {
+    if (!languageIds || languageIds.length === 0) return [];
+    
+    const languages = await Language.find({ _id: { $in: languageIds } });
+    const languageMap = {};
+    
+    languages.forEach(language => {
+      languageMap[language._id.toString()] = language.name;
+    });
+    
+    return languageIds.map(id => ({
+      id: id,
+      name: languageMap[id.toString()] || 'Unknown Language'
+    }));
+  } catch (error) {
+    console.error('Error getting language names:', error);
+    return languageIds.map(id => ({ id, name: 'Unknown Language' }));
+  }
+};
+
 // Language normalization function
 const normalizeLanguage = (language) => {
   if (!language) return '';
@@ -742,13 +773,42 @@ export const findMatchesForGigById = async (req, res) => {
         schedule: agent.availability?.schedule
       });
 
-      // Language matching
+      // Language matching - utiliser les IDs et récupérer les noms
       const requiredLanguages = gig.skills?.languages || [];
       const agentLanguages = agent.personalInfo?.languages || [];
       
+      // Récupérer les noms des langues
+      const gigLanguageIds = requiredLanguages.map(lang => lang.language);
+      const agentLanguageIds = agentLanguages.map(lang => lang.language);
+      
+      const [gigLanguageNames, agentLanguageNames] = await Promise.all([
+        getLanguageNames(gigLanguageIds),
+        getLanguageNames(agentLanguageIds)
+      ]);
+      
+      // Créer les mappings pour les langues
+      const gigLanguageMap = {};
+      const agentLanguageMap = {};
+      
+      gigLanguageNames.forEach(lang => {
+        gigLanguageMap[lang.id.toString()] = lang.name;
+      });
+      
+      agentLanguageNames.forEach(lang => {
+        agentLanguageMap[lang.id.toString()] = lang.name;
+      });
+      
       console.log('Correspondance des langues pour', agent.personalInfo?.name, ':', {
-        required: requiredLanguages,
-        agent: agentLanguages
+        required: requiredLanguages.map(lang => ({
+          id: lang.language,
+          name: gigLanguageMap[lang.language.toString()] || 'Unknown Language',
+          proficiency: lang.proficiency
+        })),
+        agent: agentLanguages.map(lang => ({
+          id: lang.language,
+          name: agentLanguageMap[lang.language.toString()] || 'Unknown Language',
+          proficiency: lang.proficiency
+        }))
       });
 
       let matchingLanguages = [];
@@ -758,19 +818,24 @@ export const findMatchesForGigById = async (req, res) => {
       requiredLanguages.forEach(reqLang => {
         if (!reqLang?.language) return;
         
-        const normalizedReqLang = normalizeLanguage(reqLang.language);
+        const reqLangId = reqLang.language?.toString();
+        const reqLangName = gigLanguageMap[reqLangId] || 'Unknown Language';
+        
         console.log('Recherche de correspondance pour la langue:', {
           required: reqLang.language,
-          normalized: normalizedReqLang
+          requiredId: reqLangId,
+          requiredName: reqLangName
         });
 
         const agentLang = agentLanguages.find(
-          lang => lang?.language && normalizeLanguage(lang.language) === normalizedReqLang
+          lang => lang?.language && lang.language.toString() === reqLangId
         );
 
         if (agentLang) {
+          const agentLangName = agentLanguageMap[reqLangId] || 'Unknown Language';
           console.log('Langue trouvée pour', agent.personalInfo?.name, ':', {
             language: agentLang.language,
+            languageName: agentLangName,
             proficiency: agentLang.proficiency
           });
           
@@ -826,7 +891,7 @@ export const findMatchesForGigById = async (req, res) => {
 
           console.log('Language level comparison:', {
             agent: agent.personalInfo?.name,
-            language: reqLang.language,
+            language: reqLangName,
             requiredLevel: reqLang.proficiency,
             normalizedReqLevel,
             agentLevel: agentLang.proficiency,
@@ -841,34 +906,40 @@ export const findMatchesForGigById = async (req, res) => {
           if (isLevelMatch) {
             console.log('✅ Language match accepted:', {
               agent: agent.personalInfo?.name,
-              language: reqLang.language,
+              language: reqLangName,
               requiredLevel: reqLang.proficiency,
               agentLevel: agentLang.proficiency
             });
             matchingLanguages.push({
               language: reqLang.language,
+              languageName: reqLangName,
               requiredLevel: reqLang.proficiency,
               agentLevel: agentLang.proficiency
             });
           } else {
             console.log('❌ Language match rejected:', {
               agent: agent.personalInfo?.name,
-              language: reqLang.language,
+              language: reqLangName,
               requiredLevel: reqLang.proficiency,
               agentLevel: agentLang.proficiency
             });
             insufficientLanguages.push({
               language: reqLang.language,
+              languageName: reqLangName,
               requiredLevel: reqLang.proficiency,
               agentLevel: agentLang.proficiency
             });
           }
         } else {
-          missingLanguages.push(reqLang.language);
+          missingLanguages.push({
+            language: reqLang.language,
+            languageName: reqLangName,
+            requiredLevel: reqLang.proficiency
+          });
         }
       });
 
-      // Skills matching - récupérer les noms des skills
+      // Skills matching - utiliser les IDs directement
       const gigTechnicalSkillIds = (gig.skills?.technical || []).map(s => s.skill);
       const gigProfessionalSkillIds = (gig.skills?.professional || []).map(s => s.skill);
       const gigSoftSkillIds = (gig.skills?.soft || []).map(s => s.skill);
@@ -877,7 +948,7 @@ export const findMatchesForGigById = async (req, res) => {
       const agentProfessionalSkillIds = (agent.skills?.professional || []).map(s => s.skill);
       const agentSoftSkillIds = (agent.skills?.soft || []).map(s => s.skill);
       
-      // Récupérer les noms des skills
+      // Récupérer les noms des skills pour l'affichage
       const [gigTechnicalSkills, gigProfessionalSkills, gigSoftSkills, 
              agentTechnicalSkills, agentProfessionalSkills, agentSoftSkills] = await Promise.all([
         getSkillNames(gigTechnicalSkillIds, 'technical'),
@@ -1020,11 +1091,11 @@ export const findMatchesForGigById = async (req, res) => {
       let missingSkills = [];
       let insufficientSkills = [];
 
-      // Check if agent has all required skills
+      // Check if agent has all required skills by ID
       const hasAllRequiredSkills = requiredSkills.every(reqSkill => {
         if (!reqSkill?.skill) return true;
         
-        // Comparer uniquement les IDs des skills, pas les niveaux
+        // Comparer uniquement les IDs des skills
         const agentSkill = agentSkills.find(
           skill => skill?.skill && skill.skill.toString() === reqSkill.skill.toString() && skill.type === reqSkill.type
         );
@@ -1192,6 +1263,7 @@ export const findMatchesForGigById = async (req, res) => {
           languages: agent.personalInfo?.languages?.map(lang => ({
             _id: lang._id,
             language: lang.language,
+            languageName: agentLanguageMap[lang.language.toString()] || 'Unknown Language',
             proficiency: lang.proficiency,
             iso639_1: lang.iso639_1
           })) || [],
