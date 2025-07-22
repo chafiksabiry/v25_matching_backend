@@ -45,6 +45,8 @@ const gigSchema = new mongoose.Schema({
       iso639_1: { type: String, required: true }
     }]
   },
+  industries: [{ type: String }],
+  activities: [{ type: String }],
   availability: {
     schedule: [{
       day: { type: String, required: true },
