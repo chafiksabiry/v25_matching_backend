@@ -198,12 +198,6 @@ const calculateExperienceScore = (agent, gig) => {
     !gig.seniority?.yearsExperience ||
     !agent.professionalSummary?.yearsOfExperience
   ) {
-    console.log("Missing experience data:", {
-      agent: agent._id,
-      gig: gig._id,
-      gigExperience: gig.seniority?.yearsExperience,
-      agentExperience: agent.professionalSummary?.yearsOfExperience,
-    });
     return {
       score: 0.5,
       status: "partial_match",
@@ -218,15 +212,6 @@ const calculateExperienceScore = (agent, gig) => {
   // Extraire les années d'expérience
   const agentExperience = parseInt(agent.professionalSummary.yearsOfExperience) || 0;
   const gigExperience = parseInt(gig.seniority.yearsExperience) || 0;
-
-  console.log("Experience comparison:", {
-    agentId: agent._id,
-    gigId: gig._id,
-    agentExperience,
-    gigExperience,
-    isExactMatch: agentExperience === gigExperience,
-    isSufficient: agentExperience >= gigExperience,
-  });
 
   let score = 0;
   let status = "no_match";
@@ -804,15 +789,6 @@ export const findMatchesForGigById = async (req, res) => {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Gig not found' });
     }
 
-    console.log('🔍 Gig found:', {
-      id: gig._id,
-      title: gig.title,
-      industries: gig.industries,
-      industriesType: typeof gig.industries,
-      industriesLength: gig.industries?.length
-    });
-
-
 
     // Get weights from request body or use defaults
     const weights = req.body.weights || { 
@@ -823,7 +799,6 @@ export const findMatchesForGigById = async (req, res) => {
       schedule: 0.10, 
       timezone: 0.10, 
       industry: 0.10,
-      weight: 0.10,
       activity: 0.10
     };
 
@@ -832,23 +807,15 @@ export const findMatchesForGigById = async (req, res) => {
       weights.industry = weights.weight;
     } else if (weights.industry !== undefined && weights.weight === undefined) {
       weights.weight = weights.industry;
+    } else if (weights.weight !== undefined && weights.industry !== undefined) {
+      // Si les deux sont définis, utiliser la valeur de industry pour weight
+      weights.weight = weights.industry;
     }
 
 
 
     const agents = await Agent.find({})
       .select('personalInfo skills availability professionalSummary');
-
-    console.log('🔍 Agents found:', agents.map(agent => ({
-      name: agent.personalInfo?.name,
-      hasActivities: !!agent.professionalSummary?.activities,
-      activitiesCount: agent.professionalSummary?.activities?.length || 0,
-      activities: agent.professionalSummary?.activities
-    })));
-
-
-    
-
 
     // Filtrer les agents qui ont des langues seulement si le poids des langues > 0
     let agentsWithLanguages = agents;
@@ -1012,15 +979,7 @@ export const findMatchesForGigById = async (req, res) => {
           return industry;
         }
       });
-      
-      console.log('🏭 Industry comparison for', agent.personalInfo?.name, ':', {
-        gigIndustries: gigIndustryIds,
-        agentIndustries: agentIndustryIds,
-        industryWeight: weights.industry,
-        weightWeight: weights.weight,
-        gigRaw: gig.industries,
-        agentRaw: agent.professionalSummary?.industries
-      });
+
 
       // Récupérer les noms des industries pour l'affichage
       const [gigIndustryNames, agentIndustryNames] = await Promise.all([
@@ -1049,12 +1008,7 @@ export const findMatchesForGigById = async (req, res) => {
         // Si le gig n'a pas d'industries, considérer comme un match neutre
         // car on ne peut pas évaluer la correspondance
         industryMatchStatus = "neutral_match";
-        
-        console.log('✅ Industry match result (no gig industries):', {
-          agent: agent.personalInfo?.name,
-          status: industryMatchStatus,
-          reason: 'Gig has no industries defined - using neutral match'
-        });
+
       } else {
         // Vérifier si l'agent a au moins une des industries requises par le gig
         gigIndustryIds.forEach(gigIndustryId => {
@@ -1086,15 +1040,6 @@ export const findMatchesForGigById = async (req, res) => {
         industryMatchStatus = matchingIndustries.length === gigIndustryIds.length ? "perfect_match" : 
                              matchingIndustries.length > 0 ? "partial_match" : "no_match";
 
-        console.log('✅ Industry match result:', {
-          agent: agent.personalInfo?.name,
-          matchingIndustries: matchingIndustries.length,
-          missingIndustries: missingIndustries.length,
-          status: industryMatchStatus,
-          gigIndustryIds,
-          agentIndustryIds,
-          matchingIndustriesDetails: matchingIndustries
-        });
       }
 
       // Activity matching - comparer les IDs des activités
@@ -1117,14 +1062,6 @@ export const findMatchesForGigById = async (req, res) => {
         } else {
           return activity;
         }
-      });
-      
-      console.log('🎯 Activity comparison for', agent.personalInfo?.name, ':', {
-        gigActivities: gigActivityIds,
-        agentActivities: agentActivityIds,
-        activityWeight: weights.activity,
-        gigRaw: gig.activities,
-        agentRaw: agent.professionalSummary?.activities
       });
 
       // Récupérer les noms des activités pour l'affichage
@@ -1153,12 +1090,6 @@ export const findMatchesForGigById = async (req, res) => {
       if (gigActivityIds.length === 0) {
         // Si le gig n'a pas d'activités, considérer comme un match neutre
         activityMatchStatus = "neutral_match";
-        
-        console.log('✅ Activity match result (no gig activities):', {
-          agent: agent.personalInfo?.name,
-          status: activityMatchStatus,
-          reason: 'Gig has no activities defined - using neutral match'
-        });
       } else {
         // Vérifier si l'agent a au moins une des activités requises par le gig
         gigActivityIds.forEach(gigActivityId => {
@@ -1189,16 +1120,6 @@ export const findMatchesForGigById = async (req, res) => {
         // Déterminer le statut du matching des activités
         activityMatchStatus = matchingActivities.length === gigActivityIds.length ? "perfect_match" : 
                              matchingActivities.length > 0 ? "partial_match" : "no_match";
-
-        console.log('✅ Activity match result:', {
-          agent: agent.personalInfo?.name,
-          matchingActivities: matchingActivities.length,
-          missingActivities: missingActivities.length,
-          status: activityMatchStatus,
-          gigActivityIds,
-          agentActivityIds,
-          matchingActivitiesDetails: matchingActivities
-        });
       }
 
       // Skills matching - utiliser les IDs directement
@@ -1224,13 +1145,6 @@ export const findMatchesForGigById = async (req, res) => {
       // Experience matching
       const gigRequiredExperience = parseInt(gig.seniority?.yearsExperience) || 0;
       const agentExperience = parseInt(agent.professionalSummary?.yearsOfExperience) || 0;
-      
-      console.log('📊 Experience comparison for', agent.personalInfo?.name, ':', {
-        gigRequired: gigRequiredExperience,
-        agentExperience: agentExperience,
-        gigSeniority: gig.seniority,
-        agentProfessionalSummary: agent.professionalSummary
-      });
 
       let experienceMatch = {
         score: 0,
@@ -1281,13 +1195,6 @@ export const findMatchesForGigById = async (req, res) => {
           status: 'partial_match'
         };
       }
-
-      console.log('✅ Experience match result:', {
-        agent: agent.personalInfo?.name,
-        score: experienceMatch.score,
-        status: experienceMatch.status,
-        reason: experienceMatch.details.reason
-      });
       
       // Créer les mappings pour faciliter la recherche (GIG)
       const gigTechnicalSkillMap = {};
@@ -1651,21 +1558,9 @@ export const findMatchesForGigById = async (req, res) => {
       .sort(([, a], [, b]) => b - a);
 
     let filteredMatches = matches;
-
-    console.log('🔍 Starting filtering with weights:', weights);
-    console.log('🔍 Total agents before filtering:', matches.length);
-    console.log('🔍 Agents with activities:', matches.filter(m => m.activityMatch).map(m => ({
-      name: m.agentInfo.name,
-      activityMatch: m.activityMatch.details.matchStatus
-    })));
     
     // Appliquer le filtrage séquentiel basé sur les poids
     for (const [criterion, weight] of sortedWeights) {
-      
-      // Ignorer les critères avec un poids de 0
-      if (weight === 0) {
-        continue;
-      }
       
       if (criterion === 'languages') {
         // Pour les langues, accepter uniquement les perfect_match
@@ -1677,19 +1572,13 @@ export const findMatchesForGigById = async (req, res) => {
         filteredMatches = filteredMatches.filter(match => {
           return match.skillsMatch.details.matchStatus === "perfect_match";
         });
-      } else if (criterion === 'industry' || criterion === 'weight') {
+      } else if (criterion === 'industry') {
         // Pour les industries, accepter les perfect_match et neutral_match
         const beforeCount = filteredMatches.length;
         filteredMatches = filteredMatches.filter(
           match => match.industryMatch.details.matchStatus === "perfect_match" || 
                    match.industryMatch.details.matchStatus === "neutral_match"
         );
-        const afterCount = filteredMatches.length;
-        console.log(`🔍 Industry filtering: ${beforeCount} -> ${afterCount} agents (criterion: ${criterion}, weight: ${weight})`);
-        console.log('🔍 Industry match statuses:', filteredMatches.map(m => ({
-          agent: m.agentInfo.name,
-          status: m.industryMatch.details.matchStatus
-        })));
       } else if (criterion === 'activity') {
         // Pour les activités, accepter les perfect_match et neutral_match
         const beforeCount = filteredMatches.length;
@@ -1698,11 +1587,7 @@ export const findMatchesForGigById = async (req, res) => {
                    match.activityMatch.details.matchStatus === "neutral_match"
         );
         const afterCount = filteredMatches.length;
-        console.log(`🔍 Activity filtering: ${beforeCount} -> ${afterCount} agents (criterion: ${criterion}, weight: ${weight})`);
-        console.log('🔍 Activity match statuses:', filteredMatches.map(m => ({
-          agent: m.agentInfo.name,
-          status: m.activityMatch.details.matchStatus
-        })));
+
       } else if (criterion === 'experience') {
         // Pour l'expérience, accepter uniquement les perfect_match
         filteredMatches = filteredMatches.filter(
@@ -1763,12 +1648,6 @@ export const findMatchesForGigById = async (req, res) => {
       
       // Sinon, accepter si au moins un critère actif a un perfect_match
       return activeCriteria.some((isActive, index) => isActive && activeMatches[index]);
-    });
-
-    console.log('🔍 Final filtering result:', {
-      beforeGlobalFilter: filteredMatches.length,
-      afterGlobalFilter: finalFilteredMatches.length,
-      finalAgents: finalFilteredMatches.map(m => m.agentInfo.name)
     });
 
 
