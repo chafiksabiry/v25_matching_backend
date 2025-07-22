@@ -9,11 +9,12 @@ import Match from "../models/Match.js";
  */
 export const calculateMatchScore = (agent, gig, weights = {}) => {
   const defaultWeights = {
-    industry: 0.8, // 80% weight for industry matching
-    experience: 0.05, // 5% for experience
-    skills: 0.05, // 5% for skills
-    language: 0.05, // 5% for language
-    availability: 0.05, // 5% for availability
+    industry: 0.20, // 20% weight for industry matching
+    experience: 0.20, // 20% for experience matching
+    skills: 0.20, // 20% for skills
+    language: 0.15, // 15% for language
+    region: 0.15, // 15% for region matching
+    availability: 0.10, // 10% for availability
   };
 
   // Utiliser les poids fournis ou les poids par défaut
@@ -24,6 +25,7 @@ export const calculateMatchScore = (agent, gig, weights = {}) => {
   const experienceScore = calculateExperienceScore(agent, gig);
   const skillsScore = calculateSkillsScore(agent, gig);
   const languageScore = calculateLanguageScore(agent, gig);
+  const regionScore = calculateRegionScore(agent, gig);
   const availabilityScore = calculateAvailabilityScore(agent, gig);
 
   // Calculer le score total en utilisant les poids
@@ -32,6 +34,7 @@ export const calculateMatchScore = (agent, gig, weights = {}) => {
     experienceScore * finalWeights.experience +
     skillsScore * finalWeights.skills +
     languageScore * finalWeights.language +
+    regionScore * finalWeights.region +
     availabilityScore * finalWeights.availability;
 
   return {
@@ -41,6 +44,7 @@ export const calculateMatchScore = (agent, gig, weights = {}) => {
       experienceScore,
       skillsScore,
       languageScore,
+      regionScore,
       availabilityScore,
     },
   };
@@ -66,22 +70,9 @@ function calculateExperienceScore(agent, gig) {
     return 0.5;
   }
 
-  const normalizeString = (str) => {
-    if (!str) return "";
-    return str
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9]/g, "")
-      .replace(/\s+/g, "");
-  };
-
-  // Extraire le nombre d'années de l'expérience du rep
-  const yearsMatch =
-    agent.professionalSummary.yearsOfExperience.match(/(\d+)\s*years?/i);
-  const agentExperience = yearsMatch ? parseInt(yearsMatch[1]) : 0;
-
-  // Extraire le nombre d'années de l'expérience requise du gig
-  const gigExperience = parseInt(gig.seniority.yearsExperience);
+  // Extraire les années d'expérience
+  const agentExperience = parseInt(agent.professionalSummary.yearsOfExperience) || 0;
+  const gigExperience = parseInt(gig.seniority.yearsExperience) || 0;
 
   console.log("Experience comparison:", {
     agentId: agent._id,
@@ -89,19 +80,32 @@ function calculateExperienceScore(agent, gig) {
     agentExperience,
     gigExperience,
     isExactMatch: agentExperience === gigExperience,
-    isPartialMatch: agentExperience >= gigExperience,
+    isSufficient: agentExperience >= gigExperience,
   });
 
+  // Logique de scoring basée sur la correspondance des années d'expérience
   if (agentExperience >= gigExperience) {
-    return 1.0;
-  } else if (agentExperience >= gigExperience * 0.8) {
-    return 0.8;
-  } else if (agentExperience >= gigExperience * 0.6) {
-    return 0.6;
-  } else if (agentExperience >= gigExperience * 0.4) {
-    return 0.4;
+    // L'agent a suffisamment d'expérience
+    if (agentExperience === gigExperience) {
+      return 1.0; // Match parfait
+    } else if (agentExperience <= gigExperience * 1.5) {
+      return 0.9; // Légèrement plus d'expérience (bon)
+    } else if (agentExperience <= gigExperience * 2) {
+      return 0.8; // Plus d'expérience mais acceptable
+    } else {
+      return 0.7; // Beaucoup plus d'expérience (peut être overqualified)
+    }
   } else {
-    return 0.2;
+    // L'agent n'a pas assez d'expérience
+    if (agentExperience >= gigExperience * 0.8) {
+      return 0.6; // Presque suffisant
+    } else if (agentExperience >= gigExperience * 0.6) {
+      return 0.4; // Partiellement suffisant
+    } else if (agentExperience >= gigExperience * 0.4) {
+      return 0.2; // Insuffisant mais pas complètement
+    } else {
+      return 0.0; // Complètement insuffisant
+    }
   }
 }
 
@@ -391,6 +395,36 @@ function calculateAvailabilityScore(agent, gig) {
   return 0.2 + 0.8 * (availableDays.length / gigDays.length);
 }
 
+/**
+ * Calcule le score de correspondance régionale entre un agent et un gig
+ * @param {Object} agent - Le représentant avec ses informations de localisation
+ * @param {Object} gig - Le gig avec sa destination_zone
+ * @returns {number} Score entre 0 et 1
+ */
+function calculateRegionScore(agent, gig) {
+  if (!gig.destination_zone) {
+    console.log("Missing destination zone for gig:", gig._id);
+    return 0.5; // Score neutre si pas de destination définie
+  }
+
+  // Pour l'instant, on utilise un score basé sur la disponibilité de l'agent
+  // Dans une implémentation complète, on comparerait les timezones et pays
+  console.log("Region matching:", {
+    agentId: agent._id,
+    gigId: gig._id,
+    destinationZone: gig.destination_zone,
+    hasAgentTimezone: !!agent.availability?.timeZone
+  });
+
+  // Si l'agent a une timezone définie, on considère qu'il peut potentiellement matcher
+  // La comparaison détaillée se fait dans le contrôleur avec les données de timezone
+  if (agent.availability?.timeZone) {
+    return 0.8; // Score élevé si l'agent a une timezone définie
+  } else {
+    return 0.3; // Score faible si pas de timezone
+  }
+}
+
 function calculateIndustryScore(agent, gig) {
   if (
     !gig.category ||
@@ -509,28 +543,23 @@ export const findMatchesForGig = async (
     switch (criterion) {
       case "experience":
         filteredAgents = filteredAgents.filter((agent) => {
-          if (!agent.professionalSummary?.yearsOfExperience) return false;
+          if (!agent.professionalSummary?.yearsOfExperience || !gig.seniority?.yearsExperience) {
+            return false;
+          }
 
-          const yearsMatch =
-            agent.professionalSummary.yearsOfExperience.match(
-              /(\d+)\s*years?/i
-            );
-          const agentExperience = yearsMatch ? parseInt(yearsMatch[1]) : 0;
-          const gigExperience = parseInt(gig.seniority.yearsExperience);
+          const agentExperience = parseInt(agent.professionalSummary.yearsOfExperience) || 0;
+          const gigExperience = parseInt(gig.seniority.yearsExperience) || 0;
 
-          console.log("Experience comparison:", {
+          console.log("Experience filtering:", {
             agentId: agent._id,
             gigId: gig._id,
             agentExperience,
             gigExperience,
-            isExactMatch: agentExperience === gigExperience,
-            isPartialMatch: agentExperience >= gigExperience,
+            isSufficient: agentExperience >= gigExperience,
           });
 
-          return (
-            agentExperience >= gigExperience &&
-            agentExperience <= gigExperience * 2
-          );
+          // Accepter les agents qui ont au moins l'expérience requise
+          return agentExperience >= gigExperience;
         });
         break;
 
@@ -700,6 +729,25 @@ export const findMatchesForGig = async (
           });
         });
         break;
+
+      case "region":
+        filteredAgents = filteredAgents.filter((agent) => {
+          if (!gig.destination_zone || !agent.availability?.timeZone) {
+            return false;
+          }
+
+          // Pour l'instant, on accepte tous les agents qui ont une timezone
+          // La comparaison détaillée se fait dans le contrôleur
+          console.log("Region filtering:", {
+            agentId: agent._id,
+            gigId: gig._id,
+            destinationZone: gig.destination_zone,
+            agentTimezone: agent.availability.timeZone
+          });
+
+          return true; // Accepte tous les agents avec timezone pour l'instant
+        });
+        break;
     }
 
     const afterCount = filteredAgents.length;
@@ -773,6 +821,7 @@ export const findGigsForAgent = async (
   console.log("Finding gigs for agent:", {
     agentId: agent._id,
     agentIndustries: agent.professionalSummary?.industries,
+    agentExperience: agent.professionalSummary?.yearsOfExperience,
     totalGigs: gigs.length,
   });
 
@@ -791,6 +840,18 @@ export const findGigsForAgent = async (
       },
     };
   }
+
+  // Poids par défaut incluant l'expérience
+  const defaultWeights = {
+    industry: 0.20,
+    experience: 0.20,
+    skills: 0.20,
+    language: 0.15,
+    region: 0.15,
+    availability: 0.10
+  };
+
+  const finalWeights = { ...defaultWeights, ...weights };
 
   // Filtrer d'abord les gigs qui ont la même catégorie que l'industrie de l'agent
   const industryMatches = gigs.filter((gig) => {
@@ -852,7 +913,7 @@ export const findGigsForAgent = async (
 
   // Calculer les scores uniquement pour les gigs qui ont la même industrie
   const allMatches = industryMatches.map((gig) => {
-    const matchResult = calculateMatchScore(agent, gig, weights);
+    const matchResult = calculateMatchScore(agent, gig, finalWeights);
     return {
       agentId: agent._id,
       gigId: gig._id,
@@ -983,8 +1044,20 @@ export const findMatches = async (
       isFindingGigs ? "Finding gigs for rep" : "Finding reps for gig"
     );
 
+    // Poids par défaut incluant l'expérience
+    const defaultWeights = {
+      industry: 0.20,
+      experience: 0.20,
+      skills: 0.20,
+      language: 0.15,
+      region: 0.15,
+      availability: 0.10
+    };
+
+    const finalWeights = { ...defaultWeights, ...weights };
+
     // Trier les critères par poids décroissant
-    const sortedCriteria = Object.entries(weights)
+    const sortedCriteria = Object.entries(finalWeights)
       .sort(([, a], [, b]) => b - a)
       .filter(([, weight]) => weight >= 0.5);
 
@@ -1002,13 +1075,13 @@ export const findMatches = async (
           matchingCandidates = matchingCandidates.filter((candidate) => {
             if (isFindingGigs) {
               // Chercher des gigs pour un rep
-              const repExp = parseInt(entity.experience);
-              const gigExp = parseInt(candidate.seniority.yearsExperience);
+              const repExp = parseInt(entity.professionalSummary?.yearsOfExperience) || 0;
+              const gigExp = parseInt(candidate.seniority?.yearsExperience) || 0;
               return repExp >= gigExp;
             } else {
               // Chercher des reps pour un gig
-              const repExp = parseInt(candidate.experience);
-              const gigExp = parseInt(entity.seniority.yearsExperience);
+              const repExp = parseInt(candidate.professionalSummary?.yearsOfExperience) || 0;
+              const gigExp = parseInt(entity.seniority?.yearsExperience) || 0;
               return repExp >= gigExp;
             }
           });

@@ -132,6 +132,99 @@ const getSkillNames = async (skillIds, skillType) => {
   }
 };
 
+// Function to calculate experience score
+const calculateExperienceScore = (agent, gig) => {
+  if (
+    !gig.seniority?.yearsExperience ||
+    !agent.professionalSummary?.yearsOfExperience
+  ) {
+    console.log("Missing experience data:", {
+      agent: agent._id,
+      gig: gig._id,
+      gigExperience: gig.seniority?.yearsExperience,
+      agentExperience: agent.professionalSummary?.yearsOfExperience,
+    });
+    return {
+      score: 0.5,
+      status: "partial_match",
+      details: {
+        agentExperience: agent.professionalSummary?.yearsOfExperience || 0,
+        gigExperience: gig.seniority?.yearsExperience || 0,
+        reason: "Missing experience data - using neutral score"
+      }
+    };
+  }
+
+  // Extraire les années d'expérience
+  const agentExperience = parseInt(agent.professionalSummary.yearsOfExperience) || 0;
+  const gigExperience = parseInt(gig.seniority.yearsExperience) || 0;
+
+  console.log("Experience comparison:", {
+    agentId: agent._id,
+    gigId: gig._id,
+    agentExperience,
+    gigExperience,
+    isExactMatch: agentExperience === gigExperience,
+    isSufficient: agentExperience >= gigExperience,
+  });
+
+  let score = 0;
+  let status = "no_match";
+  let reason = "";
+
+  // Logique de scoring basée sur la correspondance des années d'expérience
+  if (agentExperience >= gigExperience) {
+    // L'agent a suffisamment d'expérience
+    if (agentExperience === gigExperience) {
+      score = 1.0;
+      status = "perfect_match";
+      reason = "Exact experience match";
+    } else if (agentExperience <= gigExperience * 1.5) {
+      score = 0.9;
+      status = "perfect_match";
+      reason = "Slightly more experience (good)";
+    } else if (agentExperience <= gigExperience * 2) {
+      score = 0.8;
+      status = "partial_match";
+      reason = "More experience but acceptable";
+    } else {
+      score = 0.7;
+      status = "partial_match";
+      reason = "Much more experience (may be overqualified)";
+    }
+  } else {
+    // L'agent n'a pas assez d'expérience
+    if (agentExperience >= gigExperience * 0.8) {
+      score = 0.6;
+      status = "partial_match";
+      reason = "Almost sufficient experience";
+    } else if (agentExperience >= gigExperience * 0.6) {
+      score = 0.4;
+      status = "partial_match";
+      reason = "Partially sufficient experience";
+    } else if (agentExperience >= gigExperience * 0.4) {
+      score = 0.2;
+      status = "no_match";
+      reason = "Insufficient experience";
+    } else {
+      score = 0.0;
+      status = "no_match";
+      reason = "Completely insufficient experience";
+    }
+  }
+
+  return {
+    score,
+    status,
+    details: {
+      agentExperience,
+      gigExperience,
+      difference: agentExperience - gigExperience,
+      reason
+    }
+  };
+};
+
 // Get all matches
 export const getAllMatches = async (req, res) => {
   try {
@@ -265,12 +358,6 @@ export const deleteMatch = async (req, res) => {
     // Add timezone comparison function
 const compareTimezones = async (gigTimezoneId, agentTimezoneId) => {
   try {
-    console.log('🔍 Comparing timezones:', {
-      gigTimezoneId,
-      agentTimezoneId,
-      gigType: typeof gigTimezoneId,
-      agentType: typeof agentTimezoneId
-    });
 
     // Gestion des différents formats de timezone
     let gigTimezone = null;
@@ -290,7 +377,7 @@ const compareTimezones = async (gigTimezoneId, agentTimezoneId) => {
           gigTimezone = await Timezone.findOne({ zoneName: gigTimezoneId });
         }
       } catch (error) {
-        console.log('❌ Error finding gig timezone in compareTimezones:', error.message);
+        // Error finding gig timezone in compareTimezones
       }
     }
 
@@ -308,21 +395,11 @@ const compareTimezones = async (gigTimezoneId, agentTimezoneId) => {
           agentTimezone = await Timezone.findOne({ zoneName: agentTimezoneId });
         }
       } catch (error) {
-        console.log('❌ Error finding agent timezone in compareTimezones:', error.message);
+        // Error finding agent timezone in compareTimezones
       }
     }
     
     if (!gigTimezone || !agentTimezone) {
-      console.log('❌ Timezone data not found:', {
-        gigTimezoneId,
-        agentTimezoneId,
-        gigTimezoneFound: !!gigTimezone,
-        agentTimezoneFound: !!agentTimezone,
-        gigTimezoneData: gigTimezone || 'Not found',
-        agentTimezoneData: agentTimezone || 'Not found',
-        gigTimezoneIdType: typeof gigTimezoneId,
-        agentTimezoneIdType: typeof agentTimezoneId
-      });
       
       // Si aucune timezone n'est trouvée, retourner un score neutre au lieu d'un no_match
       return {
@@ -349,28 +426,7 @@ const compareTimezones = async (gigTimezoneId, agentTimezoneId) => {
       return `GMT ${hours >= 0 ? '+' : ''}${hours}`;
     };
     
-    console.log('🌍 Timezone comparison details:', {
-      gigTimezone: {
-        id: gigTimezoneId,
-        zoneName: gigTimezone.zoneName,
-        countryCode: gigTimezone.countryCode,
-        countryName: gigTimezone.countryName,
-        gmtOffset: gigTimezone.gmtOffset,
-        gmtDisplay: formatGmtOffset(gigTimezone.gmtOffset)
-      },
-      agentTimezone: {
-        id: agentTimezoneId,
-        zoneName: agentTimezone.zoneName,
-        countryCode: agentTimezone.countryCode,
-        countryName: agentTimezone.countryName,
-        gmtOffset: agentTimezone.gmtOffset,
-        gmtDisplay: formatGmtOffset(agentTimezone.gmtOffset)
-      },
-      difference: {
-        gmtOffsetDifference,
-        hoursDifference: Math.round(gmtOffsetDifference / 3600 * 100) / 100
-      }
-    });
+
 
     // Définir les seuils de compatibilité
     let score = 0;
@@ -424,7 +480,6 @@ const compareTimezones = async (gigTimezoneId, agentTimezoneId) => {
       }
     };
   } catch (error) {
-    console.error('Error comparing timezones:', error);
     return {
       score: 0,
       status: "no_match",
@@ -445,16 +500,9 @@ const compareTimezones = async (gigTimezoneId, agentTimezoneId) => {
 // Add region comparison function
 const compareRegions = async (gigDestinationZone, agentTimezoneId) => {
   try {
-    console.log('🌍 Comparing regions:', {
-      gigDestinationZone,
-      agentTimezoneId,
-      gigType: typeof gigDestinationZone,
-      agentType: typeof agentTimezoneId
-    });
 
     // Si le gig n'a pas de destination_zone, retourner un score neutre
     if (!gigDestinationZone) {
-      console.log('❌ Gig destination zone not found');
       return {
         score: 0.5, // Score neutre
         status: "partial_match",
@@ -485,7 +533,7 @@ const compareRegions = async (gigDestinationZone, agentTimezoneId) => {
           agentTimezone = await Timezone.findOne({ zoneName: agentTimezoneId });
         }
       } catch (error) {
-        console.log('❌ Error finding agent timezone in compareRegions:', error.message);
+        // Error finding agent timezone in compareRegions
       }
     }
 
@@ -494,21 +542,10 @@ const compareRegions = async (gigDestinationZone, agentTimezoneId) => {
       agentCountryName = agentTimezone.countryName;
     }
 
-    console.log('🌍 Region comparison details:', {
-      gigDestinationZone,
-      agentCountryCode,
-      agentCountryName,
-      agentTimezone: agentTimezone ? {
-        id: agentTimezoneId,
-        zoneName: agentTimezone.zoneName,
-        countryCode: agentTimezone.countryCode,
-        countryName: agentTimezone.countryName
-      } : 'Not found'
-    });
+
 
     // Si on ne peut pas récupérer le countryCode de l'agent, retourner un score neutre
     if (!agentCountryCode) {
-      console.log('❌ Agent country code not found');
       return {
         score: 0.5, // Score neutre
         status: "partial_match",
@@ -524,12 +561,7 @@ const compareRegions = async (gigDestinationZone, agentTimezoneId) => {
     // Comparer les codes de pays
     const isSameRegion = gigDestinationZone.toUpperCase() === agentCountryCode.toUpperCase();
     
-    console.log('🌍 Region match result:', {
-      gigDestinationZone: gigDestinationZone.toUpperCase(),
-      agentCountryCode: agentCountryCode.toUpperCase(),
-      agentCountryName,
-      isSameRegion
-    });
+
 
     let score = 0;
     let status = "no_match";
@@ -558,7 +590,6 @@ const compareRegions = async (gigDestinationZone, agentTimezoneId) => {
       }
     };
   } catch (error) {
-    console.error('Error comparing regions:', error);
     return {
       score: 0,
       status: "no_match",
@@ -650,7 +681,6 @@ const compareSchedules = (gigSchedule, agentAvailability) => {
 
   gigSchedule.forEach(gigDay => {
     if (!gigDay || !gigDay.day || !gigDay.hours) {
-      console.log('Invalid gig day data:', gigDay);
       return;
     }
 
@@ -714,64 +744,43 @@ export const findMatchesForGigById = async (req, res) => {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Gig not found' });
     }
 
-    console.log('Gig data:', {
-      id: gig._id,
-      title: gig.title,
-      skills: gig.skills,
-      languages: gig.skills?.languages,
-      schedule: gig.availability?.schedule,
-      timezone: {
-        time_zone: gig.availability?.time_zone,
-        timeZone: gig.availability?.timeZone,
-        timezoneType: typeof gig.availability?.time_zone || typeof gig.availability?.timeZone
-      }
-    });
+
 
     // Get weights from request body or use defaults
-    const weights = req.body.weights || { skills: 0.25, languages: 0.25, schedule: 0.2, timezone: 0.15, region: 0.15 };
-    console.log('Using weights:', weights);
+    const weights = req.body.weights || { 
+      skills: 0.20, 
+      languages: 0.15, 
+      experience: 0.20, 
+      region: 0.15,
+      schedule: 0.10, 
+      timezone: 0.10, 
+      industry: 0.10
+    };
 
-    console.log('Recherche des agents avec les critères suivants:', {
-      'personalInfo.languages': { $exists: true, $ne: [] }
-    });
+
 
     const agents = await Agent.find({})
-      .select('personalInfo skills availability');
+      .select('personalInfo skills availability professionalSummary');
 
-    console.log('Nombre total d\'agents trouvés:', agents.length);
-    console.log('Liste complète des agents:', agents.map(agent => ({
-      id: agent._id,
-      name: agent.personalInfo?.name,
-      languages: agent.personalInfo?.languages?.map(lang => ({
-        language: lang.language,
-        proficiency: lang.proficiency
-      })),
-      schedule: agent.availability?.schedule
-    })));
 
-    // Filtrer les agents qui ont des langues
-    const agentsWithLanguages = agents.filter(agent => 
-      agent.personalInfo?.languages && 
-      agent.personalInfo.languages.length > 0
-    );
+    
 
-    console.log('Nombre d\'agents avec des langues:', agentsWithLanguages.length);
-    console.log('Agents avec des langues:', agentsWithLanguages.map(agent => ({
-      id: agent._id,
-      name: agent.personalInfo?.name,
-      languages: agent.personalInfo?.languages?.map(lang => ({
-        language: lang.language,
-        proficiency: lang.proficiency
-      }))
-    })));
+
+    // Filtrer les agents qui ont des langues seulement si le poids des langues > 0
+    let agentsWithLanguages = agents;
+    if (weights.languages > 0) {
+      agentsWithLanguages = agents.filter(agent => {
+        const hasLanguages = agent.personalInfo?.languages && agent.personalInfo.languages.length > 0;
+        return hasLanguages;
+      });
+    } else {
+      agentsWithLanguages = agents;
+    }
+
+
 
     const matches = await Promise.all(agentsWithLanguages.map(async agent => {
-      console.log('Traitement de l\'agent:', {
-        id: agent._id,
-        name: agent.personalInfo?.name,
-        languages: agent.personalInfo?.languages,
-        schedule: agent.availability?.schedule
-      });
+
 
       // Language matching - utiliser les IDs et récupérer les noms
       const requiredLanguages = gig.skills?.languages || [];
@@ -798,18 +807,7 @@ export const findMatchesForGigById = async (req, res) => {
         agentLanguageMap[lang.id.toString()] = lang.name;
       });
       
-      console.log('Correspondance des langues pour', agent.personalInfo?.name, ':', {
-        required: requiredLanguages.map(lang => ({
-          id: lang.language,
-          name: gigLanguageMap[lang.language.toString()] || 'Unknown Language',
-          proficiency: lang.proficiency
-        })),
-        agent: agentLanguages.map(lang => ({
-          id: lang.language,
-          name: agentLanguageMap[lang.language.toString()] || 'Unknown Language',
-          proficiency: lang.proficiency
-        }))
-      });
+
 
       let matchingLanguages = [];
       let missingLanguages = [];
@@ -821,11 +819,7 @@ export const findMatchesForGigById = async (req, res) => {
         const reqLangId = reqLang.language?.toString();
         const reqLangName = gigLanguageMap[reqLangId] || 'Unknown Language';
         
-        console.log('Recherche de correspondance pour la langue:', {
-          required: reqLang.language,
-          requiredId: reqLangId,
-          requiredName: reqLangName
-        });
+
 
         const agentLang = agentLanguages.find(
           lang => lang?.language && lang.language.toString() === reqLangId
@@ -833,11 +827,7 @@ export const findMatchesForGigById = async (req, res) => {
 
         if (agentLang) {
           const agentLangName = agentLanguageMap[reqLangId] || 'Unknown Language';
-          console.log('Langue trouvée pour', agent.personalInfo?.name, ':', {
-            language: agentLang.language,
-            languageName: agentLangName,
-            proficiency: agentLang.proficiency
-          });
+
           
           // Normalize proficiency levels for comparison
           const normalizedReqLevel = normalizeLanguage(reqLang.proficiency);
@@ -855,61 +845,22 @@ export const findMatchesForGigById = async (req, res) => {
           const agentScore = getLanguageLevelScore(normalizedAgentLevel);
           const requiredScore = getLanguageLevelScore(normalizedReqLevel);
           
-          console.log('🔍 DEBUG - Language scores:', {
-            agent: agent.personalInfo?.name,
-            agentLevel: agentLang.proficiency,
-            normalizedAgentLevel,
-            agentScore,
-            requiredLevel: reqLang.proficiency,
-            normalizedReqLevel,
-            requiredScore,
-            comparison: `${agentScore} >= ${requiredScore}`,
-            result: agentScore >= requiredScore
-          });
+
           
           // Si l'agent a un niveau inférieur, c'est forcément un no_match
           if (agentScore < requiredScore) {
             isLevelMatch = false;
-            console.log('🔒 Forced no_match due to insufficient level:', {
-              agent: agent.personalInfo?.name,
-              agentLevel: agentLang.proficiency,
-              agentScore,
-              requiredLevel: reqLang.proficiency,
-              requiredScore
-            });
+
           } else {
             // Si l'agent a un niveau suffisant, confirmer le match
             isLevelMatch = true;
-            console.log('✅ Confirmed match due to sufficient level:', {
-              agent: agent.personalInfo?.name,
-              agentLevel: agentLang.proficiency,
-              agentScore,
-              requiredLevel: reqLang.proficiency,
-              requiredScore
-            });
+
           }
 
-          console.log('Language level comparison:', {
-            agent: agent.personalInfo?.name,
-            language: reqLangName,
-            requiredLevel: reqLang.proficiency,
-            normalizedReqLevel,
-            agentLevel: agentLang.proficiency,
-            normalizedAgentLevel,
-            isNativeRequired,
-            agentScore: getLanguageLevelScore(normalizedAgentLevel),
-            requiredScore: getLanguageLevelScore(normalizedReqLevel),
-            isLevelMatch,
-            comparison: `${getLanguageLevelScore(normalizedAgentLevel)} >= ${getLanguageLevelScore(normalizedReqLevel)}`
-          });
+
 
           if (isLevelMatch) {
-            console.log('✅ Language match accepted:', {
-              agent: agent.personalInfo?.name,
-              language: reqLangName,
-              requiredLevel: reqLang.proficiency,
-              agentLevel: agentLang.proficiency
-            });
+
             matchingLanguages.push({
               language: reqLang.language,
               languageName: reqLangName,
@@ -917,12 +868,7 @@ export const findMatchesForGigById = async (req, res) => {
               agentLevel: agentLang.proficiency
             });
           } else {
-            console.log('❌ Language match rejected:', {
-              agent: agent.personalInfo?.name,
-              language: reqLangName,
-              requiredLevel: reqLang.proficiency,
-              agentLevel: agentLang.proficiency
-            });
+
             insufficientLanguages.push({
               language: reqLang.language,
               languageName: reqLangName,
@@ -958,6 +904,74 @@ export const findMatchesForGigById = async (req, res) => {
         getSkillNames(agentProfessionalSkillIds, 'professional'),
         getSkillNames(agentSoftSkillIds, 'soft')
       ]);
+
+      // Experience matching
+      const gigRequiredExperience = parseInt(gig.seniority?.yearsExperience) || 0;
+      const agentExperience = parseInt(agent.professionalSummary?.yearsOfExperience) || 0;
+      
+      console.log('📊 Experience comparison for', agent.personalInfo?.name, ':', {
+        gigRequired: gigRequiredExperience,
+        agentExperience: agentExperience,
+        gigSeniority: gig.seniority,
+        agentProfessionalSummary: agent.professionalSummary
+      });
+
+      let experienceMatch = {
+        score: 0,
+        details: {
+          gigRequiredExperience,
+          agentExperience,
+          difference: agentExperience - gigRequiredExperience,
+          reason: ''
+        },
+        status: 'no_match'
+      };
+
+      if (agentExperience >= gigRequiredExperience) {
+        if (agentExperience === gigRequiredExperience) {
+          experienceMatch = {
+            score: 1,
+            details: {
+              gigRequiredExperience,
+              agentExperience,
+              difference: 0,
+              reason: 'Perfect match - agent has exactly the required experience'
+            },
+            status: 'perfect_match'
+          };
+        } else {
+          // Bonus pour l'expérience supplémentaire, mais pas plus de 1.2
+          const bonusScore = Math.min(1.2, 1 + (agentExperience - gigRequiredExperience) * 0.1);
+          experienceMatch = {
+            score: bonusScore,
+            details: {
+              gigRequiredExperience,
+              agentExperience,
+              difference: agentExperience - gigRequiredExperience,
+              reason: `Agent has ${agentExperience - gigRequiredExperience} more years of experience than required`
+            },
+            status: 'perfect_match'
+          };
+        }
+      } else {
+        experienceMatch = {
+          score: Math.max(0, 1 - (gigRequiredExperience - agentExperience) * 0.2),
+          details: {
+            gigRequiredExperience,
+            agentExperience,
+            difference: agentExperience - gigRequiredExperience,
+            reason: `Agent has ${gigRequiredExperience - agentExperience} fewer years of experience than required`
+          },
+          status: 'partial_match'
+        };
+      }
+
+      console.log('✅ Experience match result:', {
+        agent: agent.personalInfo?.name,
+        score: experienceMatch.score,
+        status: experienceMatch.status,
+        reason: experienceMatch.details.reason
+      });
       
       // Créer les mappings pour faciliter la recherche (GIG)
       const gigTechnicalSkillMap = {};
@@ -1082,10 +1096,7 @@ export const findMatchesForGigById = async (req, res) => {
         }))
       ];
 
-      console.log('Skills matching:', {
-        required: requiredSkills,
-        agent: agentSkills
-      });
+
 
       let matchingSkills = [];
       let missingSkills = [];
@@ -1101,13 +1112,7 @@ export const findMatchesForGigById = async (req, res) => {
         );
 
         if (agentSkill) {
-          console.log('Skill found (ID-based matching):', {
-            skill: reqSkill.skill,
-            skillName: reqSkill.name,
-            agentLevel: agentSkill.level,
-            requiredLevel: reqSkill.level,
-            skillType: reqSkill.type
-          });
+
 
           // Si l'agent a la skill (même ID), c'est un match, peu importe le niveau
           matchingSkills.push({
@@ -1120,11 +1125,7 @@ export const findMatchesForGigById = async (req, res) => {
           });
           return true;
         } else {
-          console.log('Skill not found:', {
-            skill: reqSkill.skill,
-            skillName: reqSkill.name,
-            skillType: reqSkill.type
-          });
+
           missingSkills.push({
             skill: reqSkill.skill,
             skillName: reqSkill.name,
@@ -1136,22 +1137,8 @@ export const findMatchesForGigById = async (req, res) => {
       });
 
           // Timezone matching
-    console.log('🔍 Timezone matching for agent:', {
-      agentName: agent.personalInfo?.name,
-      agentTimezoneId: agent.availability?.timeZone,
-      gigTimezoneId: gig.availability?.time_zone || gig.availability?.timeZone
-    });
-    
-    // Récupérer et afficher les données de timezone
     const gigTimezoneId = gig.availability?.time_zone || gig.availability?.timeZone;
     const agentTimezoneId = agent.availability?.timeZone;
-    
-    console.log('🔍 Timezone IDs:', {
-      gigTimezoneId,
-      agentTimezoneId,
-      gigTimezoneIdType: typeof gigTimezoneId,
-      agentTimezoneIdType: typeof agentTimezoneId
-    });
     
     // Récupérer les données de timezone avec gestion d'erreur
     let gigTimezoneData = null;
@@ -1168,7 +1155,7 @@ export const findMatchesForGigById = async (req, res) => {
         }
       }
     } catch (error) {
-      console.log('❌ Error finding gig timezone:', error.message);
+      // Error finding gig timezone
     }
     
     try {
@@ -1182,35 +1169,18 @@ export const findMatchesForGigById = async (req, res) => {
         }
       }
     } catch (error) {
-      console.log('❌ Error finding agent timezone:', error.message);
+      // Error finding agent timezone
     }
     
-    console.log('🌍 Gig timezone data:', {
-      id: gig.availability?.time_zone || gig.availability?.timeZone,
-      zoneName: gigTimezoneData?.zoneName || 'Not found',
-      countryCode: gigTimezoneData?.countryCode || 'Not found',
-      countryName: gigTimezoneData?.countryName || 'Not found',
-      gmtOffset: gigTimezoneData?.gmtOffset || 'Not found'
-    });
-    
-    console.log('🌍 Agent timezone data:', {
-      id: agent.availability?.timeZone,
-      zoneName: agentTimezoneData?.zoneName || 'Not found',
-      countryCode: agentTimezoneData?.countryCode || 'Not found',
-      countryName: agentTimezoneData?.countryName || 'Not found',
-      gmtOffset: agentTimezoneData?.gmtOffset || 'Not found'
-    });
+
     
     const timezoneMatch = await compareTimezones(gigTimezoneId, agentTimezoneId);
-    console.log('✅ Timezone match result for', agent.personalInfo?.name, ':', timezoneMatch);
 
     // Region matching
     const regionMatch = await compareRegions(gig.destination_zone, agentTimezoneId);
-    console.log('🌍 Region match result for', agent.personalInfo?.name, ':', regionMatch);
 
     // Schedule matching
     const scheduleMatch = compareSchedules(gig.availability?.schedule, agent.availability);
-    console.log('Schedule match result:', scheduleMatch);
 
       // Determine match status based on direct matches
       const languageMatchStatus = matchingLanguages.length === requiredLanguages.length ? "perfect_match" : 
@@ -1231,22 +1201,18 @@ export const findMatchesForGigById = async (req, res) => {
         skillsMatchStatus = hasAllRequiredSkills ? "perfect_match" : "no_match";
       }
 
-      console.log('Match statuses:', {
-        language: languageMatchStatus,
-        skills: skillsMatchStatus,
-        timezone: timezoneMatch.status,
-        region: regionMatch.status,
-        schedule: scheduleMatch.status
-      });
+
 
       // Overall match status - être moins strict et permettre des correspondances partielles
       const overallMatchStatus = (languageMatchStatus === "perfect_match" && 
                                 skillsMatchStatus === "perfect_match" && 
+                                experienceMatch.status === "perfect_match" &&
                                 timezoneMatch.status === "perfect_match" &&
                                 regionMatch.status === "perfect_match" &&
                                 scheduleMatch.status === "perfect_match") ? "perfect_match" :
                                 (languageMatchStatus === "no_match" && 
                                  skillsMatchStatus === "no_match" && 
+                                 experienceMatch.status === "no_match" &&
                                  timezoneMatch.status === "no_match" &&
                                  regionMatch.status === "no_match" &&
                                  scheduleMatch.status === "no_match") ? "no_match" :
@@ -1255,8 +1221,8 @@ export const findMatchesForGigById = async (req, res) => {
       return {
         agentId: agent._id,
         agentInfo: {
-          name: agent.personalInfo.name,
-          email: agent.personalInfo?.email || '',
+          name: agent.personalInfo?.name || 'Unknown',
+          email: agent.personalInfo?.email || 'Unknown',
           photo: agent.personalInfo?.photo || null,
           location: agent.personalInfo?.location || '',
           phone: agent.personalInfo?.phone || '',
@@ -1267,7 +1233,10 @@ export const findMatchesForGigById = async (req, res) => {
             proficiency: lang.proficiency,
             iso639_1: lang.iso639_1
           })) || [],
-          professionalSummary: agent.professionalSummary || {},
+          professionalSummary: {
+            ...agent.professionalSummary,
+            yearsOfExperience: agent.professionalSummary?.yearsOfExperience || 0
+          },
           skills: {
             technical: agent.skills?.technical?.map(s => ({
               _id: s._id,
@@ -1318,6 +1287,11 @@ export const findMatchesForGigById = async (req, res) => {
             matchStatus: skillsMatchStatus
           }
         },
+        experienceMatch: {
+          score: experienceMatch.score,
+          details: experienceMatch.details,
+          matchStatus: experienceMatch.status
+        },
         timezoneMatch: {
           score: timezoneMatch.score,
           details: timezoneMatch.details,
@@ -1341,13 +1315,16 @@ export const findMatchesForGigById = async (req, res) => {
     const sortedWeights = Object.entries(weights)
       .filter(([, weight]) => weight > 0) // Ignorer les critères avec poids 0
       .sort(([, a], [, b]) => b - a);
-    console.log('Sorted weights for sequential filtering:', sortedWeights);
 
     let filteredMatches = matches;
 
     // Appliquer le filtrage séquentiel basé sur les poids
     for (const [criterion, weight] of sortedWeights) {
-      console.log(`Filtering by ${criterion} with weight ${weight}`);
+      
+      // Ignorer les critères avec un poids de 0
+      if (weight === 0) {
+        continue;
+      }
       
       if (criterion === 'languages') {
         // Pour les langues, accepter uniquement les perfect_match
@@ -1359,6 +1336,11 @@ export const findMatchesForGigById = async (req, res) => {
         filteredMatches = filteredMatches.filter(match => {
           return match.skillsMatch.details.matchStatus === "perfect_match";
         });
+      } else if (criterion === 'experience') {
+        // Pour l'expérience, accepter uniquement les perfect_match
+        filteredMatches = filteredMatches.filter(
+          match => match.experienceMatch.matchStatus === "perfect_match"
+        );
       } else if (criterion === 'timezone') {
         // Pour les timezones, accepter uniquement les perfect_match
         filteredMatches = filteredMatches.filter(
@@ -1376,28 +1358,43 @@ export const findMatchesForGigById = async (req, res) => {
         );
       }
 
-      console.log(`After ${criterion} filtering: ${filteredMatches.length} matches remaining`);
+
     }
 
 
 
-    // Filtrage global obligatoire - rejeter tous les agents qui ont des no_match
+    // Filtrage global obligatoire - ignorer les critères avec un poids de 0
     const finalFilteredMatches = filteredMatches.filter(match => {
-      const hasLanguageMatch = match.languageMatch.details.matchStatus === "perfect_match";
-      const hasSkillsMatch = match.skillsMatch.details.matchStatus === "perfect_match";
-      const hasTimezoneMatch = match.timezoneMatch.matchStatus === "perfect_match";
-      const hasRegionMatch = match.regionMatch.matchStatus === "perfect_match";
-      const hasScheduleMatch = match.scheduleMatch.matchStatus === "perfect_match";
+      // Vérifier quels critères ont un poids > 0
+      const hasLanguageWeight = weights.languages > 0;
+      const hasSkillsWeight = weights.skills > 0;
+      const hasExperienceWeight = weights.experience > 0;
+      const hasTimezoneWeight = weights.timezone > 0;
+      const hasRegionWeight = weights.region > 0;
+      const hasScheduleWeight = (weights.schedule > 0 || weights.availability > 0);
       
-      // Un agent doit avoir au moins un perfect_match pour être considéré
-      return hasLanguageMatch || hasSkillsMatch || hasTimezoneMatch || hasRegionMatch || hasScheduleMatch;
+      // Vérifier les matches pour les critères avec un poids > 0
+      const hasLanguageMatch = !hasLanguageWeight || match.languageMatch.details.matchStatus === "perfect_match";
+      const hasSkillsMatch = !hasSkillsWeight || match.skillsMatch.details.matchStatus === "perfect_match";
+      const hasExperienceMatch = !hasExperienceWeight || match.experienceMatch.matchStatus === "perfect_match";
+      const hasTimezoneMatch = !hasTimezoneWeight || match.timezoneMatch.matchStatus === "perfect_match";
+      const hasRegionMatch = !hasRegionWeight || match.regionMatch.matchStatus === "perfect_match";
+      const hasScheduleMatch = !hasScheduleWeight || match.scheduleMatch.matchStatus === "perfect_match";
+      
+      // Un agent doit avoir au moins un perfect_match pour les critères avec un poids > 0
+      const activeCriteria = [hasLanguageWeight, hasSkillsWeight, hasExperienceWeight, hasTimezoneWeight, hasRegionWeight, hasScheduleWeight];
+      const activeMatches = [hasLanguageMatch, hasSkillsMatch, hasExperienceMatch, hasTimezoneMatch, hasRegionMatch, hasScheduleMatch];
+      
+      // Si aucun critère n'est actif (tous les poids à 0), accepter tous les agents
+      if (!activeCriteria.some(c => c)) {
+        return true;
+      }
+      
+      // Sinon, accepter si au moins un critère actif a un perfect_match
+      return activeCriteria.some((isActive, index) => isActive && activeMatches[index]);
     });
 
-    console.log('Filtrage global appliqué:', {
-      before: filteredMatches.length,
-      after: finalFilteredMatches.length,
-      removed: filteredMatches.length - finalFilteredMatches.length
-    });
+
 
     // Calculer les statistiques après le filtrage global
     const stats = {
@@ -1416,6 +1413,12 @@ export const findMatchesForGigById = async (req, res) => {
         partialMatches: finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'technical')).length,
         noMatches: finalFilteredMatches.length - finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'technical')).length
       },
+      experienceStats: {
+        perfectMatches: finalFilteredMatches.filter(m => m.experienceMatch.matchStatus === "perfect_match").length,
+        partialMatches: finalFilteredMatches.filter(m => m.experienceMatch.matchStatus === "partial_match").length,
+        noMatches: finalFilteredMatches.filter(m => m.experienceMatch.matchStatus === "no_match").length,
+        totalMatches: finalFilteredMatches.length
+      },
       professional: {
         perfectMatches: finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'professional')).length,
         partialMatches: finalFilteredMatches.filter(m => m.skillsMatch.details.matchingSkills.some(s => s.type === 'professional')).length,
@@ -1428,14 +1431,23 @@ export const findMatchesForGigById = async (req, res) => {
       }
     };
 
-    console.log('Statistiques après filtrage global:', stats);
+
     
+    // Retourner la réponse finale
     res.json({
       preferedmatches: finalFilteredMatches,
-      ...stats
+      totalMatches: finalFilteredMatches.length,
+      perfectMatches: finalFilteredMatches.filter(m => m.matchStatus === "perfect_match").length,
+      partialMatches: finalFilteredMatches.filter(m => m.matchStatus === "partial_match").length,
+      noMatches: finalFilteredMatches.filter(m => m.matchStatus === "no_match").length,
+      languageStats: stats.languageStats,
+      skillsStats: stats.skillsStats,
+      experienceStats: stats.experienceStats,
+      timezoneStats: stats.timezoneStats,
+      regionStats: stats.regionStats,
+      scheduleStats: stats.scheduleStats
     });
   } catch (error) {
-    console.error("Error in findMatchesForGigById:", error);
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
@@ -1448,13 +1460,7 @@ export const findMatchesForAgentById = async (req, res) => {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Agent not found' });
     }
 
-    console.log('Agent found:', {
-      id: agent._id,
-      name: agent.personalInfo.name,
-      skills: agent.skills,
-      languages: agent.personalInfo.languages,
-      experience: agent.experience
-    });
+
 
     const gigs = await Gig.find();
     if (!gigs || gigs.length === 0) {
@@ -1473,37 +1479,26 @@ export const findMatchesForAgentById = async (req, res) => {
       });
     }
 
-    console.log('Number of gigs found:', gigs.length);
+
 
     // Poids par défaut pour le matching
     const defaultWeights = {
-      industry: 0.9,
-      skills: 0.7,
-      language: 0.6,
-      experience: 0.5,
-      availability: 0.4
+      industry: 0.20,
+      experience: 0.20,
+      skills: 0.20,
+      language: 0.15,
+      region: 0.15,
+      availability: 0.10
     };
 
     const weights = req.body.weights || defaultWeights;
-    console.log('Using weights:', weights);
 
-    // Afficher les critères triés
-    const sortedEntries = Object.entries(weights)
-      .sort(([, a], [, b]) => b - a);
-    console.log('Sorted criteria with weights:');
-    sortedEntries.forEach(([criterion, weight]) => {
-      console.log(`- ${criterion}: ${weight}`);
-    });
+
 
     const result = await findMatches(agent, gigs, weights);
-    console.log('Matching results:', {
-      totalMatches: result.matches.length,
-      topScore: result.matches[0]?.score
-    });
 
     res.status(StatusCodes.OK).json(result);
   } catch (error) {
-    console.error("Error in findMatchesForAgentById:", error);
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
@@ -1513,12 +1508,24 @@ export const generateOptimalMatches = async (req, res) => {
   try {
     const { weights } = req.body;
     
+    // Poids par défaut incluant l'expérience
+    const defaultWeights = {
+      industry: 0.20,
+      experience: 0.20,
+      skills: 0.20,
+      language: 0.15,
+      region: 0.15,
+      availability: 0.10
+    };
+
+    const finalWeights = { ...defaultWeights, ...weights };
+    
     const agents = await Agent.find();
     const gigs = await Gig.find();
     
     const gigMatches = await Promise.all(
       gigs.map(async gig => {
-        const result = await findMatches(gig, agents, weights);
+        const result = await findMatches(gig, agents, finalWeights);
         return {
           gigId: gig._id,
           matches: result.matches
@@ -1529,7 +1536,8 @@ export const generateOptimalMatches = async (req, res) => {
     res.status(StatusCodes.OK).json({
       gigMatches,
       totalGigs: gigs.length,
-      totalAgents: agents.length
+      totalAgents: agents.length,
+      weights: finalWeights
     });
   } catch (error) {
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
@@ -1544,11 +1552,7 @@ export const findLanguageMatchesForGig = async (req, res) => {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Gig not found' });
     }
 
-    console.log('Finding language matches for gig:', {
-      id: gig._id,
-      title: gig.title,
-      requiredLanguages: gig.skills?.languages
-    });
+
 
     const agents = await Agent.find();
     if (!agents || agents.length === 0) {
@@ -1561,14 +1565,9 @@ export const findLanguageMatchesForGig = async (req, res) => {
     }
 
     const result = await findLanguageMatches(gig, agents);
-    console.log('Language matching results:', {
-      totalMatches: result.matches.length,
-      qualifyingAgents: result.qualifyingAgents
-    });
 
     res.status(StatusCodes.OK).json(result);
   } catch (error) {
-    console.error("Error in findLanguageMatchesForGig:", error);
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
@@ -1654,7 +1653,6 @@ export const findSkillsMatchesForGig = async (req, res) => {
       };
       const normalized = (level || '').toLowerCase().trim();
       const score = levels[normalized] || 0;
-      console.log('getLanguageLevelScore:', { level, normalized, score });
       return score;
     };
 
@@ -1759,7 +1757,6 @@ export const findSkillsMatchesForGig = async (req, res) => {
       noMatches: matches.filter(m => m.matchDetails.matchStatus === "no_match").length
     });
   } catch (error) {
-    console.error("Error in findSkillsMatchesForGig:", error);
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
@@ -1816,9 +1813,9 @@ export const createGigAgentFromMatch = async (req, res) => {
       // Marquer l'email comme envoyé
       await savedGigAgent.markEmailSent();
       
-      console.log('Email de notification envoyé avec succès:', emailResult);
+      // Email de notification envoyé avec succès
     } catch (emailError) {
-      console.error('Erreur lors de l\'envoi de l\'email:', emailError);
+      // Erreur lors de l'envoi de l'email
       // Ne pas échouer la création si l'email échoue
     }
 
@@ -1835,7 +1832,6 @@ export const createGigAgentFromMatch = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error in createGigAgentFromMatch:', error);
     
     if (error.code === 11000) {
       return res.status(StatusCodes.CONFLICT).json({ 
