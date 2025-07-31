@@ -5,7 +5,7 @@ import Gig from '../models/Gig.js';
 export const createOrUpdateWeights = async (req, res) => {
   try {
     const { gigId } = req.params;
-    const { categoryWeights } = req.body;
+    const { matchingWeights } = req.body;
 
     // Validate gig exists
     const gig = await Gig.findById(gigId);
@@ -13,17 +13,17 @@ export const createOrUpdateWeights = async (req, res) => {
       return res.status(404).json({ message: 'Gig not found' });
     }
 
-    // Validate category weights
-    const validCategories = ['skills', 'activities', 'industries', 'languages', 'destination', 'seniority'];
-    const providedCategories = Object.keys(categoryWeights || {});
+    // Validate matching weights
+    const validCategories = ['experience', 'skills', 'industry', 'languages', 'availability', 'timezone', 'activities', 'region', 'schedule'];
+    const providedCategories = Object.keys(matchingWeights || {});
     
     for (const category of providedCategories) {
       if (!validCategories.includes(category)) {
         return res.status(400).json({ message: `Invalid category: ${category}` });
       }
-      if (typeof categoryWeights[category] !== 'number' || 
-          categoryWeights[category] < 0 || 
-          categoryWeights[category] > 1) {
+      if (typeof matchingWeights[category] !== 'number' || 
+          matchingWeights[category] < 0 || 
+          matchingWeights[category] > 1) {
         return res.status(400).json({ message: `Weight for ${category} must be a number between 0 and 1` });
       }
     }
@@ -33,22 +33,25 @@ export const createOrUpdateWeights = async (req, res) => {
     
     if (weights) {
       // Update existing weights
-      weights.categoryWeights = { ...weights.categoryWeights, ...categoryWeights };
+      weights.matchingWeights = { ...weights.matchingWeights, ...matchingWeights };
       await weights.save();
     } else {
       // Create new weights with defaults and provided values
       const defaultWeights = {
-        skills: 0.5,
-        activities: 0.5,
-        industries: 0.5,
-        languages: 0.5,
-        destination: 0.5,
-        seniority: 0.5
+        experience: 0.20,
+        skills: 0.20,
+        industry: 0.15,
+        languages: 0.15,
+        availability: 0.10,
+        timezone: 0.10,
+        activities: 0.10,
+        region: 0.10,
+        schedule: 0.10
       };
       
       weights = new GigMatchingWeights({
         gigId,
-        categoryWeights: { ...defaultWeights, ...categoryWeights }
+        matchingWeights: { ...defaultWeights, ...matchingWeights }
       });
       await weights.save();
     }
@@ -80,13 +83,16 @@ export const getWeights = async (req, res) => {
       // Create default weights if none exist
       weights = new GigMatchingWeights({
         gigId,
-        categoryWeights: {
-          skills: 0.5,
-          activities: 0.5,
-          industries: 0.5,
-          languages: 0.5,
-          destination: 0.5,
-          seniority: 0.5
+        matchingWeights: {
+          experience: 0.20,
+          skills: 0.20,
+          industry: 0.15,
+          languages: 0.15,
+          availability: 0.10,
+          timezone: 0.10,
+          activities: 0.10,
+          region: 0.10,
+          schedule: 0.10
         }
       });
       await weights.save();
@@ -161,13 +167,16 @@ export const getAllGigsWithWeights = async (req, res) => {
       const gigWeights = weights.find(w => w.gigId.toString() === gig._id.toString());
       return {
         gig,
-        weights: gigWeights ? gigWeights.categoryWeights : {
-          skills: 0.5,
-          activities: 0.5,
-          industries: 0.5,
-          languages: 0.5,
-          destination: 0.5,
-          seniority: 0.5
+        weights: gigWeights ? gigWeights.matchingWeights : {
+          experience: 0.20,
+          skills: 0.20,
+          industry: 0.15,
+          languages: 0.15,
+          availability: 0.10,
+          timezone: 0.10,
+          activities: 0.10,
+          region: 0.10,
+          schedule: 0.10
         }
       };
     });
