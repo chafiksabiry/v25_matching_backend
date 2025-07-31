@@ -76,24 +76,11 @@ export const getWeights = async (req, res) => {
       return res.status(404).json({ message: 'Gig not found' });
     }
 
-    let weights = await GigMatchingWeights.findOne({ gigId });
+    const weights = await GigMatchingWeights.findOne({ gigId });
     
     if (!weights) {
-      // Create default weights if none exist
-      weights = new GigMatchingWeights({
-        gigId,
-        matchingWeights: {
-          experience: 0.20,
-          skills: 0.20,
-          industry: 0.15,
-          languages: 0.15,
-          availability: 0.10,
-          timezone: 0.10,
-          activities: 0.10,
-          region: 0.10
-        }
-      });
-      await weights.save();
+      // Return 404 instead of creating default weights
+      return res.status(404).json({ message: 'No matching weights found for this gig' });
     }
 
     res.status(200).json({
