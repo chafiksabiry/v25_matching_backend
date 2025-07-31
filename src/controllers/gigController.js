@@ -66,16 +66,16 @@ export const saveGigAvailability = async (req, res) => {
   try {
     const { id } = req.params;
     const { availability } = req.body;
-
+    
     const gig = await Gig.findById(id);
     if (!gig) {
       return res.status(StatusCodes.NOT_FOUND).json({ error: 'Gig not found' });
     }
-
+    
     // Mettre à jour l'availability du gig
     gig.availability = availability;
     await gig.save();
-
+    
     res.status(StatusCodes.OK).json({
       success: true,
       data: gig.availability,
@@ -83,10 +83,7 @@ export const saveGigAvailability = async (req, res) => {
     });
   } catch (error) {
     console.error('Error saving gig availability:', error);
-    res.status(StatusCodes.BAD_REQUEST).json({ 
-      error: 'Error saving gig availability',
-      details: error.message 
-    });
+    res.status(StatusCodes.BAD_REQUEST).json({ error: error.message });
   }
 };
 
@@ -94,12 +91,12 @@ export const saveGigAvailability = async (req, res) => {
 export const getGigAvailability = async (req, res) => {
   try {
     const { id } = req.params;
-
+    
     const gig = await Gig.findById(id);
     if (!gig) {
       return res.status(StatusCodes.NOT_FOUND).json({ error: 'Gig not found' });
     }
-
+    
     res.status(StatusCodes.OK).json({
       success: true,
       data: gig.availability,
@@ -107,10 +104,34 @@ export const getGigAvailability = async (req, res) => {
     });
   } catch (error) {
     console.error('Error getting gig availability:', error);
-    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ 
-      error: 'Error getting gig availability',
-      details: error.message 
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: error.message });
+  }
+};
+
+// Mettre à jour l'availability (schedule) d'un gig
+export const updateGigAvailability = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { availability } = req.body;
+    
+    const gig = await Gig.findByIdAndUpdate(
+      id,
+      { availability },
+      { new: true, runValidators: true }
+    );
+    
+    if (!gig) {
+      return res.status(StatusCodes.NOT_FOUND).json({ error: 'Gig not found' });
+    }
+    
+    res.status(StatusCodes.OK).json({
+      success: true,
+      data: gig.availability,
+      message: 'Gig availability updated successfully'
     });
+  } catch (error) {
+    console.error('Error updating gig availability:', error);
+    res.status(StatusCodes.BAD_REQUEST).json({ error: error.message });
   }
 };
 

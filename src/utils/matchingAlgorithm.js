@@ -346,7 +346,7 @@ function calculateLanguageScore(agent, gig) {
 function calculateAvailabilityScore(agent, gig) {
   if (
     !agent.availability ||
-    !gig.schedule ||
+    !gig.availability ||
     !Array.isArray(agent.availability)
   ) {
     console.log("Missing availability data:", {
@@ -365,11 +365,11 @@ function calculateAvailabilityScore(agent, gig) {
       .replace(/\s+/g, "");
   };
 
-  const gigSchedule = JSON.parse(gig.schedule.hours);
-  const gigDays = gigSchedule.map((day) => normalizeString(day.day));
-  const gigHours = gigSchedule.map((day) => ({
-    start: timeToMinutes(day.start),
-    end: timeToMinutes(day.end),
+  const gigAvailability = gig.availability.schedule || [];
+  const gigDays = gigAvailability.map((day) => normalizeString(day.day));
+  const gigHours = gigAvailability.map((day) => ({
+    start: timeToMinutes(day.hours.start),
+    end: timeToMinutes(day.hours.end),
   }));
 
   const availableDays = agent.availability.filter((day) => {
@@ -651,7 +651,7 @@ export const findMatchesForGig = async (
 
       case "availability":
         filteredAgents = filteredAgents.filter((agent) => {
-          if (!agent.availability || !gig.schedule?.hours) return false;
+          if (!agent.availability || !gig.availability?.schedule) return false;
 
           const normalizeString = (str) => {
             if (!str) return "";
@@ -663,8 +663,8 @@ export const findMatchesForGig = async (
           };
 
           try {
-            const gigSchedule = JSON.parse(gig.schedule.hours);
-            const gigDays = gigSchedule.map((day) => normalizeString(day.day));
+            const gigAvailability = gig.availability.schedule || [];
+            const gigDays = gigAvailability.map((day) => normalizeString(day.day));
 
             return agent.availability.some((agentDay) => {
               const normalizedAgentDay = normalizeString(agentDay);
@@ -687,7 +687,7 @@ export const findMatchesForGig = async (
               });
             });
           } catch (error) {
-            console.error("Error parsing gig schedule:", error);
+            console.error("Error parsing gig availability:", error);
             return false;
           }
         });

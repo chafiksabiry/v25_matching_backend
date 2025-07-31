@@ -14,7 +14,7 @@ export const createOrUpdateWeights = async (req, res) => {
     }
 
     // Validate matching weights
-    const validCategories = ['experience', 'skills', 'industry', 'languages', 'availability', 'timezone', 'activities', 'region', 'schedule'];
+    const validCategories = ['experience', 'skills', 'industry', 'languages', 'availability', 'timezone', 'activities', 'region'];
     const providedCategories = Object.keys(matchingWeights || {});
     
     for (const category of providedCategories) {
@@ -45,8 +45,7 @@ export const createOrUpdateWeights = async (req, res) => {
         availability: 0.10,
         timezone: 0.10,
         activities: 0.10,
-        region: 0.10,
-        schedule: 0.10
+        region: 0.10
       };
       
       weights = new GigMatchingWeights({
@@ -91,8 +90,7 @@ export const getWeights = async (req, res) => {
           availability: 0.10,
           timezone: 0.10,
           activities: 0.10,
-          region: 0.10,
-          schedule: 0.10
+          region: 0.10
         }
       });
       await weights.save();
@@ -175,8 +173,7 @@ export const getAllGigsWithWeights = async (req, res) => {
           availability: 0.10,
           timezone: 0.10,
           activities: 0.10,
-          region: 0.10,
-          schedule: 0.10
+          region: 0.10
         }
       };
     });

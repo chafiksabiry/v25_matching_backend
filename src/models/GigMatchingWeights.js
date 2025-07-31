@@ -16,8 +16,7 @@ const gigMatchingWeightsSchema = new mongoose.Schema({
     availability: { type: Number, default: 0.10, min: 0, max: 1 },
     timezone: { type: Number, default: 0.10, min: 0, max: 1 },
     activities: { type: Number, default: 0.10, min: 0, max: 1 },
-    region: { type: Number, default: 0.10, min: 0, max: 1 },
-    schedule: { type: Number, default: 0.10, min: 0, max: 1 }
+    region: { type: Number, default: 0.10, min: 0, max: 1 }
   },
   metadata: {
     createdAt: { type: Date, default: Date.now },
@@ -57,8 +56,7 @@ gigMatchingWeightsSchema.methods.resetToDefaults = function() {
     availability: 0.10,
     timezone: 0.10,
     activities: 0.10,
-    region: 0.10,
-    schedule: 0.10
+    region: 0.10
   };
   return this.save();
 };
