@@ -1542,7 +1542,7 @@ export const findMatchesForGigById = async (req, res) => {
           details: regionMatch.details,
           matchStatus: regionMatch.status
         },
-        scheduleMatch: {
+        availabilityMatch: {
           score: scheduleMatch.score,
           details: scheduleMatch.details,
           matchStatus: scheduleMatch.status
@@ -1605,7 +1605,7 @@ export const findMatchesForGigById = async (req, res) => {
       } else if (criterion === 'schedule' || criterion === 'availability') {
         // Pour les horaires, accepter uniquement les perfect_match
         filteredMatches = filteredMatches.filter(
-          match => match.scheduleMatch.matchStatus === "perfect_match"
+          match => match.availabilityMatch.matchStatus === "perfect_match"
         );
       }
 
