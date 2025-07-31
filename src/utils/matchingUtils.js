@@ -18,7 +18,7 @@ const calculateMatchScore = (entity, candidate, weights) => {
       requiredSkills: gig.requiredSkills || [],
       seniority: gig.seniority || {},
       requiredLanguages: gig.requiredLanguages || [],
-      schedule: gig.schedule || {}
+      availability: gig.availability || {}
     };
 
     // Extraire les données de l'agent
@@ -191,20 +191,20 @@ const calculateMatchScore = (entity, candidate, weights) => {
     // Matching de la disponibilité
     if (weights.availability > 0) {
       const agentAvailability = agentData.availability;
-      const requiredSchedule = gigData.schedule.hours ? JSON.parse(gigData.schedule.hours) : [];
-      const requiredAvailability = requiredSchedule.map(slot => slot.day);
+      const requiredAvailability = gigData.availability.schedule ? gigData.availability.schedule : [];
+      const requiredDays = requiredAvailability.map(slot => slot.day);
       
       console.log('Availability matching:', {
         agentAvailability,
-        requiredAvailability,
+        requiredDays,
         weight: weights.availability
       });
 
-      if (requiredAvailability.length > 0) {
+      if (requiredDays.length > 0) {
         const matchingAvailability = agentAvailability.filter(avail => 
-          requiredAvailability.includes(avail)
+          requiredDays.includes(avail)
         );
-        const availabilityScore = (matchingAvailability.length / requiredAvailability.length) * weights.availability;
+        const availabilityScore = (matchingAvailability.length / requiredDays.length) * weights.availability;
         score += availabilityScore;
         totalWeight += weights.availability;
         console.log('Availability score:', availabilityScore);
@@ -244,7 +244,7 @@ const normalizeData = (data) => {
         requiredSkills: data.requiredSkills || [],
         seniority: data.seniority || {},
         requiredLanguages: data.requiredLanguages || [],
-        schedule: data.schedule || {}
+        availability: data.availability || {}
       };
     }
 

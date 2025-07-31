@@ -61,6 +61,80 @@ export const deleteGig = async (req, res) => {
   }
 };
 
+// Sauvegarder l'availability (schedule) d'un gig
+export const saveGigAvailability = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { availability } = req.body;
+    
+    const gig = await Gig.findById(id);
+    if (!gig) {
+      return res.status(StatusCodes.NOT_FOUND).json({ error: 'Gig not found' });
+    }
+    
+    // Mettre à jour l'availability du gig
+    gig.availability = availability;
+    await gig.save();
+    
+    res.status(StatusCodes.OK).json({
+      success: true,
+      data: gig.availability,
+      message: 'Gig availability saved successfully'
+    });
+  } catch (error) {
+    console.error('Error saving gig availability:', error);
+    res.status(StatusCodes.BAD_REQUEST).json({ error: error.message });
+  }
+};
+
+// Récupérer l'availability (schedule) d'un gig
+export const getGigAvailability = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const gig = await Gig.findById(id);
+    if (!gig) {
+      return res.status(StatusCodes.NOT_FOUND).json({ error: 'Gig not found' });
+    }
+    
+    res.status(StatusCodes.OK).json({
+      success: true,
+      data: gig.availability,
+      message: 'Gig availability retrieved successfully'
+    });
+  } catch (error) {
+    console.error('Error getting gig availability:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ error: error.message });
+  }
+};
+
+// Mettre à jour l'availability (schedule) d'un gig
+export const updateGigAvailability = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { availability } = req.body;
+    
+    const gig = await Gig.findByIdAndUpdate(
+      id,
+      { availability },
+      { new: true, runValidators: true }
+    );
+    
+    if (!gig) {
+      return res.status(StatusCodes.NOT_FOUND).json({ error: 'Gig not found' });
+    }
+    
+    res.status(StatusCodes.OK).json({
+      success: true,
+      data: gig.availability,
+      message: 'Gig availability updated successfully'
+    });
+  } catch (error) {
+    console.error('Error updating gig availability:', error);
+    res.status(StatusCodes.BAD_REQUEST).json({ error: error.message });
+  }
+};
+
 // Trouver des gigs correspondants pour un agent
 export const findGigsForAgent = async (req, res) => {
   try {

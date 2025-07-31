@@ -796,7 +796,6 @@ export const findMatchesForGigById = async (req, res) => {
       languages: 0.15, 
       experience: 0.20, 
       region: 0.15,
-      schedule: 0.10, 
       timezone: 0.10, 
       industry: 0.10,
       activity: 0.10
@@ -1543,7 +1542,7 @@ export const findMatchesForGigById = async (req, res) => {
           details: regionMatch.details,
           matchStatus: regionMatch.status
         },
-        scheduleMatch: {
+        availabilityMatch: {
           score: scheduleMatch.score,
           details: scheduleMatch.details,
           matchStatus: scheduleMatch.status
@@ -1606,7 +1605,7 @@ export const findMatchesForGigById = async (req, res) => {
       } else if (criterion === 'schedule' || criterion === 'availability') {
         // Pour les horaires, accepter uniquement les perfect_match
         filteredMatches = filteredMatches.filter(
-          match => match.scheduleMatch.matchStatus === "perfect_match"
+          match => match.availabilityMatch.matchStatus === "perfect_match"
         );
       }
 
@@ -1625,7 +1624,7 @@ export const findMatchesForGigById = async (req, res) => {
       const hasExperienceWeight = weights.experience > 0;
       const hasTimezoneWeight = weights.timezone > 0;
       const hasRegionWeight = weights.region > 0;
-      const hasScheduleWeight = (weights.schedule > 0 || weights.availability > 0);
+      const hasAvailabilityWeight = (weights.availability > 0);
       
       // Vérifier les matches pour les critères avec un poids > 0
       const hasLanguageMatch = !hasLanguageWeight || match.languageMatch.details.matchStatus === "perfect_match";
@@ -1635,11 +1634,11 @@ export const findMatchesForGigById = async (req, res) => {
       const hasExperienceMatch = !hasExperienceWeight || match.experienceMatch.matchStatus === "perfect_match";
       const hasTimezoneMatch = !hasTimezoneWeight || match.timezoneMatch.matchStatus === "perfect_match";
       const hasRegionMatch = !hasRegionWeight || match.regionMatch.matchStatus === "perfect_match";
-      const hasScheduleMatch = !hasScheduleWeight || match.scheduleMatch.matchStatus === "perfect_match";
+      const hasAvailabilityMatch = !hasAvailabilityWeight || match.availabilityMatch.matchStatus === "perfect_match";
       
       // Un agent doit avoir au moins un perfect_match pour les critères avec un poids > 0
-      const activeCriteria = [hasLanguageWeight, hasSkillsWeight, hasIndustryWeight, hasActivityWeight, hasExperienceWeight, hasTimezoneWeight, hasRegionWeight, hasScheduleWeight];
-      const activeMatches = [hasLanguageMatch, hasSkillsMatch, hasIndustryMatch, hasActivityMatch, hasExperienceMatch, hasTimezoneMatch, hasRegionMatch, hasScheduleMatch];
+      const activeCriteria = [hasLanguageWeight, hasSkillsWeight, hasIndustryWeight, hasActivityWeight, hasExperienceWeight, hasTimezoneWeight, hasRegionWeight, hasAvailabilityWeight];
+      const activeMatches = [hasLanguageMatch, hasSkillsMatch, hasIndustryMatch, hasActivityMatch, hasExperienceMatch, hasTimezoneMatch, hasRegionMatch, hasAvailabilityMatch];
       
       // Si aucun critère n'est actif (tous les poids à 0), accepter tous les agents
       if (!activeCriteria.some(c => c)) {
