@@ -261,7 +261,7 @@ const calculateMatchDetails = async (agent, gig) => {
         matchStatus: skillsMatchStatus
       }
     },
-    scheduleMatch: {
+    availabilityMatch: {
       score: scheduleMatch.score,
       details: scheduleMatch.details,
       matchStatus: scheduleMatch.status
@@ -273,7 +273,7 @@ const calculateMatchDetails = async (agent, gig) => {
 const calculateMatchScore = (matchDetails) => {
   const languageScore = matchDetails.languageMatch?.score || 0;
   const skillsScore = matchDetails.skillsMatch?.details?.matchStatus === 'perfect_match' ? 1 : 0;
-  const scheduleScore = matchDetails.scheduleMatch?.score || 0;
+  const scheduleScore = matchDetails.availabilityMatch?.score || 0;
   
   return (languageScore + skillsScore + scheduleScore) / 3;
 };

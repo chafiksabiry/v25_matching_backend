@@ -6,7 +6,10 @@ import {
   updateGig,
   deleteGig,
   findGigsForAgent,
-  findAgentsForGig
+  findAgentsForGig,
+  saveGigAvailability,
+  getGigAvailability,
+  updateGigAvailability
 } from '../controllers/gigController.js';
 
 const router = express.Router();
@@ -22,5 +25,10 @@ router.post('/find-gigs-for-agent', findGigsForAgent);
 
 // Trouver des agents pour un gig
 router.post('/find-agents-for-gig', findAgentsForGig);
+
+// Routes pour l'availability (schedule)
+router.post('/:id/availability', saveGigAvailability);
+router.get('/:id/availability', getGigAvailability);
+router.put('/:id/availability', updateGigAvailability);
 
 export default router; 
