@@ -1651,6 +1651,17 @@ export const findMatchesForGigById = async (req, res) => {
 
 
 
+    // Récupérer les agents déjà invités pour ce gig
+    const invitedAgents = await GigAgent.find({ gigId: gig._id }).select('agentId');
+    const invitedAgentIds = invitedAgents.map(ga => ga.agentId.toString());
+    console.log('📧 Backend: Invited agents for gig', gig._id, ':', invitedAgentIds);
+
+    // Ajouter l'information d'invitation à chaque match
+    const matchesWithInvitationStatus = finalFilteredMatches.map(match => ({
+      ...match,
+      isInvited: invitedAgentIds.includes(match.agentId.toString())
+    }));
+
     // Calculer les statistiques après le filtrage global
     const stats = {
       totalMatches: finalFilteredMatches.length,
@@ -1704,7 +1715,7 @@ export const findMatchesForGigById = async (req, res) => {
     
     // Retourner la réponse finale
     res.json({
-      preferedmatches: finalFilteredMatches,
+      preferedmatches: matchesWithInvitationStatus,
       totalMatches: finalFilteredMatches.length,
       perfectMatches: finalFilteredMatches.filter(m => m.matchStatus === "perfect_match").length,
       partialMatches: finalFilteredMatches.filter(m => m.matchStatus === "partial_match").length,
