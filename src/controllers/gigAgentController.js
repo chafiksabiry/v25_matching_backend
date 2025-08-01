@@ -99,9 +99,23 @@ export const createGigAgent = async (req, res) => {
       gigId,
       matchScore,
       matchDetails,
+      matchStatus: 'partial_match', // Sera calculé automatiquement
       notes,
-      status: 'pending'
+      status: 'pending',
+      matchingWeights: {
+        experience: 0.20,
+        skills: 0.20,
+        industry: 0.20,
+        languages: 0.15,
+        availability: 0.10,
+        timezone: 0.15,
+        activities: 0.0,
+        region: 0.0
+      }
     });
+
+    // Calculer le statut global de matching
+    gigAgent.calculateMatchStatus();
 
     const savedGigAgent = await gigAgent.save();
 
@@ -173,18 +187,24 @@ const calculateMatchDetails = async (agent, gig) => {
       if (isLevelMatch) {
         matchingLanguages.push({
           language: reqLang.language,
+          languageName: reqLang.language,
           requiredLevel: reqLang.proficiency,
           agentLevel: agentLang.proficiency
         });
       } else {
         insufficientLanguages.push({
           language: reqLang.language,
+          languageName: reqLang.language,
           requiredLevel: reqLang.proficiency,
           agentLevel: agentLang.proficiency
         });
       }
     } else {
-      missingLanguages.push(reqLang.language);
+      missingLanguages.push({
+        language: reqLang.language,
+        languageName: reqLang.language,
+        requiredLevel: reqLang.proficiency
+      });
     }
   });
 
@@ -217,6 +237,7 @@ const calculateMatchDetails = async (agent, gig) => {
       if (agentSkill.level >= reqSkill.level) {
         matchingSkills.push({
           skill: reqSkill.skill,
+          skillName: reqSkill.skill,
           requiredLevel: reqSkill.level,
           agentLevel: agentSkill.level,
           type: reqSkill.type
@@ -224,15 +245,36 @@ const calculateMatchDetails = async (agent, gig) => {
       } else {
         insufficientSkills.push({
           skill: reqSkill.skill,
+          skillName: reqSkill.skill,
           requiredLevel: reqSkill.level,
           agentLevel: agentSkill.level,
           type: reqSkill.type
         });
       }
     } else {
-      missingSkills.push(reqSkill.skill);
+      missingSkills.push({
+        skill: reqSkill.skill,
+        skillName: reqSkill.skill,
+        type: reqSkill.type,
+        requiredLevel: reqSkill.level
+      });
     }
   });
+
+  // Industry matching
+  const industryMatch = calculateIndustryMatch(agent, gig);
+  
+  // Activity matching
+  const activityMatch = calculateActivityMatch(agent, gig);
+  
+  // Experience matching
+  const experienceMatch = calculateExperienceMatch(agent, gig);
+  
+  // Timezone matching
+  const timezoneMatch = calculateTimezoneMatch(agent, gig);
+  
+  // Region matching
+  const regionMatch = calculateRegionMatch(agent, gig);
 
   // Schedule matching
   const scheduleMatch = compareSchedules(gig.availability?.schedule, agent.availability);
@@ -241,7 +283,8 @@ const calculateMatchDetails = async (agent, gig) => {
   const languageMatchStatus = matchingLanguages.length === requiredLanguages.length ? "perfect_match" : 
                              matchingLanguages.length > 0 ? "partial_match" : "no_match";
   
-  const skillsMatchStatus = matchingSkills.length === requiredSkills.length ? "perfect_match" : "no_match";
+  const skillsMatchStatus = matchingSkills.length === requiredSkills.length ? "perfect_match" : 
+                           matchingSkills.length > 0 ? "partial_match" : "no_match";
 
   return {
     languageMatch: {
@@ -254,6 +297,7 @@ const calculateMatchDetails = async (agent, gig) => {
       }
     },
     skillsMatch: {
+      score: matchingSkills.length / Math.max(requiredSkills.length, 1),
       details: {
         matchingSkills,
         missingSkills,
@@ -261,6 +305,11 @@ const calculateMatchDetails = async (agent, gig) => {
         matchStatus: skillsMatchStatus
       }
     },
+    industryMatch,
+    activityMatch,
+    experienceMatch,
+    timezoneMatch,
+    regionMatch,
     availabilityMatch: {
       score: scheduleMatch.score,
       details: scheduleMatch.details,
@@ -272,10 +321,294 @@ const calculateMatchDetails = async (agent, gig) => {
 // Fonction pour calculer le score global
 const calculateMatchScore = (matchDetails) => {
   const languageScore = matchDetails.languageMatch?.score || 0;
-  const skillsScore = matchDetails.skillsMatch?.details?.matchStatus === 'perfect_match' ? 1 : 0;
-  const scheduleScore = matchDetails.availabilityMatch?.score || 0;
+  const skillsScore = matchDetails.skillsMatch?.score || 0;
+  const industryScore = matchDetails.industryMatch?.score || 0;
+  const activityScore = matchDetails.activityMatch?.score || 0;
+  const experienceScore = matchDetails.experienceMatch?.score || 0;
+  const timezoneScore = matchDetails.timezoneMatch?.score || 0;
+  const regionScore = matchDetails.regionMatch?.score || 0;
+  const availabilityScore = matchDetails.availabilityMatch?.score || 0;
   
-  return (languageScore + skillsScore + scheduleScore) / 3;
+  // Poids par défaut
+  const weights = {
+    language: 0.15,
+    skills: 0.20,
+    industry: 0.20,
+    activity: 0.05,
+    experience: 0.20,
+    timezone: 0.10,
+    region: 0.05,
+    availability: 0.05
+  };
+  
+  return (
+    languageScore * weights.language +
+    skillsScore * weights.skills +
+    industryScore * weights.industry +
+    activityScore * weights.activity +
+    experienceScore * weights.experience +
+    timezoneScore * weights.timezone +
+    regionScore * weights.region +
+    availabilityScore * weights.availability
+  );
+};
+
+// Fonction pour calculer le matching d'industrie
+const calculateIndustryMatch = (agent, gig) => {
+  if (!gig.category || !agent.professionalSummary?.industries) {
+    return {
+      score: 0,
+      details: {
+        matchingIndustries: [],
+        missingIndustries: [],
+        matchStatus: 'no_match'
+      }
+    };
+  }
+
+  const normalizeString = (str) => {
+    if (!str) return "";
+    return str.toLowerCase().trim().replace(/[^a-z0-9]/g, "").replace(/\s+/g, "");
+  };
+
+  const gigCategory = normalizeString(gig.category);
+  const matchingIndustries = [];
+  const missingIndustries = [];
+
+  const hasMatchingIndustry = agent.professionalSummary.industries.some(industry => {
+    const normalizedIndustry = normalizeString(industry);
+    const isExactMatch = normalizedIndustry === gigCategory;
+    const isPartialMatch = normalizedIndustry.includes(gigCategory) || gigCategory.includes(normalizedIndustry);
+
+    if (isExactMatch || isPartialMatch) {
+      matchingIndustries.push({
+        industry: gig.category,
+        industryName: gig.category,
+        agentIndustryName: industry
+      });
+      return true;
+    }
+    return false;
+  });
+
+  if (!hasMatchingIndustry) {
+    missingIndustries.push({
+      industry: gig.category,
+      industryName: gig.category
+    });
+  }
+
+  return {
+    score: hasMatchingIndustry ? 1.0 : 0.0,
+    details: {
+      matchingIndustries,
+      missingIndustries,
+      matchStatus: hasMatchingIndustry ? 'perfect_match' : 'no_match'
+    }
+  };
+};
+
+// Fonction pour calculer le matching d'activités
+const calculateActivityMatch = (agent, gig) => {
+  if (!gig.activities || !agent.professionalSummary?.activities) {
+    return {
+      score: 0,
+      details: {
+        matchingActivities: [],
+        missingActivities: [],
+        matchStatus: 'no_match'
+      }
+    };
+  }
+
+  const normalizeString = (str) => {
+    if (!str) return "";
+    return str.toLowerCase().trim().replace(/[^a-z0-9]/g, "").replace(/\s+/g, "");
+  };
+
+  const matchingActivities = [];
+  const missingActivities = [];
+
+  gig.activities.forEach(gigActivity => {
+    const normalizedGigActivity = normalizeString(gigActivity);
+    const agentActivity = agent.professionalSummary.activities.find(activity => {
+      const normalizedActivity = normalizeString(activity);
+      return normalizedActivity === normalizedGigActivity || 
+             normalizedActivity.includes(normalizedGigActivity) || 
+             normalizedGigActivity.includes(normalizedActivity);
+    });
+
+    if (agentActivity) {
+      matchingActivities.push({
+        activity: gigActivity,
+        activityName: gigActivity,
+        agentActivityName: agentActivity
+      });
+    } else {
+      missingActivities.push({
+        activity: gigActivity,
+        activityName: gigActivity
+      });
+    }
+  });
+
+  const hasMatches = matchingActivities.length > 0;
+  const allMatch = matchingActivities.length === gig.activities.length;
+
+  return {
+    score: allMatch ? 1.0 : hasMatches ? 0.5 : 0.0,
+    details: {
+      matchingActivities,
+      missingActivities,
+      matchStatus: allMatch ? 'perfect_match' : hasMatches ? 'partial_match' : 'no_match'
+    }
+  };
+};
+
+// Fonction pour calculer le matching d'expérience
+const calculateExperienceMatch = (agent, gig) => {
+  if (!gig.seniority?.yearsExperience || !agent.professionalSummary?.yearsOfExperience) {
+    return {
+      score: 0.5,
+      details: {
+        gigRequiredExperience: 0,
+        agentExperience: 0,
+        difference: 0,
+        reason: 'Missing experience data'
+      },
+      matchStatus: 'no_match'
+    };
+  }
+
+  const agentExperience = parseInt(agent.professionalSummary.yearsOfExperience) || 0;
+  const gigExperience = parseInt(gig.seniority.yearsExperience) || 0;
+  const difference = agentExperience - gigExperience;
+
+  let score = 0;
+  let reason = '';
+  let matchStatus = 'no_match';
+
+  if (agentExperience >= gigExperience) {
+    if (agentExperience === gigExperience) {
+      score = 1.0;
+      reason = 'Exact experience match';
+      matchStatus = 'perfect_match';
+    } else if (agentExperience <= gigExperience * 1.5) {
+      score = 0.9;
+      reason = 'Slightly more experience (good)';
+      matchStatus = 'perfect_match';
+    } else if (agentExperience <= gigExperience * 2) {
+      score = 0.8;
+      reason = 'More experience but acceptable';
+      matchStatus = 'partial_match';
+    } else {
+      score = 0.7;
+      reason = 'Much more experience (may be overqualified)';
+      matchStatus = 'partial_match';
+    }
+  } else {
+    if (agentExperience >= gigExperience * 0.8) {
+      score = 0.6;
+      reason = 'Almost sufficient experience';
+      matchStatus = 'partial_match';
+    } else if (agentExperience >= gigExperience * 0.6) {
+      score = 0.4;
+      reason = 'Partially sufficient experience';
+      matchStatus = 'partial_match';
+    } else if (agentExperience >= gigExperience * 0.4) {
+      score = 0.2;
+      reason = 'Insufficient but not completely';
+      matchStatus = 'no_match';
+    } else {
+      score = 0.0;
+      reason = 'Completely insufficient experience';
+      matchStatus = 'no_match';
+    }
+  }
+
+  return {
+    score,
+    details: {
+      gigRequiredExperience: gigExperience,
+      agentExperience: agentExperience,
+      difference: difference,
+      reason: reason
+    },
+    matchStatus
+  };
+};
+
+// Fonction pour calculer le matching de timezone
+const calculateTimezoneMatch = (agent, gig) => {
+  if (!gig.availability?.timeZone || !agent.availability?.timeZone) {
+    return {
+      score: 0.5,
+      details: {
+        gigTimezone: gig.availability?.timeZone || 'Unknown',
+        agentTimezone: agent.availability?.timeZone || 'Unknown',
+        reason: 'Missing timezone data'
+      },
+      matchStatus: 'no_match'
+    };
+  }
+
+  const gigTimezone = gig.availability.timeZone;
+  const agentTimezone = agent.availability.timeZone;
+  const isExactMatch = gigTimezone === agentTimezone;
+
+  let score = 0;
+  let reason = '';
+  let matchStatus = 'no_match';
+
+  if (isExactMatch) {
+    score = 1.0;
+    reason = 'Exact timezone match';
+    matchStatus = 'perfect_match';
+  } else {
+    // Logique simplifiée pour la compatibilité de timezone
+    score = 0.7;
+    reason = 'Different timezones but potentially compatible';
+    matchStatus = 'partial_match';
+  }
+
+  return {
+    score,
+    details: {
+      gigTimezone,
+      agentTimezone,
+      reason
+    },
+    matchStatus
+  };
+};
+
+// Fonction pour calculer le matching de région
+const calculateRegionMatch = (agent, gig) => {
+  if (!gig.destination_zone) {
+    return {
+      score: 0.5,
+      details: {
+        gigDestinationZone: 'Unknown',
+        agentCountryCode: 'Unknown',
+        reason: 'No destination zone specified'
+      },
+      matchStatus: 'neutral_match'
+    };
+  }
+
+  // Logique simplifiée pour la compatibilité régionale
+  const score = 0.8;
+  const reason = 'Regional compatibility assumed';
+
+  return {
+    score,
+    details: {
+      gigDestinationZone: gig.destination_zone,
+      agentCountryCode: 'Unknown',
+      reason
+    },
+    matchStatus: 'partial_match'
+  };
 };
 
 // Fonction de normalisation des langues (importée depuis matchController)
