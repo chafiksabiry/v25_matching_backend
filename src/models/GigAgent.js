@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import crypto from 'crypto';
 
 const gigAgentSchema = new mongoose.Schema({
   agentId: {
@@ -20,7 +21,8 @@ const gigAgentSchema = new mongoose.Schema({
     type: Number,
     min: 0,
     max: 1,
-    required: true
+    required: false, // Pas requis pour l'enrôlement, sera calculé plus tard
+    default: null
   },
   matchDetails: {
     // Language matching
@@ -208,7 +210,8 @@ const gigAgentSchema = new mongoose.Schema({
   matchStatus: {
     type: String,
     enum: ['perfect_match', 'partial_match', 'no_match'],
-    required: true
+    required: false, // Pas requis pour l'enrôlement, sera calculé plus tard
+    default: null
   },
   // Email tracking
   emailSent: {
@@ -225,6 +228,36 @@ const gigAgentSchema = new mongoose.Schema({
     default: 'pending'
   },
   agentResponseAt: {
+    type: Date
+  },
+  // Enrollment system fields
+  enrollmentStatus: {
+    type: String,
+    enum: ['invited', 'accepted', 'rejected', 'expired'],
+    default: 'invited'
+  },
+  invitationSentAt: {
+    type: Date,
+    default: Date.now
+  },
+  invitationExpiresAt: {
+    type: Date,
+    default: function() {
+      // Expire après 7 jours par défaut
+      const expiryDate = new Date();
+      expiryDate.setDate(expiryDate.getDate() + 7);
+      return expiryDate;
+    }
+  },
+  invitationToken: {
+    type: String,
+    unique: true,
+    sparse: true
+  },
+  enrollmentNotes: {
+    type: String
+  },
+  enrollmentDate: {
     type: Date
   },
   // Additional fields
@@ -350,6 +383,48 @@ gigAgentSchema.methods.getMatchSummary = function() {
       }
     }
   };
+};
+
+// Enrollment methods
+gigAgentSchema.methods.generateInvitationToken = function() {
+  this.invitationToken = crypto.randomBytes(32).toString('hex');
+  this.invitationSentAt = new Date();
+  this.invitationExpiresAt = new Date();
+  this.invitationExpiresAt.setDate(this.invitationExpiresAt.getDate() + 7);
+  return this.invitationToken;
+};
+
+gigAgentSchema.methods.acceptEnrollment = function(notes = '') {
+  this.enrollmentStatus = 'accepted';
+  this.status = 'accepted';
+  this.agentResponse = 'accepted';
+  this.agentResponseAt = new Date();
+  this.enrollmentDate = new Date();
+  this.enrollmentNotes = notes;
+  return this.save();
+};
+
+gigAgentSchema.methods.rejectEnrollment = function(notes = '') {
+  this.enrollmentStatus = 'rejected';
+  this.status = 'rejected';
+  this.agentResponse = 'rejected';
+  this.agentResponseAt = new Date();
+  this.enrollmentNotes = notes;
+  return this.save();
+};
+
+gigAgentSchema.methods.expireInvitation = function() {
+  this.enrollmentStatus = 'expired';
+  this.status = 'expired';
+  return this.save();
+};
+
+gigAgentSchema.methods.isInvitationExpired = function() {
+  return new Date() > this.invitationExpiresAt;
+};
+
+gigAgentSchema.methods.canEnroll = function() {
+  return this.enrollmentStatus === 'invited' && !this.isInvitationExpired();
 };
 
 const GigAgent = mongoose.model('GigAgent', gigAgentSchema);
