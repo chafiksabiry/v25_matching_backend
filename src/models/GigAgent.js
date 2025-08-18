@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import crypto from 'crypto';
 
 const gigAgentSchema = new mongoose.Schema({
   agentId: {
@@ -20,7 +21,8 @@ const gigAgentSchema = new mongoose.Schema({
     type: Number,
     min: 0,
     max: 1,
-    required: true
+    required: false, // Pas requis pour l'enrôlement, sera calculé plus tard
+    default: null
   },
   matchDetails: {
     // Language matching
@@ -208,7 +210,8 @@ const gigAgentSchema = new mongoose.Schema({
   matchStatus: {
     type: String,
     enum: ['perfect_match', 'partial_match', 'no_match'],
-    required: true
+    required: false, // Pas requis pour l'enrôlement, sera calculé plus tard
+    default: null
   },
   // Email tracking
   emailSent: {
@@ -384,7 +387,6 @@ gigAgentSchema.methods.getMatchSummary = function() {
 
 // Enrollment methods
 gigAgentSchema.methods.generateInvitationToken = function() {
-  const crypto = require('crypto');
   this.invitationToken = crypto.randomBytes(32).toString('hex');
   this.invitationSentAt = new Date();
   this.invitationExpiresAt = new Date();
