@@ -9,7 +9,10 @@ import {
   cancelEnrollmentInvitation,
   acceptEnrollmentById,
   rejectEnrollmentById,
-  getAgentEnrolledGigs
+  getAgentEnrolledGigs,
+  requestEnrollment,
+  acceptEnrollmentRequest,
+  rejectEnrollmentRequest
 } from '../controllers/enrollmentController.js';
 
 const router = express.Router();
@@ -18,6 +21,11 @@ const router = express.Router();
 router.post('/invite', sendEnrollmentInvitation);
 router.post('/accept', acceptEnrollment);
 router.post('/reject', rejectEnrollment);
+
+// Routes pour les demandes d'enrôlement (agent -> company)
+router.post('/request', requestEnrollment);
+router.post('/request/accept', acceptEnrollmentRequest);
+router.post('/request/reject', rejectEnrollmentRequest);
 
 // Routes directes via ID (pour la plateforme)
 router.post('/:id/accept', acceptEnrollmentById);
