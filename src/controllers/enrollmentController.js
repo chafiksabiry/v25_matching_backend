@@ -422,8 +422,11 @@ export const acceptEnrollmentById = async (req, res) => {
     // 🆕 AJOUTER L'AGENT AU GIG
     const gig = await Gig.findById(gigAgent.gigId);
     if (gig && !gig.enrolledAgents.includes(gigAgent.agentId)) {
-      gig.enrolledAgents.push(gigAgent.agentId);
-      await gig.save();
+      // Utiliser updateOne pour éviter les problèmes de validation
+      await Gig.updateOne(
+        { _id: gigAgent.gigId },
+        { $addToSet: { enrolledAgents: gigAgent.agentId } }
+      );
     }
 
     // Envoyer une notification de confirmation
@@ -643,8 +646,11 @@ export const acceptEnrollmentRequest = async (req, res) => {
     // 🆕 AJOUTER L'AGENT AU GIG
     const gig = await Gig.findById(gigAgent.gigId);
     if (gig && !gig.enrolledAgents.includes(gigAgent.agentId)) {
-      gig.enrolledAgents.push(gigAgent.agentId);
-      await gig.save();
+      // Utiliser updateOne pour éviter les problèmes de validation
+      await Gig.updateOne(
+        { _id: gigAgent.gigId },
+        { $addToSet: { enrolledAgents: gigAgent.agentId } }
+      );
     }
 
     // Envoyer une notification de confirmation
@@ -735,13 +741,10 @@ export const removeAgentFromGig = async (req, res) => {
     );
 
     // 🆕 RETIRER L'AGENT DU GIG
-    const gig = await Gig.findById(gigId);
-    if (gig) {
-      gig.enrolledAgents = gig.enrolledAgents.filter(
-        id => id.toString() !== agentId
-      );
-      await gig.save();
-    }
+    await Gig.updateOne(
+      { _id: gigId },
+      { $pull: { enrolledAgents: agentId } }
+    );
 
     res.status(StatusCodes.OK).json({
       message: 'Agent retiré du gig avec succès'
