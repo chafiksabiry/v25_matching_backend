@@ -122,6 +122,13 @@ export const acceptEnrollment = async (req, res) => {
     // Accepter l'enrôlement
     await gigAgent.acceptEnrollment(notes);
 
+    // 🆕 AJOUTER L'AGENT AU GIG
+    const gig = await Gig.findById(gigAgent.gigId);
+    if (gig && !gig.enrolledAgents.includes(gigAgent.agentId)) {
+      gig.enrolledAgents.push(gigAgent.agentId);
+      await gig.save();
+    }
+
     // Envoyer une notification de confirmation
     try {
       await sendEmailNotification(gigAgent.agentId, gigAgent.gigId, 'accepted');
@@ -412,6 +419,13 @@ export const acceptEnrollmentById = async (req, res) => {
     // Accepter l'enrôlement
     await gigAgent.acceptEnrollment(notes);
 
+    // 🆕 AJOUTER L'AGENT AU GIG
+    const gig = await Gig.findById(gigAgent.gigId);
+    if (gig && !gig.enrolledAgents.includes(gigAgent.agentId)) {
+      gig.enrolledAgents.push(gigAgent.agentId);
+      await gig.save();
+    }
+
     // Envoyer une notification de confirmation
     try {
       await sendEmailNotification(gigAgent.agentId, gigAgent.gigId, 'accepted');
@@ -626,6 +640,13 @@ export const acceptEnrollmentRequest = async (req, res) => {
     // Accepter la demande d'enrôlement
     await gigAgent.acceptEnrollment(notes);
 
+    // 🆕 AJOUTER L'AGENT AU GIG
+    const gig = await Gig.findById(gigAgent.gigId);
+    if (gig && !gig.enrolledAgents.includes(gigAgent.agentId)) {
+      gig.enrolledAgents.push(gigAgent.agentId);
+      await gig.save();
+    }
+
     // Envoyer une notification de confirmation
     try {
       await sendEmailNotification(gigAgent.agentId, gigAgent.gigId, 'accepted');
@@ -695,6 +716,60 @@ export const rejectEnrollmentRequest = async (req, res) => {
 
   } catch (error) {
     console.error('Error in rejectEnrollmentRequest:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+// Retirer un agent d'un gig
+export const removeAgentFromGig = async (req, res) => {
+  try {
+    const { gigId, agentId } = req.body;
+
+    // Retirer de GigAgent
+    await GigAgent.findOneAndUpdate(
+      { gigId, agentId },
+      { 
+        enrollmentStatus: 'removed',
+        status: 'cancelled'
+      }
+    );
+
+    // 🆕 RETIRER L'AGENT DU GIG
+    const gig = await Gig.findById(gigId);
+    if (gig) {
+      gig.enrolledAgents = gig.enrolledAgents.filter(
+        id => id.toString() !== agentId
+      );
+      await gig.save();
+    }
+
+    res.status(StatusCodes.OK).json({
+      message: 'Agent retiré du gig avec succès'
+    });
+
+  } catch (error) {
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+// Voir tous les agents d'un gig
+export const getGigAgents = async (req, res) => {
+  try {
+    const { gigId } = req.params;
+    
+    const gig = await Gig.findById(gigId)
+      .populate('enrolledAgents', 'firstName lastName email skills');
+    
+    if (!gig) {
+      return res.status(StatusCodes.NOT_FOUND).json({ message: 'Gig non trouvé' });
+    }
+    
+    res.status(StatusCodes.OK).json({
+      gigId,
+      totalAgents: gig.enrolledAgents.length,
+      agents: gig.enrolledAgents
+    });
+  } catch (error) {
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };

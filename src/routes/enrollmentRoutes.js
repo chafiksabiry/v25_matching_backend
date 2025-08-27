@@ -12,7 +12,9 @@ import {
   getAgentEnrolledGigs,
   requestEnrollment,
   acceptEnrollmentRequest,
-  rejectEnrollmentRequest
+  rejectEnrollmentRequest,
+  removeAgentFromGig,
+  getGigAgents
 } from '../controllers/enrollmentController.js';
 
 const router = express.Router();
@@ -37,6 +39,10 @@ router.get('/gig/:gigId', getGigEnrollments);
 
 // Route spécifique pour récupérer les gigs d'un agent enrôlé
 router.get('/agent/:agentId/gigs', getAgentEnrolledGigs);
+
+// 🆕 Nouvelles routes pour la gestion des agents dans les gigs
+router.get('/gig/:gigId/agents', getGigAgents);
+router.post('/gig/remove-agent', removeAgentFromGig);
 
 // Routes de gestion
 router.post('/:id/resend', resendEnrollmentInvitation);

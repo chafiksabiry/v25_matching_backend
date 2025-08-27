@@ -233,7 +233,7 @@ const gigAgentSchema = new mongoose.Schema({
   // Enrollment system fields
   enrollmentStatus: {
     type: String,
-    enum: ['invited', 'requested', 'accepted', 'rejected', 'expired'],
+    enum: ['invited', 'requested', 'accepted', 'rejected', 'expired', 'removed'],
     default: 'invited'
   },
   invitationSentAt: {
