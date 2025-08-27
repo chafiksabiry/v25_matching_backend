@@ -233,7 +233,7 @@ const gigAgentSchema = new mongoose.Schema({
   // Enrollment system fields
   enrollmentStatus: {
     type: String,
-    enum: ['invited', 'accepted', 'rejected', 'expired'],
+    enum: ['invited', 'requested', 'accepted', 'rejected', 'expired', 'removed'],
     default: 'invited'
   },
   invitationSentAt: {
@@ -425,6 +425,24 @@ gigAgentSchema.methods.isInvitationExpired = function() {
 
 gigAgentSchema.methods.canEnroll = function() {
   return this.enrollmentStatus === 'invited' && !this.isInvitationExpired();
+};
+
+gigAgentSchema.methods.requestEnrollment = function(notes = '') {
+  this.enrollmentStatus = 'requested';
+  this.status = 'pending';
+  this.enrollmentNotes = notes;
+  this.enrollmentDate = new Date();
+  return this.save();
+};
+
+gigAgentSchema.methods.canRequestEnrollment = function() {
+  // Un agent peut demander un enrôlement si :
+  // 1. Aucun enrôlement n'existe déjà pour cette combinaison agent-gig
+  // 2. Ou si l'enrôlement existant est dans un état qui permet une nouvelle demande
+  return !this.enrollmentStatus || 
+         this.enrollmentStatus === 'rejected' || 
+         this.enrollmentStatus === 'expired' ||
+         this.enrollmentStatus === 'cancelled';
 };
 
 const GigAgent = mongoose.model('GigAgent', gigAgentSchema);

@@ -122,6 +122,13 @@ export const acceptEnrollment = async (req, res) => {
     // Accepter l'enrôlement
     await gigAgent.acceptEnrollment(notes);
 
+    // 🆕 AJOUTER L'AGENT AU GIG
+    const gig = await Gig.findById(gigAgent.gigId);
+    if (gig && !gig.enrolledAgents.includes(gigAgent.agentId)) {
+      gig.enrolledAgents.push(gigAgent.agentId);
+      await gig.save();
+    }
+
     // Envoyer une notification de confirmation
     try {
       await sendEmailNotification(gigAgent.agentId, gigAgent.gigId, 'accepted');
@@ -412,6 +419,16 @@ export const acceptEnrollmentById = async (req, res) => {
     // Accepter l'enrôlement
     await gigAgent.acceptEnrollment(notes);
 
+    // 🆕 AJOUTER L'AGENT AU GIG
+    const gig = await Gig.findById(gigAgent.gigId);
+    if (gig && !gig.enrolledAgents.includes(gigAgent.agentId)) {
+      // Utiliser updateOne pour éviter les problèmes de validation
+      await Gig.updateOne(
+        { _id: gigAgent.gigId },
+        { $addToSet: { enrolledAgents: gigAgent.agentId } }
+      );
+    }
+
     // Envoyer une notification de confirmation
     try {
       await sendEmailNotification(gigAgent.agentId, gigAgent.gigId, 'accepted');
@@ -539,6 +556,223 @@ export const rejectEnrollmentById = async (req, res) => {
 
   } catch (error) {
     console.error('Error in rejectEnrollmentById:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+// Demander un enrôlement à un gig (pour un agent)
+export const requestEnrollment = async (req, res) => {
+  try {
+    const { agentId, gigId, notes } = req.body;
+
+    // Vérifier que l'agent et le gig existent
+    const agent = await Agent.findById(agentId);
+    if (!agent) {
+      return res.status(StatusCodes.NOT_FOUND).json({ message: 'Agent not found' });
+    }
+
+    const gig = await Gig.findById(gigId);
+    if (!gig) {
+      return res.status(StatusCodes.NOT_FOUND).json({ message: 'Gig not found' });
+    }
+
+    // Vérifier si une assignation existe déjà
+    let gigAgent = await GigAgent.findOne({ agentId, gigId });
+    
+    if (!gigAgent) {
+      // Créer une nouvelle assignation avec statut de demande
+      gigAgent = new GigAgent({
+        agentId,
+        gigId,
+        status: 'pending',
+        enrollmentStatus: 'requested',
+        notes: notes || ''
+      });
+    } else {
+      // Vérifier si l'agent peut faire une nouvelle demande
+      if (!gigAgent.canRequestEnrollment()) {
+        return res.status(StatusCodes.BAD_REQUEST).json({ 
+          message: 'Une demande d\'enrôlement existe déjà et ne peut pas être modifiée' 
+        });
+      }
+      
+      // Mettre à jour l'assignation existante
+      gigAgent.enrollmentStatus = 'requested';
+      gigAgent.notes = notes || gigAgent.notes;
+    }
+
+    await gigAgent.save();
+
+    res.status(StatusCodes.CREATED).json({
+      message: 'Demande d\'enrôlement envoyée avec succès',
+      gigAgent: {
+        id: gigAgent._id,
+        agentId: gigAgent.agentId,
+        gigId: gigAgent.gigId,
+        enrollmentStatus: gigAgent.enrollmentStatus,
+        status: gigAgent.status,
+        enrollmentNotes: gigAgent.enrollmentNotes
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in requestEnrollment:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+// Accepter une demande d'enrôlement (pour la company)
+export const acceptEnrollmentRequest = async (req, res) => {
+  try {
+    const { enrollmentId, notes } = req.body;
+
+    const gigAgent = await GigAgent.findById(enrollmentId)
+      .populate('agentId')
+      .populate('gigId');
+
+    if (!gigAgent) {
+      return res.status(StatusCodes.NOT_FOUND).json({ message: 'Demande d\'enrôlement non trouvée' });
+    }
+
+    if (gigAgent.enrollmentStatus !== 'requested') {
+      return res.status(StatusCodes.BAD_REQUEST).json({ 
+        message: 'Seules les demandes d\'enrôlement peuvent être acceptées' 
+      });
+    }
+
+    // Accepter la demande d'enrôlement
+    await gigAgent.acceptEnrollment(notes);
+
+    // 🆕 AJOUTER L'AGENT AU GIG
+    const gig = await Gig.findById(gigAgent.gigId);
+    if (gig && !gig.enrolledAgents.includes(gigAgent.agentId)) {
+      // Utiliser updateOne pour éviter les problèmes de validation
+      await Gig.updateOne(
+        { _id: gigAgent.gigId },
+        { $addToSet: { enrolledAgents: gigAgent.agentId } }
+      );
+    }
+
+    // Envoyer une notification de confirmation
+    try {
+      await sendEmailNotification(gigAgent.agentId, gigAgent.gigId, 'accepted');
+    } catch (emailError) {
+      console.error('Erreur lors de l\'envoi de la notification:', emailError);
+    }
+
+    res.status(StatusCodes.OK).json({
+      message: 'Demande d\'enrôlement acceptée avec succès',
+      gigAgent: {
+        id: gigAgent._id,
+        agentId: gigAgent.agentId,
+        gigId: gigAgent.gigId,
+        enrollmentStatus: gigAgent.enrollmentStatus,
+        status: gigAgent.status,
+        enrollmentDate: gigAgent.enrollmentDate,
+        enrollmentNotes: gigAgent.enrollmentNotes
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in acceptEnrollmentRequest:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+// Refuser une demande d'enrôlement (pour la company)
+export const rejectEnrollmentRequest = async (req, res) => {
+  try {
+    const { enrollmentId, notes } = req.body;
+
+    const gigAgent = await GigAgent.findById(enrollmentId)
+      .populate('agentId')
+      .populate('gigId');
+
+    if (!gigAgent) {
+      return res.status(StatusCodes.NOT_FOUND).json({ message: 'Demande d\'enrôlement non trouvée' });
+    }
+
+    if (gigAgent.enrollmentStatus !== 'requested') {
+      return res.status(StatusCodes.BAD_REQUEST).json({ 
+        message: 'Seules les demandes d\'enrôlement peuvent être refusées' 
+      });
+    }
+
+    // Refuser la demande d'enrôlement
+    await gigAgent.rejectEnrollment(notes);
+
+    // Envoyer une notification de refus
+    try {
+      await sendEmailNotification(gigAgent.agentId, gigAgent.gigId, 'rejected');
+    } catch (emailError) {
+      console.error('Erreur lors de l\'envoi de la notification:', emailError);
+    }
+
+    res.status(StatusCodes.OK).json({
+      message: 'Demande d\'enrôlement refusée',
+      gigAgent: {
+        id: gigAgent._id,
+        agentId: gigAgent.agentId,
+        gigId: gigAgent.gigId,
+        enrollmentStatus: gigAgent.enrollmentStatus,
+        status: gigAgent.status,
+        enrollmentNotes: gigAgent.enrollmentNotes
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in rejectEnrollmentRequest:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+// Retirer un agent d'un gig
+export const removeAgentFromGig = async (req, res) => {
+  try {
+    const { gigId, agentId } = req.body;
+
+    // Retirer de GigAgent
+    await GigAgent.findOneAndUpdate(
+      { gigId, agentId },
+      { 
+        enrollmentStatus: 'removed',
+        status: 'cancelled'
+      }
+    );
+
+    // 🆕 RETIRER L'AGENT DU GIG
+    await Gig.updateOne(
+      { _id: gigId },
+      { $pull: { enrolledAgents: agentId } }
+    );
+
+    res.status(StatusCodes.OK).json({
+      message: 'Agent retiré du gig avec succès'
+    });
+
+  } catch (error) {
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+// Voir tous les agents d'un gig
+export const getGigAgents = async (req, res) => {
+  try {
+    const { gigId } = req.params;
+    
+    const gig = await Gig.findById(gigId)
+      .populate('enrolledAgents', 'firstName lastName email skills');
+    
+    if (!gig) {
+      return res.status(StatusCodes.NOT_FOUND).json({ message: 'Gig non trouvé' });
+    }
+    
+    res.status(StatusCodes.OK).json({
+      gigId,
+      totalAgents: gig.enrolledAgents.length,
+      agents: gig.enrolledAgents
+    });
+  } catch (error) {
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };

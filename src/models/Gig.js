@@ -105,6 +105,11 @@ const gigSchema = new mongoose.Schema({
     ],
     territories: [{ type: String }],
   },
+  // Agents enrôlés dans ce gig
+  enrolledAgents: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Agent'
+  }],
   documentation: {
     product: [
       {
