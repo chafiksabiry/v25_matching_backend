@@ -866,6 +866,123 @@ export const resendEmailNotification = async (req, res) => {
   }
 };
 
+// Get invited gigs for an agent
+export const getInvitedGigsForAgent = async (req, res) => {
+  try {
+    const gigAgents = await GigAgent.find({ 
+      agentId: req.params.agentId,
+      enrollmentStatus: 'invited'
+    })
+    .populate('gigId')
+    .sort({ createdAt: -1 });
+    
+    res.status(StatusCodes.OK).json(gigAgents);
+  } catch (error) {
+    console.error('Error in getInvitedGigsForAgent:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+// Get invited agents for a company
+export const getInvitedAgentsForCompany = async (req, res) => {
+  try {
+    // D'abord, on récupère tous les gigs de la company
+    const gigs = await Gig.find({ companyId: req.params.companyId });
+    const gigIds = gigs.map(gig => gig._id);
+
+    // Ensuite, on cherche les GigAgents qui correspondent à ces gigs
+    const gigAgents = await GigAgent.find({ 
+      enrollmentStatus: 'invited',
+      gigId: { $in: gigIds }
+    })
+    .populate('agentId')
+    .populate('gigId')
+    .sort({ createdAt: -1 });
+    
+    // Get unique agents
+    const uniqueAgents = Array.from(new Set(gigAgents.map(ga => ga.agentId._id)))
+      .map(agentId => {
+        const gigAgent = gigAgents.find(ga => ga.agentId._id.equals(agentId));
+        return gigAgent.agentId;
+      });
+    
+    res.status(StatusCodes.OK).json(uniqueAgents);
+  } catch (error) {
+    console.error('Error in getInvitedAgentsForCompany:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+// Get enrolled gigs for an agent
+export const getEnrolledGigsForAgent = async (req, res) => {
+  try {
+    const gigAgents = await GigAgent.find({ 
+      agentId: req.params.agentId,
+      enrollmentStatus: 'accepted'
+    })
+    .populate('gigId')
+    .sort({ createdAt: -1 });
+    
+    res.status(StatusCodes.OK).json(gigAgents);
+  } catch (error) {
+    console.error('Error in getEnrolledGigsForAgent:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+// Get enrollment requests for a company
+export const getEnrollmentRequestsForCompany = async (req, res) => {
+  try {
+    // D'abord, on récupère tous les gigs de la company
+    const gigs = await Gig.find({ companyId: req.params.companyId });
+    const gigIds = gigs.map(gig => gig._id);
+
+    // Ensuite, on cherche les GigAgents qui correspondent à ces gigs
+    const requests = await GigAgent.find({ 
+      enrollmentStatus: 'requested',
+      gigId: { $in: gigIds }
+    })
+    .populate('gigId')
+    .populate('agentId')
+    .sort({ createdAt: -1 });
+    
+    res.status(StatusCodes.OK).json(requests);
+  } catch (error) {
+    console.error('Error in getEnrollmentRequestsForCompany:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+// Get active agents for a company
+export const getActiveAgentsForCompany = async (req, res) => {
+  try {
+    // D'abord, on récupère tous les gigs de la company
+    const gigs = await Gig.find({ companyId: req.params.companyId });
+    const gigIds = gigs.map(gig => gig._id);
+
+    // Ensuite, on cherche les GigAgents qui correspondent à ces gigs
+    const activeAgents = await GigAgent.find({ 
+      enrollmentStatus: 'accepted',
+      gigId: { $in: gigIds }
+    })
+    .populate('agentId')
+    .populate('gigId')
+    .sort({ createdAt: -1 });
+    
+    // Get unique agents
+    const uniqueAgents = Array.from(new Set(activeAgents.map(ga => ga.agentId._id)))
+      .map(agentId => {
+        const gigAgent = activeAgents.find(ga => ga.agentId._id.equals(agentId));
+        return gigAgent.agentId;
+      });
+    
+    res.status(StatusCodes.OK).json(uniqueAgents);
+  } catch (error) {
+    console.error('Error in getActiveAgentsForCompany:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
 // Get gig agents by status
 export const getGigAgentsByStatus = async (req, res) => {
   try {
