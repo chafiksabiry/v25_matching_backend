@@ -962,7 +962,7 @@ export const getActiveAgentsForCompany = async (req, res) => {
 
     // Ensuite, on cherche les GigAgents qui correspondent à ces gigs
     const activeAgents = await GigAgent.find({ 
-      enrollmentStatus: 'accepted',
+      enrollmentStatus: 'enrolled',
       gigId: { $in: gigIds }
     })
     .populate('agentId')
@@ -1074,6 +1074,51 @@ export const acceptEnrollmentRequest = async (req, res) => {
 };
 
 
+
+// Agent rejects invitation
+export const agentRejectInvitation = async (req, res) => {
+  try {
+    const gigAgent = await GigAgent.findById(req.params.id);
+    
+    if (!gigAgent) {
+      return res.status(StatusCodes.NOT_FOUND).json({ 
+        message: 'Invitation not found' 
+      });
+    }
+
+    if (gigAgent.enrollmentStatus !== 'invited') {
+      return res.status(StatusCodes.BAD_REQUEST).json({ 
+        message: 'Only invited enrollments can be rejected by agent' 
+      });
+    }
+
+    // Vérifier que l'invitation n'a pas expiré
+    if (gigAgent.isInvitationExpired()) {
+      return res.status(StatusCodes.BAD_REQUEST).json({ 
+        message: 'Invitation has expired' 
+      });
+    }
+
+    // Rejeter l'enrollment avec les notes optionnelles
+    await gigAgent.rejectEnrollment(req.body.notes);
+
+    // Récupérer le gigAgent mis à jour avec les relations
+    const updatedGigAgent = await GigAgent.findById(gigAgent._id)
+      .populate('agentId')
+      .populate('gigId');
+
+    res.status(StatusCodes.OK).json({
+      message: 'Invitation rejected successfully',
+      gigAgent: updatedGigAgent
+    });
+
+  } catch (error) {
+    console.error('Error in agentRejectInvitation:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ 
+      message: error.message 
+    });
+  }
+};
 
 // Get gig agents by status
 export const getGigAgentsByStatus = async (req, res) => {
