@@ -969,14 +969,8 @@ export const getActiveAgentsForCompany = async (req, res) => {
     .populate('gigId')
     .sort({ createdAt: -1 });
     
-    // Get unique agents
-    const uniqueAgents = Array.from(new Set(activeAgents.map(ga => ga.agentId._id)))
-      .map(agentId => {
-        const gigAgent = activeAgents.find(ga => ga.agentId._id.equals(agentId));
-        return gigAgent.agentId;
-      });
-    
-    res.status(StatusCodes.OK).json(uniqueAgents);
+    // Retourner tous les GigAgents actifs
+    res.status(StatusCodes.OK).json(activeAgents);
   } catch (error) {
     console.error('Error in getActiveAgentsForCompany:', error);
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
