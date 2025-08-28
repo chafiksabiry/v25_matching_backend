@@ -1055,6 +1055,20 @@ export const acceptEnrollmentRequest = async (req, res) => {
     // Accepter l'enrollment avec les notes optionnelles
     await gigAgent.acceptEnrollment(req.body.notes);
 
+    // Ajouter l'agent au gig
+    await Gig.findByIdAndUpdate(
+      gigAgent.gigId,
+      { $addToSet: { enrolledAgents: gigAgent.agentId } },
+      { new: true }
+    );
+
+    // Ajouter le gig à l'agent
+    await Agent.findByIdAndUpdate(
+      gigAgent.agentId,
+      { $addToSet: { enrolledGigs: gigAgent.gigId } },
+      { new: true }
+    );
+
     // Récupérer le gigAgent mis à jour avec les relations
     const updatedGigAgent = await GigAgent.findById(gigAgent._id)
       .populate('agentId')
