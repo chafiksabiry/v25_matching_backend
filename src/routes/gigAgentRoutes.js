@@ -17,7 +17,8 @@ import {
   getActiveAgentsForCompany,
   acceptEnrollmentRequest,
   agentAcceptInvitation,
-  agentRejectInvitation
+  agentRejectInvitation,
+  sendEnrollmentRequest
 } from '../controllers/gigAgentController.js';
 
 const router = express.Router();
@@ -57,5 +58,8 @@ router.post('/enrollment-requests/:id/accept', acceptEnrollmentRequest);
 // Routes pour qu'un agent accepte ou refuse une invitation
 router.post('/invitations/:id/accept', agentAcceptInvitation);
 router.post('/invitations/:id/reject', agentRejectInvitation);
+
+// Route pour qu'un agent envoie une demande d'enrollment
+router.post('/enrollment-request/:agentId/:gigId', sendEnrollmentRequest);
 
 export default router; 

@@ -1120,6 +1120,68 @@ export const agentRejectInvitation = async (req, res) => {
   }
 };
 
+// Agent sends enrollment request
+export const sendEnrollmentRequest = async (req, res) => {
+  try {
+    // Vérifier si le gig existe
+    const gig = await Gig.findById(req.params.gigId);
+    if (!gig) {
+      return res.status(StatusCodes.NOT_FOUND).json({ 
+        message: 'Gig not found' 
+      });
+    }
+
+    // Vérifier si l'agent existe
+    const agent = await Agent.findById(req.params.agentId);
+    if (!agent) {
+      return res.status(StatusCodes.NOT_FOUND).json({ 
+        message: 'Agent not found' 
+      });
+    }
+
+    // Vérifier si une relation existe déjà
+    let gigAgent = await GigAgent.findOne({ 
+      agentId: req.params.agentId,
+      gigId: req.params.gigId
+    });
+
+    if (gigAgent) {
+      // Vérifier si une nouvelle demande est possible
+      if (!gigAgent.canRequestEnrollment()) {
+        return res.status(StatusCodes.BAD_REQUEST).json({ 
+          message: 'Cannot request enrollment for this gig at this time' 
+        });
+      }
+    } else {
+      // Créer une nouvelle relation GigAgent
+      gigAgent = new GigAgent({
+        agentId: req.params.agentId,
+        gigId: req.params.gigId,
+        status: 'pending'
+      });
+    }
+
+    // Enregistrer la demande d'enrollment
+    await gigAgent.requestEnrollment(req.body.notes);
+
+    // Récupérer le gigAgent mis à jour avec les relations
+    const updatedGigAgent = await GigAgent.findById(gigAgent._id)
+      .populate('agentId')
+      .populate('gigId');
+
+    res.status(StatusCodes.OK).json({
+      message: 'Enrollment request sent successfully',
+      gigAgent: updatedGigAgent
+    });
+
+  } catch (error) {
+    console.error('Error in sendEnrollmentRequest:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ 
+      message: error.message 
+    });
+  }
+};
+
 // Get gig agents by status
 export const getGigAgentsByStatus = async (req, res) => {
   try {
