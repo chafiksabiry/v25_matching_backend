@@ -983,6 +983,58 @@ export const getActiveAgentsForCompany = async (req, res) => {
   }
 };
 
+// Agent accepts invitation
+export const agentAcceptInvitation = async (req, res) => {
+  try {
+    const gigAgent = await GigAgent.findById(req.params.id);
+    
+    if (!gigAgent) {
+      return res.status(StatusCodes.NOT_FOUND).json({ 
+        message: 'Invitation not found' 
+      });
+    }
+
+    if (gigAgent.enrollmentStatus !== 'invited') {
+      return res.status(StatusCodes.BAD_REQUEST).json({ 
+        message: 'Only invited enrollments can be accepted by agent' 
+      });
+    }
+
+    // Vérifier que l'invitation n'a pas expiré
+    if (gigAgent.isInvitationExpired()) {
+      return res.status(StatusCodes.BAD_REQUEST).json({ 
+        message: 'Invitation has expired' 
+      });
+    }
+
+    // Accepter l'enrollment avec les notes optionnelles
+    await gigAgent.acceptEnrollment(req.body.notes);
+
+    // Ajouter l'agent à la liste des agents enrôlés du gig
+    await Gig.findByIdAndUpdate(
+      gigAgent.gigId,
+      { $addToSet: { enrolledAgents: gigAgent.agentId } },
+      { new: true }
+    );
+
+    // Récupérer le gigAgent mis à jour avec les relations
+    const updatedGigAgent = await GigAgent.findById(gigAgent._id)
+      .populate('agentId')
+      .populate('gigId');
+
+    res.status(StatusCodes.OK).json({
+      message: 'Invitation accepted successfully',
+      gigAgent: updatedGigAgent
+    });
+
+  } catch (error) {
+    console.error('Error in agentAcceptInvitation:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ 
+      message: error.message 
+    });
+  }
+};
+
 // Accept enrollment request
 export const acceptEnrollmentRequest = async (req, res) => {
   try {
@@ -1020,6 +1072,8 @@ export const acceptEnrollmentRequest = async (req, res) => {
     });
   }
 };
+
+
 
 // Get gig agents by status
 export const getGigAgentsByStatus = async (req, res) => {
