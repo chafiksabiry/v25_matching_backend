@@ -983,6 +983,44 @@ export const getActiveAgentsForCompany = async (req, res) => {
   }
 };
 
+// Accept enrollment request
+export const acceptEnrollmentRequest = async (req, res) => {
+  try {
+    const gigAgent = await GigAgent.findById(req.params.id);
+    
+    if (!gigAgent) {
+      return res.status(StatusCodes.NOT_FOUND).json({ 
+        message: 'Enrollment request not found' 
+      });
+    }
+
+    if (gigAgent.enrollmentStatus !== 'requested') {
+      return res.status(StatusCodes.BAD_REQUEST).json({ 
+        message: 'Only requested enrollments can be accepted' 
+      });
+    }
+
+    // Accepter l'enrollment avec les notes optionnelles
+    await gigAgent.acceptEnrollment(req.body.notes);
+
+    // Récupérer le gigAgent mis à jour avec les relations
+    const updatedGigAgent = await GigAgent.findById(gigAgent._id)
+      .populate('agentId')
+      .populate('gigId');
+
+    res.status(StatusCodes.OK).json({
+      message: 'Enrollment request accepted successfully',
+      gigAgent: updatedGigAgent
+    });
+
+  } catch (error) {
+    console.error('Error in acceptEnrollmentRequest:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ 
+      message: error.message 
+    });
+  }
+};
+
 // Get gig agents by status
 export const getGigAgentsByStatus = async (req, res) => {
   try {
