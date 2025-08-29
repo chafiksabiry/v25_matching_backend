@@ -213,6 +213,11 @@ const agentSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  // Gigs auxquels l'agent est enrollé
+  enrolledGigs: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Gig'
+  }],
 }, {
   timestamps: true
 });

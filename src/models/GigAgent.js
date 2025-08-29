@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import crypto from 'crypto';
+import Agent from './Agent.js';
 
 const gigAgentSchema = new mongoose.Schema({
   agentId: {
@@ -14,7 +15,7 @@ const gigAgentSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'accepted', 'rejected', 'completed', 'cancelled'],
+    enum: ['pending', 'accepted', 'rejected', 'completed', 'cancelled', 'enrolled'],
     default: 'pending'
   },
   matchScore: {
@@ -233,7 +234,7 @@ const gigAgentSchema = new mongoose.Schema({
   // Enrollment system fields
   enrollmentStatus: {
     type: String,
-    enum: ['invited', 'requested', 'accepted', 'rejected', 'expired', 'removed'],
+    enum: ['invited', 'requested', 'accepted', 'rejected', 'expired', 'removed', 'enrolled'],
     default: 'invited'
   },
   invitationSentAt: {
@@ -394,13 +395,21 @@ gigAgentSchema.methods.generateInvitationToken = function() {
   return this.invitationToken;
 };
 
-gigAgentSchema.methods.acceptEnrollment = function(notes = '') {
-  this.enrollmentStatus = 'accepted';
-  this.status = 'accepted';
+gigAgentSchema.methods.acceptEnrollment = async function(notes = '') {
+  this.enrollmentStatus = 'enrolled';
+  this.status = 'enrolled';
   this.agentResponse = 'accepted';
   this.agentResponseAt = new Date();
   this.enrollmentDate = new Date();
   this.enrollmentNotes = notes;
+
+  // Ajouter le gig à la liste des gigs de l'agent
+  await Agent.findByIdAndUpdate(
+    this.agentId,
+    { $addToSet: { enrolledGigs: this.gigId } },
+    { new: true }
+  );
+
   return this.save();
 };
 
