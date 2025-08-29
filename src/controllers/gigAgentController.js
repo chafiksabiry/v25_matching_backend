@@ -918,7 +918,7 @@ export const getEnrolledGigsForAgent = async (req, res) => {
   try {
     const gigAgents = await GigAgent.find({ 
       agentId: req.params.agentId,
-      enrollmentStatus: 'accepted'
+      enrollmentStatus: 'enrolled'
     })
     .populate('gigId')
     .sort({ createdAt: -1 });
