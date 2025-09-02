@@ -1464,9 +1464,9 @@ export const findMatchesForGigById = async (req, res) => {
           languageScore,
           industryScore,
           activityScore,
-          experienceMatch.score,
-          timezoneMatch.score,
-          regionMatch.score,
+          experienceMatch.status === "perfect_match" ? 1 : 0, // ⭐ BINAIRE
+          timezoneMatch.status === "perfect_match" ? 1 : 0, // ⭐ BINAIRE
+          regionMatch.status === "perfect_match" ? 1 : 0, // ⭐ BINAIRE
           scheduleMatch.score,
           // Ajouter un 8ème critère (skills) - utiliser 1 si perfect_match, 0 sinon
           skillsMatchStatus === "perfect_match" ? 1 : 0
@@ -1499,17 +1499,20 @@ export const findMatchesForGigById = async (req, res) => {
         }
         
         if (weights.experience > 0) {
-          totalScore += experienceMatch.score * weights.experience;
+          const experienceScore = experienceMatch.status === "perfect_match" ? 1 : 0; // ⭐ BINAIRE
+          totalScore += experienceScore * weights.experience;
           totalWeights += weights.experience;
         }
         
         if (weights.timezone > 0) {
-          totalScore += timezoneMatch.score * weights.timezone;
+          const timezoneScore = timezoneMatch.status === "perfect_match" ? 1 : 0; // ⭐ BINAIRE
+          totalScore += timezoneScore * weights.timezone;
           totalWeights += weights.timezone;
         }
         
         if (weights.region > 0) {
-          totalScore += regionMatch.score * weights.region;
+          const regionScore = regionMatch.status === "perfect_match" ? 1 : 0; // ⭐ BINAIRE
+          totalScore += regionScore * weights.region;
           totalWeights += weights.region;
         }
         
@@ -1595,6 +1598,7 @@ export const findMatchesForGigById = async (req, res) => {
           }
         },
         skillsMatch: {
+          score: requiredSkills.length > 0 ? matchingSkills.length / requiredSkills.length : 1,
           details: {
             matchingSkills,
             missingSkills,
@@ -1619,17 +1623,17 @@ export const findMatchesForGigById = async (req, res) => {
           }
         },
         experienceMatch: {
-          score: experienceMatch.score,
+          score: experienceMatch.status === "perfect_match" ? 1 : 0, // ⭐ BINAIRE: 1 si match, 0 sinon
           details: experienceMatch.details,
           matchStatus: experienceMatch.status
         },
         timezoneMatch: {
-          score: timezoneMatch.score,
+          score: timezoneMatch.status === "perfect_match" ? 1 : 0, // ⭐ BINAIRE: 1 si match, 0 sinon
           details: timezoneMatch.details,
           matchStatus: timezoneMatch.status
         },
         regionMatch: {
-          score: regionMatch.score,
+          score: regionMatch.status === "perfect_match" ? 1 : 0, // ⭐ BINAIRE: 1 si match, 0 sinon
           details: regionMatch.details,
           matchStatus: regionMatch.status
         },
@@ -2029,10 +2033,10 @@ export const findSkillsMatchesForGig = async (req, res) => {
 
           if (agentSkill) {
             // ⭐ NOUVEAU: Ignorer les niveaux - si l'agent a la skill, c'est un match
-            matchingSkills.push({
-              skill: reqSkill.skill,
-              requiredLevel: reqSkill.level,
-              agentLevel: agentSkill.level,
+              matchingSkills.push({
+                skill: reqSkill.skill,
+                requiredLevel: reqSkill.level,
+                agentLevel: agentSkill.level,
               score: 1 // Score fixe de 1 pour chaque skill possédée
             });
             totalScore += 1; // Chaque skill compte pour 1 point
