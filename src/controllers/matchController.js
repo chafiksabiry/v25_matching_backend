@@ -1401,7 +1401,11 @@ export const findMatchesForGigById = async (req, res) => {
     const regionMatch = await compareRegions(gig.destination_zone, agentTimezoneId);
 
     // Schedule matching
+    console.log(`🗓️ Debugging availability for agent ${agent._id}:`);
+    console.log(`   Gig schedule:`, JSON.stringify(gig.availability?.schedule, null, 2));
+    console.log(`   Agent availability:`, JSON.stringify(agent.availability, null, 2));
     const scheduleMatch = compareSchedules(gig.availability?.schedule, agent.availability);
+    console.log(`   Schedule match result:`, JSON.stringify(scheduleMatch, null, 2));
 
       // Calculer le score des langues (proportionnel)
       const languageScore = requiredLanguages.length > 0 ? 
@@ -1646,7 +1650,7 @@ export const findMatchesForGigById = async (req, res) => {
       totalAgentsEvaluated: matches.length,
       steps: []
     };
-    
+
     let filteredMatches = matches;
     
     if (allWeightsZero) {
@@ -1656,118 +1660,29 @@ export const findMatchesForGigById = async (req, res) => {
       // Pas de filtrage séquentiel, garder tous les agents
       filteredMatches = matches;
     } else {
-      // ⭐ LOGIQUE NORMALE: Les weights sont des SEUILS DE SCORE MINIMUM
-      // Trier par ordre décroissant pour maintenir la priorité (plus haut seuil = plus important)
-      const sortedWeights = Object.entries(weights)
-        .filter(([, threshold]) => threshold > 0) // Ignorer complètement les critères avec seuil 0
-        .sort(([, a], [, b]) => b - a);
-
-      console.log('🎯 Filtrage séquentiel selon les SEUILS DE SCORE:', sortedWeights);
-      console.log(`📊 Avant filtrage séquentiel: ${matches.length} agents évalués`);
+            // ⭐ NOUVELLE LOGIQUE: Les weights déterminent les PRIORITÉS (pas des seuils)
+      // Plus le weight est élevé, plus le critère est important pour le classement final
+      // On ne fait plus de filtrage séquentiel, juste du tri par score total pondéré
+      // ⭐ NOUVELLE APPROCHE: Pas de filtrage séquentiel, juste tri par score total pondéré
+      // Tous les agents sont gardés, mais triés selon l'importance des critères (weights)
+      filteredMatches = matches;
       
-      // Debug: Afficher les exigences du gig
-      console.log(`📋 Exigences du gig:`);
-      console.log(`   - Langues requises: ${gig.skills?.languages?.length || 0}`);
-      if (gig.skills?.languages?.length > 0) {
-        gig.skills.languages.forEach(lang => {
-          console.log(`     • ${lang.language} (niveau: ${lang.proficiency})`);
-        });
-      }
-      
-      // Appliquer le filtrage séquentiel EN CASCADE selon l'ordre des seuils
-      for (const [criterion, threshold] of sortedWeights) {
-      const beforeCount = filteredMatches.length;
-      console.log(`🔍 Filtrage ${criterion} (seuil: ${threshold}) - Avant: ${beforeCount} agents`);
-      
-      if (criterion === 'languages') {
-        // Afficher les scores avant filtrage pour debug
-        console.log(`   📊 Scores des langues avant filtrage (seuil: ${threshold}):`);
-        filteredMatches.forEach((match, index) => {
-          if (index < 5) { // Montrer seulement les 5 premiers pour éviter le spam
-            console.log(`      Agent ${match.agentId}: languageScore = ${match.languageMatch.score.toFixed(3)}`);
-          }
-        });
-        
-        // Filtrer par score de langues >= seuil
-        filteredMatches = filteredMatches.filter(
-          match => match.languageMatch.score >= threshold
-        );
-        console.log(`   → Garder agents avec languageScore >= ${threshold}`);
-      } else if (criterion === 'industry') {
-        // Filtrer par score d'industries >= seuil
-        filteredMatches = filteredMatches.filter(
-          match => match.industryMatch.score >= threshold
-        );
-        console.log(`   → Garder agents avec industryScore >= ${threshold}`);
-      } else if (criterion === 'activity') {
-        // Filtrer par score d'activités >= seuil
-        filteredMatches = filteredMatches.filter(
-          match => match.activityMatch.score >= threshold
-        );
-        console.log(`   → Garder agents avec activityScore >= ${threshold}`);
-      } else if (criterion === 'skills') {
-        // Pour les compétences, on garde la logique de statut pour l'instant
-        filteredMatches = filteredMatches.filter(match => {
-          return match.skillsMatch.details.matchStatus === "perfect_match";
-        });
-        console.log(`   → Garder agents avec skillsMatch = perfect_match`);
-      } else if (criterion === 'experience') {
-        // Pour l'expérience, on garde la logique de statut pour l'instant
-        filteredMatches = filteredMatches.filter(
-          match => match.experienceMatch.matchStatus === "perfect_match"
-        );
-        console.log(`   → Garder agents avec experienceMatch = perfect_match`);
-      } else if (criterion === 'timezone') {
-        // Pour les timezones, on garde la logique de statut pour l'instant
-        filteredMatches = filteredMatches.filter(
-          match => match.timezoneMatch.matchStatus === "perfect_match"
-        );
-        console.log(`   → Garder agents avec timezoneMatch = perfect_match`);
-      } else if (criterion === 'region') {
-        // Pour les régions, on garde la logique de statut pour l'instant
-        filteredMatches = filteredMatches.filter(
-          match => match.regionMatch.matchStatus === "perfect_match"
-        );
-        console.log(`   → Garder agents avec regionMatch = perfect_match`);
-      } else if (criterion === 'schedule' || criterion === 'availability') {
-        // Pour les horaires, on garde la logique de statut pour l'instant
-        filteredMatches = filteredMatches.filter(
-          match => match.availabilityMatch.matchStatus === "perfect_match"
-        );
-        console.log(`   → Garder agents avec availabilityMatch = perfect_match`);
-      }
-
-      const afterCount = filteredMatches.length;
-      console.log(`✅ Après filtrage ${criterion}: ${afterCount} agents (éliminés: ${beforeCount - afterCount})`);
-      
-      // Enregistrer les statistiques de cette étape
-      filteringSteps.steps.push({
-        criterion: criterion,
-        threshold: threshold,
-        agentsBeforeFilter: beforeCount,
-        agentsAfterFilter: afterCount,
-        agentsEliminated: beforeCount - afterCount,
-        eliminationRate: beforeCount > 0 ? ((beforeCount - afterCount) / beforeCount * 100).toFixed(1) : 0
-      });
-      
-        // Si plus aucun agent, arrêter le filtrage
-        if (afterCount === 0) {
-          console.log(`⚠️ Aucun agent restant après filtrage ${criterion}, arrêt du filtrage séquentiel`);
-          break;
-        }
-      }
+      console.log(`📊 Tous les ${matches.length} agents gardés - Tri selon les priorités (weights)`);
+      console.log(`📋 Weights comme priorités:`, Object.entries(weights)
+        .sort(([, a], [, b]) => b - a)
+        .map(([criterion, weight]) => `${criterion}: ${weight}`)
+        .join(', '));
     }
 
 
 
-    // Le filtrage séquentiel a déjà été appliqué, donc on utilise directement les résultats
-    // Plus besoin de filtrage global final car le filtrage séquentiel respecte déjà les poids
+    // ⭐ NOUVELLE APPROCHE: Pas de filtrage, tous les agents sont gardés
+    // Le tri se fait uniquement par le score total pondéré (totalMatchingScore)
     const finalFilteredMatches = filteredMatches;
     
     // Ajouter le résultat final aux statistiques
     filteringSteps.finalAgentsSelected = finalFilteredMatches.length;
-    filteringSteps.totalEliminationRate = filteringSteps.totalAgentsEvaluated > 0 ? 
-      ((filteringSteps.totalAgentsEvaluated - finalFilteredMatches.length) / filteringSteps.totalAgentsEvaluated * 100).toFixed(1) : 0;
+    filteringSteps.totalEliminationRate = "0.0"; // Pas d'élimination, tous gardés
     
     // Calculer les statistiques des scores totaux
     if (finalFilteredMatches.length > 0) {
@@ -1804,7 +1719,7 @@ export const findMatchesForGigById = async (req, res) => {
     sortedMatches.slice(0, 10).forEach((match, index) => {
       console.log(`   ${index + 1}. Agent ${match.agentId} - Score: ${match.totalMatchingScore} (${(match.totalMatchingScore * 100).toFixed(1)}%)`);
     });
-    
+
     // Ajouter l'information d'invitation à chaque match
     const matchesWithInvitationStatus = sortedMatches.map(match => ({
       ...match,
@@ -2113,25 +2028,14 @@ export const findSkillsMatchesForGig = async (req, res) => {
           );
 
           if (agentSkill) {
-            const skillScore = getSkillLevelScore(agentSkill.level);
-            const requiredScore = getSkillLevelScore(reqSkill.level);
-            
-            if (skillScore >= requiredScore) {
-              matchingSkills.push({
-                skill: reqSkill.skill,
-                requiredLevel: reqSkill.level,
-                agentLevel: agentSkill.level,
-                score: skillScore
-              });
-              totalScore += skillScore;
-            } else {
-              insufficientSkills.push({
-                skill: reqSkill.skill,
-                requiredLevel: reqSkill.level,
-                agentLevel: agentSkill.level,
-                score: skillScore
-              });
-            }
+            // ⭐ NOUVEAU: Ignorer les niveaux - si l'agent a la skill, c'est un match
+            matchingSkills.push({
+              skill: reqSkill.skill,
+              requiredLevel: reqSkill.level,
+              agentLevel: agentSkill.level,
+              score: 1 // Score fixe de 1 pour chaque skill possédée
+            });
+            totalScore += 1; // Chaque skill compte pour 1 point
           } else {
             missingSkills.push(reqSkill.skill);
           }
