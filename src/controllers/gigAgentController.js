@@ -234,23 +234,14 @@ const calculateMatchDetails = async (agent, gig) => {
     );
 
     if (agentSkill) {
-      if (agentSkill.level >= reqSkill.level) {
-        matchingSkills.push({
-          skill: reqSkill.skill,
-          skillName: reqSkill.skill,
-          requiredLevel: reqSkill.level,
-          agentLevel: agentSkill.level,
-          type: reqSkill.type
-        });
-      } else {
-        insufficientSkills.push({
-          skill: reqSkill.skill,
-          skillName: reqSkill.skill,
-          requiredLevel: reqSkill.level,
-          agentLevel: agentSkill.level,
-          type: reqSkill.type
-        });
-      }
+      // ⭐ NOUVEAU: Ignorer les niveaux - si l'agent a la skill, c'est un match
+      matchingSkills.push({
+        skill: reqSkill.skill,
+        skillName: reqSkill.skill,
+        requiredLevel: reqSkill.level,
+        agentLevel: agentSkill.level,
+        type: reqSkill.type
+      });
     } else {
       missingSkills.push({
         skill: reqSkill.skill,
@@ -1245,4 +1236,4 @@ export const getGigAgentStats = async (req, res) => {
     console.error('Error in getGigAgentStats:', error);
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
-}; 
+};
