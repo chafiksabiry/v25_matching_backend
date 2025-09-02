@@ -1306,7 +1306,7 @@ export const findLanguageMatches = (gig, agents) => {
     const insufficientLanguages = []; // Langues présentes mais niveau insuffisant
 
     // Vérification de chaque langue requise par le gig
-    const allLanguagesMatch = gig.skills.languages.every(gigLang => {
+    gig.skills.languages.forEach(gigLang => {
       const gigLangId = gigLang.language?.toString();
       const gigLevel = gigLang.proficiency?.toLowerCase();
 
@@ -1322,7 +1322,7 @@ export const findLanguageMatches = (gig, agents) => {
           languageId: gigLangId,
           requiredLevel: gigLang.proficiency
         });
-        return false;
+        return;
       }
 
       const agentLevel = agentLang.proficiency?.toLowerCase();
@@ -1346,7 +1346,6 @@ export const findLanguageMatches = (gig, agents) => {
           requiredLevel: gigLang.proficiency,
           agentLevel: agentLang.proficiency
         });
-        return true;
       } else {
         // Si le niveau ne correspond pas, ajouter aux langues insuffisantes
         insufficientLanguages.push({
@@ -1354,20 +1353,40 @@ export const findLanguageMatches = (gig, agents) => {
           requiredLevel: gigLang.proficiency,
           agentLevel: agentLang.proficiency
         });
-        return false;
       }
     });
+
+    // Calculer le score et le statut basé sur les langues qui matchent
+    const totalRequiredLanguages = gig.skills.languages.length;
+    const totalMatchingLanguages = matchingLanguages.length;
+    
+    let score = 0;
+    let matchStatus = "no_match";
+    
+    if (totalMatchingLanguages === 0) {
+      // Aucune langue ne matche
+      score = 0;
+      matchStatus = "no_match";
+    } else if (totalMatchingLanguages === totalRequiredLanguages) {
+      // Toutes les langues matchent
+      score = 1;
+      matchStatus = "perfect_match";
+    } else {
+      // Au moins une langue matche, mais pas toutes
+      score = totalMatchingLanguages / totalRequiredLanguages;
+      matchStatus = "partial_match";
+    }
 
     // Retourner le résultat pour cet agent
     return {
       agent,
-      score: allLanguagesMatch ? 1 : 0, // Score 1 si toutes les langues matchent, 0 sinon
+      score: score,
       details: {
         matchingLanguages,
         missingLanguages,
         insufficientLanguages,
-        matchStatus: allLanguagesMatch ? "perfect_match" : "no_match"
+        matchStatus: matchStatus
       }
     };
-  }).filter(match => match.score === 1); // Ne garder que les agents avec un score de 1
+  }).filter(match => match.score > 0); // Garder les agents avec au moins une langue commune
 };

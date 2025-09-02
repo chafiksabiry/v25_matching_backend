@@ -816,38 +816,12 @@ export const findMatchesForGigById = async (req, res) => {
     const agents = await Agent.find({})
       .select('personalInfo skills availability professionalSummary');
 
-    // Filtrer les agents qui ont des langues seulement si le poids des langues > 0
-    let agentsWithLanguages = agents;
-    if (weights.languages > 0) {
-      agentsWithLanguages = agents.filter(agent => {
-        const hasLanguages = agent.personalInfo?.languages && agent.personalInfo.languages.length > 0;
-        return hasLanguages;
-      });
-    } else {
-      agentsWithLanguages = agents;
-    }
-
-    // Filtrer les agents qui ont des industries seulement si le poids des industries > 0
-    let agentsWithIndustries = agentsWithLanguages;
-    if (weights.industry > 0 || weights.weight > 0) {
-      agentsWithIndustries = agentsWithLanguages.filter(agent => {
-        const hasIndustries = agent.professionalSummary?.industries && agent.professionalSummary.industries.length > 0;
-        return hasIndustries;
-      });
-    } else {
-      agentsWithIndustries = agentsWithLanguages;
-    }
-
-    // Filtrer les agents qui ont des activités seulement si le poids des activités > 0
-    let agentsWithActivities = agentsWithIndustries;
-    if (weights.activity > 0) {
-      agentsWithActivities = agentsWithIndustries.filter(agent => {
-        const hasActivities = agent.professionalSummary?.activities && agent.professionalSummary.activities.length > 0;
-        return hasActivities;
-      });
-    } else {
-      agentsWithActivities = agentsWithIndustries;
-    }
+    // ⚠️ NOUVEAU: Pas de pré-filtrage - évaluer tous les agents
+    // Le filtrage se fera uniquement dans la phase séquentielle selon les poids
+    console.log(`📊 Évaluation de ${agents.length} agents sans pré-filtrage`);
+    
+    // Garder tous les agents pour l'évaluation complète
+    const agentsWithActivities = agents;
 
 
 
@@ -1003,9 +977,10 @@ export const findMatchesForGigById = async (req, res) => {
       let industryMatchStatus;
 
       // Gérer le cas où le gig n'a pas d'industries définies
+      let industryScore;
       if (gigIndustryIds.length === 0) {
         // Si le gig n'a pas d'industries, considérer comme un match neutre
-        // car on ne peut pas évaluer la correspondance
+        industryScore = 1; // Score parfait si pas d'industries requises
         industryMatchStatus = "neutral_match";
 
       } else {
@@ -1035,9 +1010,20 @@ export const findMatchesForGigById = async (req, res) => {
           }
         });
 
-        // Déterminer le statut du matching des industries
-        industryMatchStatus = matchingIndustries.length === gigIndustryIds.length ? "perfect_match" : 
-                             matchingIndustries.length > 0 ? "partial_match" : "no_match";
+        // Calculer le score des industries (proportionnel)
+        industryScore = matchingIndustries.length / gigIndustryIds.length;
+        
+        // Nouvelle logique : accepter au moins une industrie commune
+        if (matchingIndustries.length === 0) {
+          // Aucune industrie ne matche
+          industryMatchStatus = "no_match";
+        } else if (matchingIndustries.length === gigIndustryIds.length) {
+          // Toutes les industries matchent
+          industryMatchStatus = "perfect_match";
+        } else {
+          // Au moins une industrie matche, mais pas toutes
+          industryMatchStatus = "partial_match";
+        }
 
       }
 
@@ -1086,8 +1072,10 @@ export const findMatchesForGigById = async (req, res) => {
       let activityMatchStatus;
 
       // Gérer le cas où le gig n'a pas d'activités définies
+      let activityScore;
       if (gigActivityIds.length === 0) {
         // Si le gig n'a pas d'activités, considérer comme un match neutre
+        activityScore = 1; // Score parfait si pas d'activités requises
         activityMatchStatus = "neutral_match";
       } else {
         // Vérifier si l'agent a au moins une des activités requises par le gig
@@ -1116,9 +1104,20 @@ export const findMatchesForGigById = async (req, res) => {
           }
         });
 
-        // Déterminer le statut du matching des activités
-        activityMatchStatus = matchingActivities.length === gigActivityIds.length ? "perfect_match" : 
-                             matchingActivities.length > 0 ? "partial_match" : "no_match";
+        // Calculer le score des activités (proportionnel)
+        activityScore = matchingActivities.length / gigActivityIds.length;
+        
+        // Nouvelle logique : accepter au moins une activité commune
+        if (matchingActivities.length === 0) {
+          // Aucune activité ne matche
+          activityMatchStatus = "no_match";
+        } else if (matchingActivities.length === gigActivityIds.length) {
+          // Toutes les activités matchent
+          activityMatchStatus = "perfect_match";
+        } else {
+          // Au moins une activité matche, mais pas toutes
+          activityMatchStatus = "partial_match";
+        }
       }
 
       // Skills matching - utiliser les IDs directement
@@ -1402,9 +1401,18 @@ export const findMatchesForGigById = async (req, res) => {
     const regionMatch = await compareRegions(gig.destination_zone, agentTimezoneId);
 
     // Schedule matching
+    console.log(`🗓️ Debugging availability for agent ${agent._id}:`);
+    console.log(`   Gig schedule:`, JSON.stringify(gig.availability?.schedule, null, 2));
+    console.log(`   Agent availability:`, JSON.stringify(agent.availability, null, 2));
     const scheduleMatch = compareSchedules(gig.availability?.schedule, agent.availability);
+    console.log(`   Schedule match result:`, JSON.stringify(scheduleMatch, null, 2));
 
-      // Determine match status based on direct matches
+      // Calculer le score des langues (proportionnel)
+      const languageScore = requiredLanguages.length > 0 ? 
+                           matchingLanguages.length / requiredLanguages.length : 
+                           1; // Si aucune langue requise, score parfait
+      
+      // Determine match status based on direct matches - accepter partial_match
       const languageMatchStatus = matchingLanguages.length === requiredLanguages.length ? "perfect_match" : 
                                  matchingLanguages.length > 0 ? "partial_match" : "no_match";
       
@@ -1444,8 +1452,88 @@ export const findMatchesForGigById = async (req, res) => {
                                  scheduleMatch.status === "no_match") ? "no_match" :
                                 "partial_match";
 
+      // ⭐ CALCUL DU SCORE TOTAL SELON LE CAS
+      let normalizedTotalScore = 0;
+      
+      // Vérifier si tous les weights sont à 0
+      const allWeightsZero = Object.values(weights).every(weight => weight === 0);
+      
+      if (allWeightsZero) {
+        // CAS SPÉCIAL: Tous weights = 0 → Diviser par 8 (tous les critères)
+        const allScores = [
+          languageScore,
+          industryScore,
+          activityScore,
+          experienceMatch.score,
+          timezoneMatch.score,
+          regionMatch.score,
+          scheduleMatch.score,
+          // Ajouter un 8ème critère (skills) - utiliser 1 si perfect_match, 0 sinon
+          skillsMatchStatus === "perfect_match" ? 1 : 0
+        ];
+        
+        const totalScore = allScores.reduce((a, b) => a + b, 0);
+        normalizedTotalScore = totalScore / 8; // Diviser par 8 critères
+          
+        console.log(`🧮 Score total pour agent ${agent._id}: (${allScores.join(' + ')}) ÷ 8 = ${normalizedTotalScore.toFixed(3)}`);
+      } else {
+        // CAS NORMAL: Score pondéré - IGNORER les weights = 0
+        let totalScore = 0;
+        let totalWeights = 0;
+        
+        // Ajouter seulement les critères avec weight > 0
+        if (weights.languages > 0) {
+          totalScore += languageScore * weights.languages;
+          totalWeights += weights.languages;
+        }
+        
+        if ((weights.industry || weights.weight || 0) > 0) {
+          const industryWeight = weights.industry || weights.weight || 0;
+          totalScore += industryScore * industryWeight;
+          totalWeights += industryWeight;
+        }
+        
+        if (weights.activity > 0) {
+          totalScore += activityScore * weights.activity;
+          totalWeights += weights.activity;
+        }
+        
+        if (weights.experience > 0) {
+          totalScore += experienceMatch.score * weights.experience;
+          totalWeights += weights.experience;
+        }
+        
+        if (weights.timezone > 0) {
+          totalScore += timezoneMatch.score * weights.timezone;
+          totalWeights += weights.timezone;
+        }
+        
+        if (weights.region > 0) {
+          totalScore += regionMatch.score * weights.region;
+          totalWeights += weights.region;
+        }
+        
+        if ((weights.availability || weights.schedule || 0) > 0) {
+          const availabilityWeight = weights.availability || weights.schedule || 0;
+          totalScore += scheduleMatch.score * availabilityWeight;
+          totalWeights += availabilityWeight;
+        }
+        
+        if (weights.skills > 0) {
+          const skillScore = skillsMatchStatus === "perfect_match" ? 1 : 0;
+          totalScore += skillScore * weights.skills;
+          totalWeights += weights.skills;
+        }
+        
+        normalizedTotalScore = totalWeights > 0 ? totalScore / totalWeights : 0;
+        
+        console.log(`🧮 Score pondéré pour agent ${agent._id}: totalScore=${totalScore.toFixed(3)}, totalWeights=${totalWeights}, final=${normalizedTotalScore.toFixed(3)}`);
+      }
+
       return {
         agentId: agent._id,
+        // ⭐ NOUVEAU: Score total de matching
+        totalMatchingScore: parseFloat(normalizedTotalScore.toFixed(3)),
         agentInfo: {
           name: agent.personalInfo?.name || 'Unknown',
           email: agent.personalInfo?.email || 'Unknown',
@@ -1498,6 +1586,7 @@ export const findMatchesForGigById = async (req, res) => {
           }
         },
         languageMatch: {
+          score: languageScore,
           details: {
             matchingLanguages,
             missingLanguages,
@@ -1514,6 +1603,7 @@ export const findMatchesForGigById = async (req, res) => {
           }
         },
         industryMatch: {
+          score: industryScore,
           details: {
             matchingIndustries,
             missingIndustries,
@@ -1521,6 +1611,7 @@ export const findMatchesForGigById = async (req, res) => {
           }
         },
         activityMatch: {
+          score: activityScore,
           details: {
             matchingActivities,
             missingActivities,
@@ -1551,103 +1642,67 @@ export const findMatchesForGigById = async (req, res) => {
       };
     }));
 
-    // Trouver le critère avec le poids le plus élevé
-    const sortedWeights = Object.entries(weights)
-      .filter(([, weight]) => weight > 0) // Ignorer les critères avec poids 0
-      .sort(([, a], [, b]) => b - a);
+    // ⭐ VÉRIFIER SI TOUS LES WEIGHTS SONT À 0
+    const allWeightsZero = Object.values(weights).every(weight => weight === 0);
+    
+    // Tracker pour compter les agents à chaque étape (déclaré en dehors des blocs conditionnels)
+    const filteringSteps = {
+      totalAgentsEvaluated: matches.length,
+      steps: []
+    };
 
     let filteredMatches = matches;
     
-    // Appliquer le filtrage séquentiel basé sur les poids
-    for (const [criterion, weight] of sortedWeights) {
+    if (allWeightsZero) {
+      console.log('🎯 TOUS LES WEIGHTS SONT À 0 - Aucun filtrage, garder tous les agents');
+      console.log(`📊 Tous les ${matches.length} agents seront retournés avec leurs scores individuels`);
       
-      if (criterion === 'languages') {
-        // Pour les langues, accepter uniquement les perfect_match
-        filteredMatches = filteredMatches.filter(
-          match => match.languageMatch.details.matchStatus === "perfect_match"
-        );
-      } else if (criterion === 'skills') {
-        // Pour les compétences, accepter uniquement les perfect_match
-        filteredMatches = filteredMatches.filter(match => {
-          return match.skillsMatch.details.matchStatus === "perfect_match";
-        });
-      } else if (criterion === 'industry') {
-        // Pour les industries, accepter les perfect_match et neutral_match
-        const beforeCount = filteredMatches.length;
-        filteredMatches = filteredMatches.filter(
-          match => match.industryMatch.details.matchStatus === "perfect_match" || 
-                   match.industryMatch.details.matchStatus === "neutral_match"
-        );
-      } else if (criterion === 'activity') {
-        // Pour les activités, accepter les perfect_match et neutral_match
-        const beforeCount = filteredMatches.length;
-        filteredMatches = filteredMatches.filter(
-          match => match.activityMatch.details.matchStatus === "perfect_match" || 
-                   match.activityMatch.details.matchStatus === "neutral_match"
-        );
-        const afterCount = filteredMatches.length;
-
-      } else if (criterion === 'experience') {
-        // Pour l'expérience, accepter uniquement les perfect_match
-        filteredMatches = filteredMatches.filter(
-          match => match.experienceMatch.matchStatus === "perfect_match"
-        );
-      } else if (criterion === 'timezone') {
-        // Pour les timezones, accepter uniquement les perfect_match
-        filteredMatches = filteredMatches.filter(
-          match => match.timezoneMatch.matchStatus === "perfect_match"
-        );
-      } else if (criterion === 'region') {
-        // Pour les régions, accepter uniquement les perfect_match
-        filteredMatches = filteredMatches.filter(
-          match => match.regionMatch.matchStatus === "perfect_match"
-        );
-      } else if (criterion === 'schedule' || criterion === 'availability') {
-        // Pour les horaires, accepter uniquement les perfect_match
-        filteredMatches = filteredMatches.filter(
-          match => match.availabilityMatch.matchStatus === "perfect_match"
-        );
-      }
-
-
+      // Pas de filtrage séquentiel, garder tous les agents
+      filteredMatches = matches;
+    } else {
+            // ⭐ NOUVELLE LOGIQUE: Les weights déterminent les PRIORITÉS (pas des seuils)
+      // Plus le weight est élevé, plus le critère est important pour le classement final
+      // On ne fait plus de filtrage séquentiel, juste du tri par score total pondéré
+      // ⭐ NOUVELLE APPROCHE: Pas de filtrage séquentiel, juste tri par score total pondéré
+      // Tous les agents sont gardés, mais triés selon l'importance des critères (weights)
+      filteredMatches = matches;
+      
+      console.log(`📊 Tous les ${matches.length} agents gardés - Tri selon les priorités (weights)`);
+      console.log(`📋 Weights comme priorités:`, Object.entries(weights)
+        .sort(([, a], [, b]) => b - a)
+        .map(([criterion, weight]) => `${criterion}: ${weight}`)
+        .join(', '));
     }
 
 
 
-    // Filtrage global obligatoire - ignorer les critères avec un poids de 0
-    const finalFilteredMatches = filteredMatches.filter(match => {
-      // Vérifier quels critères ont un poids > 0
-      const hasLanguageWeight = weights.languages > 0;
-      const hasSkillsWeight = weights.skills > 0;
-      const hasIndustryWeight = (weights.industry > 0 || weights.weight > 0);
-      const hasActivityWeight = weights.activity > 0;
-      const hasExperienceWeight = weights.experience > 0;
-      const hasTimezoneWeight = weights.timezone > 0;
-      const hasRegionWeight = weights.region > 0;
-      const hasAvailabilityWeight = (weights.availability > 0);
-      
-      // Vérifier les matches pour les critères avec un poids > 0
-      const hasLanguageMatch = !hasLanguageWeight || match.languageMatch.details.matchStatus === "perfect_match";
-      const hasSkillsMatch = !hasSkillsWeight || match.skillsMatch.details.matchStatus === "perfect_match";
-      const hasIndustryMatch = !hasIndustryWeight || match.industryMatch.details.matchStatus === "perfect_match" || match.industryMatch.details.matchStatus === "neutral_match";
-      const hasActivityMatch = !hasActivityWeight || match.activityMatch.details.matchStatus === "perfect_match" || match.activityMatch.details.matchStatus === "neutral_match";
-      const hasExperienceMatch = !hasExperienceWeight || match.experienceMatch.matchStatus === "perfect_match";
-      const hasTimezoneMatch = !hasTimezoneWeight || match.timezoneMatch.matchStatus === "perfect_match";
-      const hasRegionMatch = !hasRegionWeight || match.regionMatch.matchStatus === "perfect_match";
-      const hasAvailabilityMatch = !hasAvailabilityWeight || match.availabilityMatch.matchStatus === "perfect_match";
-      
-      // Un agent doit avoir au moins un perfect_match pour les critères avec un poids > 0
-      const activeCriteria = [hasLanguageWeight, hasSkillsWeight, hasIndustryWeight, hasActivityWeight, hasExperienceWeight, hasTimezoneWeight, hasRegionWeight, hasAvailabilityWeight];
-      const activeMatches = [hasLanguageMatch, hasSkillsMatch, hasIndustryMatch, hasActivityMatch, hasExperienceMatch, hasTimezoneMatch, hasRegionMatch, hasAvailabilityMatch];
-      
-      // Si aucun critère n'est actif (tous les poids à 0), accepter tous les agents
-      if (!activeCriteria.some(c => c)) {
-        return true;
-      }
-      
-      // Sinon, accepter si au moins un critère actif a un perfect_match
-      return activeCriteria.some((isActive, index) => isActive && activeMatches[index]);
-    });
+    // ⭐ NOUVELLE APPROCHE: Pas de filtrage, tous les agents sont gardés
+    // Le tri se fait uniquement par le score total pondéré (totalMatchingScore)
+    const finalFilteredMatches = filteredMatches;
+    
+    // Ajouter le résultat final aux statistiques
+    filteringSteps.finalAgentsSelected = finalFilteredMatches.length;
+    filteringSteps.totalEliminationRate = "0.0"; // Pas d'élimination, tous gardés
+    
+    // Calculer les statistiques des scores totaux
+    if (finalFilteredMatches.length > 0) {
+      const totalScores = finalFilteredMatches.map(m => m.totalMatchingScore);
+      filteringSteps.scoreStats = {
+        highest: Math.max(...totalScores),
+        lowest: Math.min(...totalScores),
+        average: (totalScores.reduce((a, b) => a + b, 0) / totalScores.length).toFixed(3),
+        median: totalScores.sort((a, b) => a - b)[Math.floor(totalScores.length / 2)]
+      };
+    } else {
+      filteringSteps.scoreStats = {
+        highest: 0,
+        lowest: 0,
+        average: 0,
+        median: 0
+      };
+    }
+    
+    console.log(`🎯 Filtrage final terminé: ${finalFilteredMatches.length} agents sélectionnés`);
 
 
 
@@ -1656,8 +1711,17 @@ export const findMatchesForGigById = async (req, res) => {
     const invitedAgentIds = invitedAgents.map(ga => ga.agentId.toString());
     console.log('📧 Backend: Invited agents for gig', gig._id, ':', invitedAgentIds);
 
+    // Trier les agents par score total décroissant pour avoir les meilleurs en premier
+    const sortedMatches = finalFilteredMatches.sort((a, b) => b.totalMatchingScore - a.totalMatchingScore);
+    
+    // 📊 Log du tri des agents par score décroissant
+    console.log('🏆 TOP 10 AGENTS TRIÉS PAR SCORE DÉCROISSANT:');
+    sortedMatches.slice(0, 10).forEach((match, index) => {
+      console.log(`   ${index + 1}. Agent ${match.agentId} - Score: ${match.totalMatchingScore} (${(match.totalMatchingScore * 100).toFixed(1)}%)`);
+    });
+
     // Ajouter l'information d'invitation à chaque match
-    const matchesWithInvitationStatus = finalFilteredMatches.map(match => ({
+    const matchesWithInvitationStatus = sortedMatches.map(match => ({
       ...match,
       isInvited: invitedAgentIds.includes(match.agentId.toString())
     }));
@@ -1713,7 +1777,7 @@ export const findMatchesForGigById = async (req, res) => {
 
 
     
-    // Retourner la réponse finale
+    // Retourner la réponse finale avec les statistiques de filtrage
     res.json({
       preferedmatches: matchesWithInvitationStatus,
       totalMatches: finalFilteredMatches.length,
@@ -1727,7 +1791,9 @@ export const findMatchesForGigById = async (req, res) => {
       activityStats: stats.activityStats,
       timezoneStats: stats.timezoneStats,
       regionStats: stats.regionStats,
-      scheduleStats: stats.scheduleStats
+      scheduleStats: stats.scheduleStats,
+      // ⭐ NOUVEAU: Statistiques détaillées du processus de filtrage
+      filteringProcess: filteringSteps
     });
   } catch (error) {
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
@@ -1962,25 +2028,14 @@ export const findSkillsMatchesForGig = async (req, res) => {
           );
 
           if (agentSkill) {
-            const skillScore = getSkillLevelScore(agentSkill.level);
-            const requiredScore = getSkillLevelScore(reqSkill.level);
-            
-            if (skillScore >= requiredScore) {
-              matchingSkills.push({
-                skill: reqSkill.skill,
-                requiredLevel: reqSkill.level,
-                agentLevel: agentSkill.level,
-                score: skillScore
-              });
-              totalScore += skillScore;
-            } else {
-              insufficientSkills.push({
-                skill: reqSkill.skill,
-                requiredLevel: reqSkill.level,
-                agentLevel: agentSkill.level,
-                score: skillScore
-              });
-            }
+            // ⭐ NOUVEAU: Ignorer les niveaux - si l'agent a la skill, c'est un match
+            matchingSkills.push({
+              skill: reqSkill.skill,
+              requiredLevel: reqSkill.level,
+              agentLevel: agentSkill.level,
+              score: 1 // Score fixe de 1 pour chaque skill possédée
+            });
+            totalScore += 1; // Chaque skill compte pour 1 point
           } else {
             missingSkills.push(reqSkill.skill);
           }
