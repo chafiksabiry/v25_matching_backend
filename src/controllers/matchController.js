@@ -132,6 +132,21 @@ const getActivityNames = async (activityIds) => {
 // Language normalization function
 const normalizeLanguage = (language) => {
   if (!language) return '';
+  
+  // Handle populated Language object case (has name property)
+  if (typeof language === 'object' && language.name) {
+    language = language.name;
+  }
+  // Handle ObjectId case (non-populated references)
+  else if (typeof language === 'object' && language.toString) {
+    language = language.toString();
+  }
+  
+  // Ensure language is a string before calling toLowerCase
+  if (typeof language !== 'string') {
+    return '';
+  }
+  
   const languageMap = {
     'french': 'french',
     'français': 'french',

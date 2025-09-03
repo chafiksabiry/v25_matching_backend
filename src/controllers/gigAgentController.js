@@ -71,12 +71,23 @@ export const createGigAgent = async (req, res) => {
     const { agentId, gigId, notes } = req.body;
 
     // Vérifier que l'agent et le gig existent
-    const agent = await Agent.findById(agentId);
+    const agent = await Agent.findById(agentId)
+      .populate('professionalSummary.industries')
+      .populate('personalInfo.languages.language')
+      .populate('skills.technical.skill')
+      .populate('skills.professional.skill')
+      .populate('skills.soft.skill');
     if (!agent) {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Agent not found' });
     }
 
-    const gig = await Gig.findById(gigId);
+    const gig = await Gig.findById(gigId)
+      .populate('skills.languages.language')
+      .populate('skills.technical.skill')
+      .populate('skills.professional.skill')
+      .populate('skills.soft.skill')
+      .populate('activities')
+      .populate('industries');
     if (!gig) {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Gig not found' });
     }
@@ -228,9 +239,9 @@ const calculateMatchDetails = async (agent, gig) => {
   requiredSkills.forEach(reqSkill => {
     if (!reqSkill?.skill) return;
     
-    const normalizedReqSkill = reqSkill.skill.toLowerCase().trim();
+    const normalizedReqSkill = normalizeSkill(reqSkill.skill);
     const agentSkill = agentSkills.find(
-      skill => skill?.skill && skill.skill.toLowerCase().trim() === normalizedReqSkill && skill.type === reqSkill.type
+      skill => skill?.skill && normalizeSkill(skill.skill) === normalizedReqSkill && skill.type === reqSkill.type
     );
 
     if (agentSkill) {
@@ -359,6 +370,21 @@ const calculateIndustryMatch = (agent, gig) => {
 
   const normalizeString = (str) => {
     if (!str) return "";
+    
+    // Handle ObjectId case
+    if (typeof str === 'object' && str.toString) {
+      str = str.toString();
+    }
+    // Handle number case
+    else if (typeof str === 'number') {
+      str = str.toString();
+    }
+    
+    // Ensure str is a string before calling toLowerCase
+    if (typeof str !== 'string') {
+      return "";
+    }
+    
     return str.toLowerCase().trim().replace(/[^a-z0-9]/g, "").replace(/\s+/g, "");
   };
 
@@ -414,6 +440,21 @@ const calculateActivityMatch = (agent, gig) => {
 
   const normalizeString = (str) => {
     if (!str) return "";
+    
+    // Handle ObjectId case
+    if (typeof str === 'object' && str.toString) {
+      str = str.toString();
+    }
+    // Handle number case
+    else if (typeof str === 'number') {
+      str = str.toString();
+    }
+    
+    // Ensure str is a string before calling toLowerCase
+    if (typeof str !== 'string') {
+      return "";
+    }
+    
     return str.toLowerCase().trim().replace(/[^a-z0-9]/g, "").replace(/\s+/g, "");
   };
 
@@ -605,6 +646,21 @@ const calculateRegionMatch = (agent, gig) => {
 // Fonction de normalisation des langues (importée depuis matchController)
 const normalizeLanguage = (language) => {
   if (!language) return '';
+  
+  // Handle populated Language object case (has name property)
+  if (typeof language === 'object' && language.name) {
+    language = language.name;
+  }
+  // Handle ObjectId case (non-populated references)
+  else if (typeof language === 'object' && language.toString) {
+    language = language.toString();
+  }
+  
+  // Ensure language is a string before calling toLowerCase
+  if (typeof language !== 'string') {
+    return '';
+  }
+  
   const languageMap = {
     'french': 'french',
     'français': 'french',
@@ -625,6 +681,27 @@ const normalizeLanguage = (language) => {
     'débutant': 'beginner'
   };
   return languageMap[language.toLowerCase()] || language.toLowerCase();
+};
+
+// Fonction de normalisation des compétences (skills)
+const normalizeSkill = (skill) => {
+  if (!skill) return '';
+  
+  // Handle populated Skill object case (has name property)
+  if (typeof skill === 'object' && skill.name) {
+    skill = skill.name;
+  }
+  // Handle ObjectId case (non-populated references)
+  else if (typeof skill === 'object' && skill.toString) {
+    skill = skill.toString();
+  }
+  
+  // Ensure skill is a string before calling toLowerCase
+  if (typeof skill !== 'string') {
+    return '';
+  }
+  
+  return skill.toLowerCase().trim();
 };
 
 // Fonction pour obtenir le score de niveau de langue (importée depuis matchController)
