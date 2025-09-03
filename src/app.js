@@ -22,7 +22,8 @@ const corsOptions = {
     'https://v25.harx.ai',
     'https://v25-preprod.harx.ai',
     'https://matching.harx.ai/',
-    'http://localhost:5181'
+    'http://localhost:5181',
+    'https://preprod-matching.harx.ai/',
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
