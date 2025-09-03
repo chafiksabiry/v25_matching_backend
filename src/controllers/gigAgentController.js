@@ -234,9 +234,9 @@ const calculateMatchDetails = async (agent, gig) => {
   requiredSkills.forEach(reqSkill => {
     if (!reqSkill?.skill) return;
     
-    const normalizedReqSkill = reqSkill.skill.toLowerCase().trim();
+    const normalizedReqSkill = normalizeSkill(reqSkill.skill);
     const agentSkill = agentSkills.find(
-      skill => skill?.skill && skill.skill.toLowerCase().trim() === normalizedReqSkill && skill.type === reqSkill.type
+      skill => skill?.skill && normalizeSkill(skill.skill) === normalizedReqSkill && skill.type === reqSkill.type
     );
 
     if (agentSkill) {
@@ -646,6 +646,27 @@ const normalizeLanguage = (language) => {
     'débutant': 'beginner'
   };
   return languageMap[language.toLowerCase()] || language.toLowerCase();
+};
+
+// Fonction de normalisation des compétences (skills)
+const normalizeSkill = (skill) => {
+  if (!skill) return '';
+  
+  // Handle populated Skill object case (has name property)
+  if (typeof skill === 'object' && skill.name) {
+    skill = skill.name;
+  }
+  // Handle ObjectId case (non-populated references)
+  else if (typeof skill === 'object' && skill.toString) {
+    skill = skill.toString();
+  }
+  
+  // Ensure skill is a string before calling toLowerCase
+  if (typeof skill !== 'string') {
+    return '';
+  }
+  
+  return skill.toLowerCase().trim();
 };
 
 // Fonction pour obtenir le score de niveau de langue (importée depuis matchController)
