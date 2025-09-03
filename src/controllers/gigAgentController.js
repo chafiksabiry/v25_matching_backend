@@ -170,10 +170,18 @@ const calculateMatchDetails = async (agent, gig) => {
   requiredLanguages.forEach(reqLang => {
     if (!reqLang?.language) return;
     
-    const normalizedReqLang = normalizeLanguage(reqLang.language);
-    const agentLang = agentLanguages.find(
-      lang => lang?.language && normalizeLanguage(lang.language) === normalizedReqLang
-    );
+    // Si language est un ObjectId, on utilise toString() pour obtenir l'ID
+    const reqLanguageId = typeof reqLang.language === 'object' && reqLang.language._id 
+      ? reqLang.language._id.toString()
+      : reqLang.language.toString();
+    
+    const agentLang = agentLanguages.find(lang => {
+      if (!lang?.language) return false;
+      const agentLanguageId = typeof lang.language === 'object' && lang.language._id
+        ? lang.language._id.toString()
+        : lang.language.toString();
+      return agentLanguageId === reqLanguageId;
+    });
 
     if (agentLang) {
       const normalizedReqLevel = normalizeLanguage(reqLang.proficiency);
@@ -186,23 +194,29 @@ const calculateMatchDetails = async (agent, gig) => {
 
       if (isLevelMatch) {
         matchingLanguages.push({
-          language: reqLang.language,
-          languageName: reqLang.language,
+          language: reqLanguageId,
+          languageName: typeof reqLang.language === 'object' && reqLang.language.name 
+            ? reqLang.language.name 
+            : reqLanguageId,
           requiredLevel: reqLang.proficiency,
           agentLevel: agentLang.proficiency
         });
       } else {
         insufficientLanguages.push({
-          language: reqLang.language,
-          languageName: reqLang.language,
+          language: reqLanguageId,
+          languageName: typeof reqLang.language === 'object' && reqLang.language.name 
+            ? reqLang.language.name 
+            : reqLanguageId,
           requiredLevel: reqLang.proficiency,
           agentLevel: agentLang.proficiency
         });
       }
     } else {
       missingLanguages.push({
-        language: reqLang.language,
-        languageName: reqLang.language,
+        language: reqLanguageId,
+        languageName: typeof reqLang.language === 'object' && reqLang.language.name 
+          ? reqLang.language.name 
+          : reqLanguageId,
         requiredLevel: reqLang.proficiency
       });
     }
@@ -228,24 +242,36 @@ const calculateMatchDetails = async (agent, gig) => {
   requiredSkills.forEach(reqSkill => {
     if (!reqSkill?.skill) return;
     
-    const normalizedReqSkill = reqSkill.skill.toLowerCase().trim();
-    const agentSkill = agentSkills.find(
-      skill => skill?.skill && skill.skill.toLowerCase().trim() === normalizedReqSkill && skill.type === reqSkill.type
-    );
+    // Si skill est un ObjectId, on utilise toString() pour obtenir l'ID
+    const reqSkillId = typeof reqSkill.skill === 'object' && reqSkill.skill._id 
+      ? reqSkill.skill._id.toString()
+      : reqSkill.skill.toString();
+    
+    const agentSkill = agentSkills.find(skill => {
+      if (!skill?.skill) return false;
+      const agentSkillId = typeof skill.skill === 'object' && skill.skill._id
+        ? skill.skill._id.toString()
+        : skill.skill.toString();
+      return agentSkillId === reqSkillId && skill.type === reqSkill.type;
+    });
 
     if (agentSkill) {
       // ⭐ NOUVEAU: Ignorer les niveaux - si l'agent a la skill, c'est un match
       matchingSkills.push({
-        skill: reqSkill.skill,
-        skillName: reqSkill.skill,
+        skill: reqSkillId,
+        skillName: typeof reqSkill.skill === 'object' && reqSkill.skill.name 
+          ? reqSkill.skill.name 
+          : reqSkillId,
         requiredLevel: reqSkill.level,
         agentLevel: agentSkill.level,
         type: reqSkill.type
       });
     } else {
       missingSkills.push({
-        skill: reqSkill.skill,
-        skillName: reqSkill.skill,
+        skill: reqSkillId,
+        skillName: typeof reqSkill.skill === 'object' && reqSkill.skill.name 
+          ? reqSkill.skill.name 
+          : reqSkillId,
         type: reqSkill.type,
         requiredLevel: reqSkill.level
       });
