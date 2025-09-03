@@ -1,6 +1,6 @@
 import Match from '../models/Match.js';
 import Agent from '../models/Agent.js';
-import Gig from '../models/Gig.js';
+import { Gig } from '../models/Gig.js';
 import GigAgent from '../models/GigAgent.js';
 import { StatusCodes } from 'http-status-codes';
 import { findMatches } from '../utils/matchingUtils.js';

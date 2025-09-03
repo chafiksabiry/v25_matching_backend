@@ -1,9 +1,10 @@
 import { Document, model, Schema } from 'mongoose';
 import mongoose from 'mongoose';
 import countries from 'i18n-iso-countries';
+import frLocale from 'i18n-iso-countries/langs/fr.json' assert { type: 'json' };
 
 // Initialiser les pays en français
-countries.registerLocale(require('i18n-iso-countries/langs/fr.json'));
+countries.registerLocale(frLocale);
 
 // Fonction de validation pour les codes pays alpha-2
 const validateCountryCode = (value) => {
