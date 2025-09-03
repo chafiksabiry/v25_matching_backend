@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import Agent from '../models/Agent.js';
-import Gig from '../models/Gig.js';
+import { Gig } from '../models/Gig.js';
 
 // Load environment variables
 dotenv.config();
