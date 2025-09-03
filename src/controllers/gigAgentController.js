@@ -71,7 +71,12 @@ export const createGigAgent = async (req, res) => {
     const { agentId, gigId, notes } = req.body;
 
     // Vérifier que l'agent et le gig existent
-    const agent = await Agent.findById(agentId);
+    const agent = await Agent.findById(agentId)
+      .populate('professionalSummary.industries')
+      .populate('personalInfo.languages.language')
+      .populate('skills.technical.skill')
+      .populate('skills.professional.skill')
+      .populate('skills.soft.skill');
     if (!agent) {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Agent not found' });
     }
@@ -365,6 +370,21 @@ const calculateIndustryMatch = (agent, gig) => {
 
   const normalizeString = (str) => {
     if (!str) return "";
+    
+    // Handle ObjectId case
+    if (typeof str === 'object' && str.toString) {
+      str = str.toString();
+    }
+    // Handle number case
+    else if (typeof str === 'number') {
+      str = str.toString();
+    }
+    
+    // Ensure str is a string before calling toLowerCase
+    if (typeof str !== 'string') {
+      return "";
+    }
+    
     return str.toLowerCase().trim().replace(/[^a-z0-9]/g, "").replace(/\s+/g, "");
   };
 
@@ -420,6 +440,21 @@ const calculateActivityMatch = (agent, gig) => {
 
   const normalizeString = (str) => {
     if (!str) return "";
+    
+    // Handle ObjectId case
+    if (typeof str === 'object' && str.toString) {
+      str = str.toString();
+    }
+    // Handle number case
+    else if (typeof str === 'number') {
+      str = str.toString();
+    }
+    
+    // Ensure str is a string before calling toLowerCase
+    if (typeof str !== 'string') {
+      return "";
+    }
+    
     return str.toLowerCase().trim().replace(/[^a-z0-9]/g, "").replace(/\s+/g, "");
   };
 
