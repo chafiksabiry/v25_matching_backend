@@ -20,6 +20,9 @@ router.get('/', getAllMatches);
 // Get a specific match by ID
 router.get('/:id', getMatchById);
 
+// Get matches for a specific gig
+router.get('/gig/:id', findMatchesForGigById);
+
 // Create a new match
 router.post('/', createMatch);
 
@@ -29,7 +32,7 @@ router.put('/:id', updateMatch);
 // Delete a match
 router.delete('/:id', deleteMatch);
 
-// Find matches for a specific gig (POST because it needs weights in body)
+// Find matches for a specific gig
 router.post('/gig/:id', findMatchesForGigById);
 
 // Find matches for a specific agent
