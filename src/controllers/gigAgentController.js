@@ -76,7 +76,13 @@ export const createGigAgent = async (req, res) => {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Agent not found' });
     }
 
-    const gig = await Gig.findById(gigId);
+    const gig = await Gig.findById(gigId)
+      .populate('skills.languages.language')
+      .populate('skills.technical.skill')
+      .populate('skills.professional.skill')
+      .populate('skills.soft.skill')
+      .populate('activities')
+      .populate('industries');
     if (!gig) {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Gig not found' });
     }
@@ -605,6 +611,21 @@ const calculateRegionMatch = (agent, gig) => {
 // Fonction de normalisation des langues (importée depuis matchController)
 const normalizeLanguage = (language) => {
   if (!language) return '';
+  
+  // Handle populated Language object case (has name property)
+  if (typeof language === 'object' && language.name) {
+    language = language.name;
+  }
+  // Handle ObjectId case (non-populated references)
+  else if (typeof language === 'object' && language.toString) {
+    language = language.toString();
+  }
+  
+  // Ensure language is a string before calling toLowerCase
+  if (typeof language !== 'string') {
+    return '';
+  }
+  
   const languageMap = {
     'french': 'french',
     'français': 'french',
