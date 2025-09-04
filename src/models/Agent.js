@@ -15,15 +15,16 @@ const languageSchema = new mongoose.Schema({
 // Schema for skills
 const skillSchema = new mongoose.Schema({
   skill: {
-    type: String,
+    type: mongoose.Schema.Types.ObjectId,
     required: true
   },
   level: {
     type: Number,
     required: true,
-    min: 1,
+    min: 0,
     max: 5
-  }
+  },
+  details: String
 });
 
 // Schema for contact center skills
@@ -132,23 +133,113 @@ const scheduleSchema = new mongoose.Schema({
 
 // Main Agent schema
 const agentSchema = new mongoose.Schema({
-  firstName: {
+  // Nouveaux champs en premier (comme dans vos données)
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: false
+  },
+  plan: {
     type: String,
-    required: true
+    required: false,
+    default: null
   },
-  lastName: {
+  status: {
     type: String,
-    required: true
+    enum: ['draft', 'active', 'inactive'],
+    default: 'draft'
   },
-  email: {
-    type: String,
-    required: true,
-    unique: true
+  isBasicProfileCompleted: {
+    type: Boolean,
+    default: false
   },
-  experience: {
-    type: Number,
-    required: true
+  onboardingProgress: {
+    phases: {
+      phase1: {
+        requiredActions: {
+          accountCreated: { type: Boolean, default: false },
+          emailVerified: { type: Boolean, default: false }
+        },
+        optionalActions: {
+          locationConfirmed: { type: Boolean, default: false },
+          identityVerified: { type: Boolean, default: false },
+          twoFactorEnabled: { type: Boolean, default: false }
+        },
+        status: {
+          type: String,
+          enum: ['not_started', 'in_progress', 'completed'],
+          default: 'not_started'
+        },
+        completedAt: Date
+      },
+      phase2: {
+        requiredActions: {
+          experienceAdded: { type: Boolean, default: false },
+          skillsAdded: { type: Boolean, default: false },
+          industriesAdded: { type: Boolean, default: false },
+          activitiesAdded: { type: Boolean, default: false },
+          availabilitySet: { type: Boolean, default: false },
+          videoUploaded: { type: Boolean, default: false }
+        },
+        optionalActions: {
+          photoUploaded: { type: Boolean, default: false },
+          bioCompleted: { type: Boolean, default: false }
+        },
+        status: {
+          type: String,
+          enum: ['not_started', 'in_progress', 'completed'],
+          default: 'not_started'
+        },
+        completedAt: Date
+      },
+      phase3: {
+        requiredActions: {
+          languageAssessmentDone: { type: Boolean, default: false },
+          contactCenterAssessmentDone: { type: Boolean, default: false }
+        },
+        optionalActions: {
+          technicalEvaluationDone: { type: Boolean, default: false },
+          bestPracticesReviewed: { type: Boolean, default: false }
+        },
+        status: {
+          type: String,
+          enum: ['not_started', 'in_progress', 'completed'],
+          default: 'not_started'
+        },
+        completedAt: Date
+      },
+      phase4: {
+        requiredActions: {
+          subscriptionActivated: { type: Boolean, default: false }
+        },
+        status: {
+          type: String,
+          enum: ['not_started', 'in_progress', 'completed'],
+          default: 'not_started'
+        },
+        completedAt: Date
+      }
+    },
+    currentPhase: {
+      type: Number,
+      default: 1
+    },
+    lastUpdated: Date
   },
+  // Availability en haut (comme dans vos données)
+  availability: {
+    schedule: [scheduleSchema],
+    timeZone: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Timezone',
+      required: false,
+      default: null
+    },
+    flexibility: [{
+      type: String,
+      enum: ['Remote Work Available', 'Part-Time Options', 'Flexible Hours', 'Weekend Work']
+    }]
+  },
+  // Skills (comme dans vos données)
   skills: {
     technical: [skillSchema],
     professional: [skillSchema],
@@ -158,66 +249,80 @@ const agentSchema = new mongoose.Schema({
   personalInfo: {
     name: {
       type: String,
-      required: true
+      required: false
     },
-    location: {
-      type: String,
-      required: true
+    country: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Country',
+      required: false
     },
     email: {
       type: String,
-      required: true
+      required: false
     },
-    photo: {
+    phone: {
       type: String,
-      required: true
+      required: false
     },
     languages: [{
-      language: String,
+      language: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Language',
+        required: false
+      },
       proficiency: String,
-      iso639_1: String,
-    }]
-  },
-  availability: {
-    schedule: [scheduleSchema],
-    timeZone: {
-      type: String,
-      required: true
-    },
-    flexibility: [{
-      type: String,
-      enum: ['Remote Work Available', 'Part-Time Options', 'Flexible Hours', 'Weekend Work']
-    }]
-  },
-  status: {
-    type: String,
-    enum: ['active', 'inactive'],
-    default: 'active'
+      _id: {
+        type: mongoose.Schema.Types.ObjectId,
+        auto: true
+      }
+    }],
+    presentationVideo: {
+      recordedAt: {
+        type: Date,
+        required: false
+      }
+    }
   },
   professionalSummary: {
-    industries: [String],
-    activities: [String],
-    yearsOfExperience: String
+    yearsOfExperience: {
+      type: Number,
+      required: false
+    },
+    currentRole: {
+      type: String,
+      required: false
+    },
+    industries: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Industry'
+    }],
+    activities: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Activity'
+    }],
+    keyExpertise: [{
+      type: String
+    }],
+    notableCompanies: [{
+      type: String
+    }],
+    profileDescription: {
+      type: String,
+      required: false
+    }
   },
-  completionSteps: {
-    basicInfo: { type: Boolean, default: false },
-    experience: { type: Boolean, default: false },
-    skills: { type: Boolean, default: false },
-    languages: { type: Boolean, default: false },
-    assessment: { type: Boolean, default: false },
-  },
-  assessments: {
-    contactCenter: [contactCenterAssessmentSchema],
-  },
+
+  // Experience array (comme dans vos données)
+  experience: [experienceSchema],
+  favoriteGigs: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Gig'
+  }],
+  achievements: [achievementSchema],
   lastUpdated: {
     type: Date,
     default: Date.now,
   },
-  // Gigs auxquels l'agent est enrollé
-  enrolledGigs: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Gig'
-  }],
 }, {
   timestamps: true
 });

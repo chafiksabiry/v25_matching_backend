@@ -61,7 +61,7 @@ const GigSchema = new Schema(
           end: { type: String, required: false }
         }
       }],
-      time_zone: { type: mongoose.Schema.Types.ObjectId, ref: 'TimeZone', required: false },
+      time_zone: { type: mongoose.Schema.Types.ObjectId, ref: 'Timezone', required: false },
       flexibility: [{ type: String }],
       minimumHours: {
         daily: { type: Number, required: false },
