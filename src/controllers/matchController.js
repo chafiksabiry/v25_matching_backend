@@ -1048,10 +1048,9 @@ export const findMatchesForGigById = async (req, res) => {
             status: 'perfect_match'
           };
         } else {
-          // Bonus pour l'expérience supplémentaire, mais pas plus de 1.2
-          const bonusScore = Math.min(1.2, 1 + (agentExperience - gigRequiredExperience) * 0.1);
+          // Score parfait pour expérience supérieure, limité à 1.0
           experienceMatch = {
-            score: bonusScore,
+            score: 1.0,
             details: {
               gigRequiredExperience,
               agentExperience,
@@ -1271,20 +1270,17 @@ export const findMatchesForGigById = async (req, res) => {
         }
         
         if (weights.experience > 0) {
-          const experienceScore = experienceMatch.status === "perfect_match" ? 1 : 0; // ⭐ BINAIRE
-          totalScore += experienceScore * weights.experience;
+          totalScore += experienceMatch.score * weights.experience;
           totalWeights += weights.experience;
         }
         
         if (weights.timezone > 0) {
-          const timezoneScore = timezoneMatch.status === "perfect_match" ? 1 : 0; // ⭐ BINAIRE
-          totalScore += timezoneScore * weights.timezone;
+          totalScore += timezoneMatch.score * weights.timezone;
           totalWeights += weights.timezone;
         }
         
         if (weights.region > 0) {
-          const regionScore = regionMatch.status === "perfect_match" ? 1 : 0; // ⭐ BINAIRE
-          totalScore += regionScore * weights.region;
+          totalScore += regionMatch.score * weights.region;
           totalWeights += weights.region;
         }
         
@@ -1295,8 +1291,7 @@ export const findMatchesForGigById = async (req, res) => {
         }
         
         if (weights.skills > 0) {
-          const skillScore = skillsMatchStatus === "perfect_match" ? 1 : 0;
-          totalScore += skillScore * weights.skills;
+          totalScore += skillsMatch.score * weights.skills;
           totalWeights += weights.skills;
         }
         
