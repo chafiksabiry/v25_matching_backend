@@ -701,11 +701,18 @@ export const findMatchesForGigById = async (req, res) => {
       activity: 0.10
     };
 
+    console.log('🔍 Received weights from frontend:', weights);
+    console.log('🔍 Weight keys:', Object.keys(weights));
+
     // Validate weights
-    const validWeightKeys = ['skills', 'languages', 'experience', 'region', 'timezone', 'industry', 'activity', 'availability'];
+    const validWeightKeys = ['skills', 'languages', 'experience', 'region', 'timezone', 'industry', 'activity', 'activities', 'availability'];
     const invalidKeys = Object.keys(weights).filter(key => !validWeightKeys.includes(key));
     
+    console.log('🔍 Valid weight keys:', validWeightKeys);
+    console.log('🔍 Invalid keys found:', invalidKeys);
+    
     if (invalidKeys.length > 0) {
+      console.error('❌ Invalid weight keys detected:', invalidKeys);
       return res.status(StatusCodes.BAD_REQUEST).json({ 
         message: `Invalid weight keys: ${invalidKeys.join(', ')}. Valid keys are: ${validWeightKeys.join(', ')}` 
       });
@@ -716,7 +723,10 @@ export const findMatchesForGigById = async (req, res) => {
       typeof value !== 'number' || value < 0 || value > 1
     );
     
+    console.log('🔍 Invalid weight values found:', invalidWeights);
+    
     if (invalidWeights.length > 0) {
+      console.error('❌ Invalid weight values detected:', invalidWeights);
       return res.status(StatusCodes.BAD_REQUEST).json({ 
         message: `Invalid weight values. All weights must be numbers between 0 and 1. Invalid: ${invalidWeights.map(([key, value]) => `${key}=${value}`).join(', ')}` 
       });
@@ -730,6 +740,16 @@ export const findMatchesForGigById = async (req, res) => {
     } else if (weights.weight !== undefined && weights.industry !== undefined) {
       // Si les deux sont définis, utiliser la valeur de industry pour weight
       weights.weight = weights.industry;
+    }
+
+    // Normaliser activities/activity
+    if (weights.activities !== undefined && weights.activity === undefined) {
+      weights.activity = weights.activities;
+    } else if (weights.activity !== undefined && weights.activities === undefined) {
+      weights.activities = weights.activity;
+    } else if (weights.activities !== undefined && weights.activity !== undefined) {
+      // Si les deux sont définis, utiliser la valeur de activities pour activity
+      weights.activity = weights.activities;
     }
 
 
