@@ -1291,7 +1291,8 @@ export const findMatchesForGigById = async (req, res) => {
         }
         
         if (weights.skills > 0) {
-          totalScore += skillsMatch.score * weights.skills;
+          const skillsScore = requiredSkills.length > 0 ? matchingSkills.length / requiredSkills.length : 1;
+          totalScore += skillsScore * weights.skills;
           totalWeights += weights.skills;
         }
         
