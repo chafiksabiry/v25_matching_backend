@@ -701,6 +701,27 @@ export const findMatchesForGigById = async (req, res) => {
       activity: 0.10
     };
 
+    // Validate weights
+    const validWeightKeys = ['skills', 'languages', 'experience', 'region', 'timezone', 'industry', 'activity', 'availability'];
+    const invalidKeys = Object.keys(weights).filter(key => !validWeightKeys.includes(key));
+    
+    if (invalidKeys.length > 0) {
+      return res.status(StatusCodes.BAD_REQUEST).json({ 
+        message: `Invalid weight keys: ${invalidKeys.join(', ')}. Valid keys are: ${validWeightKeys.join(', ')}` 
+      });
+    }
+
+    // Validate weight values (should be between 0 and 1)
+    const invalidWeights = Object.entries(weights).filter(([key, value]) => 
+      typeof value !== 'number' || value < 0 || value > 1
+    );
+    
+    if (invalidWeights.length > 0) {
+      return res.status(StatusCodes.BAD_REQUEST).json({ 
+        message: `Invalid weight values. All weights must be numbers between 0 and 1. Invalid: ${invalidWeights.map(([key, value]) => `${key}=${value}`).join(', ')}` 
+      });
+    }
+
     // Normaliser les poids pour supporter les deux noms (industry et weight)
     if (weights.weight !== undefined && weights.industry === undefined) {
       weights.industry = weights.weight;
@@ -728,15 +749,32 @@ export const findMatchesForGigById = async (req, res) => {
     // Le filtrage se fera uniquement dans la phase séquentielle selon les poids
     console.log(`📊 Évaluation de ${agents.length} agents sans pré-filtrage`);
     
+    // Validate agents data
+    if (!agents || agents.length === 0) {
+      return res.status(StatusCodes.OK).json({
+        preferedmatches: [],
+        totalMatches: 0,
+        perfectMatches: 0,
+        partialMatches: 0,
+        noMatches: 0,
+        message: 'No agents available for matching'
+      });
+    }
+    
     // Garder tous les agents pour l'évaluation complète
     const agentsWithActivities = agents;
 
 
 
     const matches = await Promise.all(agentsWithActivities.map(async agent => {
+      try {
+        // Validate agent data
+        if (!agent || !agent._id) {
+          console.warn('⚠️ Skipping invalid agent:', agent);
+          return null;
+        }
 
-
-      // Language matching - utiliser les données populées
+        // Language matching - utiliser les données populées
       const requiredLanguages = gig.skills?.languages || [];
       const agentLanguages = agent.personalInfo?.languages || [];
       
@@ -1480,34 +1518,71 @@ export const findMatchesForGigById = async (req, res) => {
         },
         matchStatus: overallMatchStatus
       };
+      } catch (agentError) {
+        console.error(`❌ Error processing agent ${agent?._id}:`, agentError);
+        
+        // Return a default match result for this agent
+        return {
+          agentId: agent?._id || 'unknown',
+          totalMatchingScore: 0,
+          agentInfo: {
+            _id: agent?._id || 'unknown',
+            name: agent?.personalInfo?.name || 'Unknown Agent',
+            email: agent?.personalInfo?.email || '',
+            // Add minimal required fields
+            personalInfo: agent?.personalInfo || {},
+            availability: agent?.availability || {},
+            professionalSummary: agent?.professionalSummary || {},
+            skills: agent?.skills || {}
+          },
+          languageMatch: { score: 0, details: { matchStatus: 'error' } },
+          skillsMatch: { score: 0, details: { matchStatus: 'error' } },
+          industryMatch: { score: 0, details: { matchStatus: 'error' } },
+          activityMatch: { score: 0, details: { matchStatus: 'error' } },
+          experienceMatch: { score: 0, details: {}, matchStatus: 'error' },
+          timezoneMatch: { score: 0, details: {}, matchStatus: 'error' },
+          regionMatch: { score: 0, details: {}, matchStatus: 'error' },
+          availabilityMatch: { score: 0, details: {}, matchStatus: 'error' },
+          matchStatus: 'error'
+        };
+      }
     }));
 
+    // Filter out null results (agents that failed to process)
+    const validMatches = matches.filter(match => match !== null);
+    const failedMatches = matches.length - validMatches.length;
+    
+    if (failedMatches > 0) {
+      console.warn(`⚠️ ${failedMatches} agents failed to process and were excluded from results`);
+    }
+    
     // ⭐ VÉRIFIER SI TOUS LES WEIGHTS SONT À 0
     const allWeightsZero = Object.values(weights).every(weight => weight === 0);
     
     // Tracker pour compter les agents à chaque étape (déclaré en dehors des blocs conditionnels)
     const filteringSteps = {
-      totalAgentsEvaluated: matches.length,
+      totalAgentsEvaluated: validMatches.length,
+      failedAgents: failedMatches,
       steps: []
     };
 
-    let filteredMatches = matches;
+    let filteredMatches = validMatches;
     
     if (allWeightsZero) {
       console.log('🎯 TOUS LES WEIGHTS SONT À 0 - Aucun filtrage, garder tous les agents');
-      console.log(`📊 Tous les ${matches.length} agents seront retournés avec leurs scores individuels`);
+      console.log(`📊 Tous les ${validMatches.length} agents seront retournés avec leurs scores individuels`);
       
       // Pas de filtrage séquentiel, garder tous les agents
-      filteredMatches = matches;
+      filteredMatches = validMatches;
     } else {
             // ⭐ NOUVELLE LOGIQUE: Les weights déterminent les PRIORITÉS (pas des seuils)
       // Plus le weight est élevé, plus le critère est important pour le classement final
       // On ne fait plus de filtrage séquentiel, juste du tri par score total pondéré
       // ⭐ NOUVELLE APPROCHE: Pas de filtrage séquentiel, juste tri par score total pondéré
       // Tous les agents sont gardés, mais triés selon l'importance des critères (weights)
-      filteredMatches = matches;
+      filteredMatches = validMatches;
       
-      console.log(`📊 Tous les ${matches.length} agents gardés - Tri selon les priorités (weights)`);
+      console.log(`📊 Tous les ${validMatches.length} agents gardés - Tri selon les priorités (weights)`);
       console.log(`📋 Weights comme priorités:`, Object.entries(weights)
         .sort(([, a], [, b]) => b - a)
         .map(([criterion, weight]) => `${criterion}: ${weight}`)
@@ -1636,7 +1711,26 @@ export const findMatchesForGigById = async (req, res) => {
       filteringProcess: filteringSteps
     });
   } catch (error) {
-    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
+    console.error('❌ Error in findMatchesForGigById:', error);
+    
+    // Provide more detailed error information
+    let errorMessage = 'Internal server error';
+    let statusCode = StatusCodes.INTERNAL_SERVER_ERROR;
+    
+    if (error.name === 'CastError') {
+      errorMessage = 'Invalid gig ID format';
+      statusCode = StatusCodes.BAD_REQUEST;
+    } else if (error.name === 'ValidationError') {
+      errorMessage = 'Invalid request data';
+      statusCode = StatusCodes.BAD_REQUEST;
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    res.status(statusCode).json({ 
+      message: errorMessage,
+      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 };
 
