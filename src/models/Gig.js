@@ -1,29 +1,17 @@
-import { Document, model, Schema } from 'mongoose';
+import { model, Schema } from 'mongoose';
 import mongoose from 'mongoose';
-import countries from 'i18n-iso-countries';
-import frLocale from 'i18n-iso-countries/langs/fr.json' assert { type: 'json' };
-
-// Initialiser les pays en français
-countries.registerLocale(frLocale);
-
-// Fonction de validation pour les codes pays alpha-2
-const validateCountryCode = (value) => {
-  return countries.isValid(value) && value.length === 2;
-};
 
 const GigSchema = new Schema(
   {
     title: { type: String, required: false },
     description: { type: String, required: false },
     category: { type: String, required: false },
-    userId: { type: mongoose.Schema.Types.ObjectId, default: null },
-    companyId: { type: mongoose.Schema.Types.ObjectId, default: null },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', default: null },
     destination_zone: { 
-      type: String,
-      validate: {
-        validator: validateCountryCode,
-        message: 'Le code pays doit être un code alpha-2 valide (ex: FR, US, DE)'
-      }
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: 'Country', 
+      required: false 
     },
     activities: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Activity', required: false }],
     industries: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Industry', required: false }],
@@ -75,7 +63,7 @@ const GigSchema = new Schema(
       bonus: String,
       bonusAmount: String,
       structure: String,
-      currency: { type: String, required: false },
+      currency: { type: mongoose.Schema.Types.ObjectId, ref: 'Currency', required: false },
       minimumVolume: {
         amount: { type: String, required: false },
         period: { type: String, required: false },
@@ -110,28 +98,10 @@ const GigSchema = new Schema(
           },
         },
       ],
-      territories: [{ type: String }],
+      territories: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Country', required: false }],
     },
-    documentation: {
-      product: [
-        {
-          name: { type: String, required: false },
-          url: { type: String, required: false },
-        },
-      ],
-      process: [
-        {
-          name: { type: String, required: false },
-          url: { type: String, required: false },
-        },
-      ],
-      training: [
-        {
-          name: { type: String, required: false },
-          url: { type: String, required: false },
-        },
-      ],
-    },
+    highlights: [{ type: String, required: false }],
+    deliverables: [{ type: String, required: false }],
     status: { 
       type: String, 
       enum: ['to_activate', 'active', 'inactive', 'archived'], 
@@ -142,4 +112,8 @@ const GigSchema = new Schema(
   { timestamps: true }
 );
 
-export const Gig = model('Gig', GigSchema);
+
+const Gig = model('Gig', GigSchema);
+
+export default Gig;
+export { GigSchema };

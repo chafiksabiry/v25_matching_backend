@@ -28,9 +28,8 @@ const timezoneSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Index pour optimiser les recherches
+// Index pour optimiser les recherches (zoneName déjà indexé via unique: true)
 timezoneSchema.index({ countryCode: 1 });
-timezoneSchema.index({ zoneName: 1 });
 
 // Middleware pour mettre à jour lastUpdated
 timezoneSchema.pre('save', function(next) {

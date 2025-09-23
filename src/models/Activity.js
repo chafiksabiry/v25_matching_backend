@@ -26,8 +26,7 @@ const activitySchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Index pour optimiser les recherches
-activitySchema.index({ name: 1 });
+// Index pour optimiser les recherches (name déjà indexé via unique: true)
 activitySchema.index({ category: 1 });
 activitySchema.index({ isActive: 1 });
 

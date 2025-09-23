@@ -1,5 +1,5 @@
 import GigMatchingWeights from '../models/GigMatchingWeights.js';
-import { Gig } from '../models/Gig.js';
+import Gig from '../models/Gig.js';
 
 // Create or update matching weights for a gig
 export const createOrUpdateWeights = async (req, res) => {

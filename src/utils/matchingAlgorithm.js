@@ -407,32 +407,60 @@ function calculateRegionScore(agent, gig) {
     return 0.5; // Score neutre si pas de destination définie
   }
 
-  // Pour l'instant, on utilise un score basé sur la disponibilité de l'agent
-  // Dans une implémentation complète, on comparerait les timezones et pays
   console.log("Region matching:", {
     agentId: agent._id,
     gigId: gig._id,
-    destinationZone: gig.destination_zone,
-    hasAgentTimezone: !!agent.availability?.timeZone
+    gigDestinationZone: gig.destination_zone,
+    agentTimezone: agent.availability?.timeZone
   });
 
-  // Si l'agent a une timezone définie, on considère qu'il peut potentiellement matcher
-  // La comparaison détaillée se fait dans le contrôleur avec les données de timezone
+  // Comparaison principale : alpha2 code du pays de destination vs countryCode de la timezone de l'agent
+  if (agent.availability?.timeZone && gig.destination_zone) {
+    // Si les données sont populées, on peut comparer les codes pays
+    if (gig.destination_zone.cca2 && agent.availability.timeZone.countryCode) {
+      const gigCountryCode = gig.destination_zone.cca2; // alpha-2 code du pays de destination
+      const agentCountryCode = agent.availability.timeZone.countryCode; // alpha-2 code du pays de la timezone
+      
+      if (gigCountryCode === agentCountryCode) {
+        console.log("Perfect country code match:", { 
+          gigCountryCode, 
+          agentCountryCode,
+          gigCountry: gig.destination_zone.name?.common,
+          agentTimezone: agent.availability.timeZone.zoneName 
+        });
+        return 1.0; // Match parfait : même pays
+      } else {
+        console.log("Country code mismatch:", { 
+          gigCountryCode, 
+          agentCountryCode,
+          gigCountry: gig.destination_zone.name?.common,
+          agentTimezone: agent.availability.timeZone.zoneName 
+        });
+        return 0.2; // Score faible : pays différents
+      }
+    }
+  }
+
+  // Score de fallback basé sur la présence de données
   if (agent.availability?.timeZone) {
-    return 0.8; // Score élevé si l'agent a une timezone définie
+    console.log("Agent has timezone but no populated data for comparison");
+    return 0.6; // Score moyen si l'agent a une timezone
   } else {
-    return 0.3; // Score faible si pas de timezone
+    console.log("Agent has no timezone information");
+    return 0.1; // Score très faible si pas de timezone
   }
 }
 
 function calculateIndustryScore(agent, gig) {
+  // Nouveau schéma: gig.industries est un array d'ObjectIds
   if (
-    !gig.category ||
+    (!gig.category && (!gig.industries || gig.industries.length === 0)) ||
     !agent.professionalSummary ||
     !agent.professionalSummary.industries
   ) {
     console.log("Missing industry data:", {
       gigCategory: gig.category,
+      gigIndustries: gig.industries,
       agentIndustries: agent.professionalSummary?.industries,
     });
     return 0.0;
@@ -448,39 +476,43 @@ function calculateIndustryScore(agent, gig) {
       .replace(/\s+/g, "");
   };
 
-  const gigCategory = normalizeString(gig.category);
+  let hasMatchingIndustry = false;
+
+  // Si le gig a une catégorie (backward compatibility)
+  if (gig.category) {
+    const gigCategory = normalizeString(gig.category);
+    hasMatchingIndustry = agent.professionalSummary.industries.some(
+      (industry) => {
+        const normalizedIndustry = normalizeString(industry);
+        const isExactMatch = normalizedIndustry === gigCategory;
+        const isPartialMatch =
+          normalizedIndustry.includes(gigCategory) ||
+          gigCategory.includes(normalizedIndustry);
+        return isExactMatch || isPartialMatch;
+      }
+    );
+  }
+
+  // Si le gig a des industries (nouveau schéma)
+  if (gig.industries && gig.industries.length > 0 && !hasMatchingIndustry) {
+    // Pour l'instant, on compare les ObjectIds directement
+    // Dans une implémentation complète, on populaterait les industries
+    hasMatchingIndustry = agent.professionalSummary.industries.some(
+      (agentIndustryId) => {
+        return gig.industries.some(gigIndustryId => 
+          gigIndustryId.toString() === agentIndustryId.toString()
+        );
+      }
+    );
+  }
 
   console.log("Industry comparison:", {
     gigId: gig._id,
-    originalGigCategory: gig.category,
-    normalizedGigCategory: gigCategory,
+    gigCategory: gig.category,
+    gigIndustries: gig.industries,
     agentIndustries: agent.professionalSummary.industries,
-    normalizedAgentIndustries:
-      agent.professionalSummary.industries.map(normalizeString),
+    hasMatchingIndustry,
   });
-
-  // Vérifier si l'une des industries du rep correspond à la catégorie du gig
-  const hasMatchingIndustry = agent.professionalSummary.industries.some(
-    (industry) => {
-      const normalizedIndustry = normalizeString(industry);
-
-      // Vérifier la correspondance exacte ou partielle
-      const isExactMatch = normalizedIndustry === gigCategory;
-      const isPartialMatch =
-        normalizedIndustry.includes(gigCategory) ||
-        gigCategory.includes(normalizedIndustry);
-
-      console.log("Comparing:", {
-        industry,
-        normalizedIndustry,
-        gigCategory,
-        isExactMatch,
-        isPartialMatch,
-      });
-
-      return isExactMatch || isPartialMatch;
-    }
-  );
 
   return hasMatchingIndustry ? 1.0 : 0.0;
 }
@@ -695,8 +727,12 @@ export const findMatchesForGig = async (
 
       case "industry":
         filteredAgents = filteredAgents.filter((agent) => {
-          if (!agent.professionalSummary?.industries || !gig.category)
+          if (!agent.professionalSummary?.industries) return false;
+          
+          // Nouveau schéma: vérifier gig.industries ou gig.category (backward compatibility)
+          if (!gig.category && (!gig.industries || gig.industries.length === 0)) {
             return false;
+          }
 
           const normalizeString = (str) => {
             if (!str) return "";
@@ -707,45 +743,86 @@ export const findMatchesForGig = async (
               .replace(/\s+/g, "");
           };
 
-          const normalizedGigCategory = normalizeString(gig.category);
+          let hasMatch = false;
 
-          return agent.professionalSummary.industries.some((industry) => {
-            const normalizedIndustry = normalizeString(industry);
-            const isExactMatch = normalizedIndustry === normalizedGigCategory;
-            const isPartialMatch =
-              normalizedIndustry.includes(normalizedGigCategory) ||
-              normalizedGigCategory.includes(normalizedIndustry);
-
-            console.log("Industry comparison:", {
-              agentId: agent._id,
-              gigId: gig._id,
-              gigCategory: gig.category,
-              agentIndustry: industry,
-              isExactMatch,
-              isPartialMatch,
+          // Vérifier avec la catégorie (backward compatibility)
+          if (gig.category) {
+            const normalizedGigCategory = normalizeString(gig.category);
+            hasMatch = agent.professionalSummary.industries.some((industry) => {
+              const normalizedIndustry = normalizeString(industry);
+              const isExactMatch = normalizedIndustry === normalizedGigCategory;
+              const isPartialMatch =
+                normalizedIndustry.includes(normalizedGigCategory) ||
+                normalizedGigCategory.includes(normalizedIndustry);
+              return isExactMatch || isPartialMatch;
             });
+          }
 
-            return isExactMatch || isPartialMatch;
+          // Vérifier avec les industries (nouveau schéma)
+          if (!hasMatch && gig.industries && gig.industries.length > 0) {
+            hasMatch = agent.professionalSummary.industries.some((agentIndustryId) => {
+              return gig.industries.some(gigIndustryId => 
+                gigIndustryId.toString() === agentIndustryId.toString()
+              );
+            });
+          }
+
+          console.log("Industry filtering:", {
+            agentId: agent._id,
+            gigId: gig._id,
+            gigCategory: gig.category,
+            gigIndustries: gig.industries,
+            agentIndustries: agent.professionalSummary.industries,
+            hasMatch,
           });
+
+          return hasMatch;
         });
         break;
 
       case "region":
         filteredAgents = filteredAgents.filter((agent) => {
-          if (!gig.destination_zone || !agent.availability?.timeZone) {
+          if (!gig.destination_zone) {
             return false;
           }
 
-          // Pour l'instant, on accepte tous les agents qui ont une timezone
-          // La comparaison détaillée se fait dans le contrôleur
-          console.log("Region filtering:", {
+          // Comparaison des codes pays : destination_zone.cca2 vs timeZone.countryCode
+          if (agent.availability?.timeZone && gig.destination_zone) {
+            // Si les données sont populées, on peut comparer les codes pays
+            if (gig.destination_zone.cca2 && agent.availability.timeZone.countryCode) {
+              const gigCountryCode = gig.destination_zone.cca2;
+              const agentCountryCode = agent.availability.timeZone.countryCode;
+              
+              if (gigCountryCode === agentCountryCode) {
+                console.log("Region filtering - Country code match:", {
+                  agentId: agent._id,
+                  gigId: gig._id,
+                  countryCode: gigCountryCode,
+                  gigCountry: gig.destination_zone.name?.common,
+                  agentTimezone: agent.availability.timeZone.zoneName
+                });
+                return true; // Match parfait
+              }
+            }
+          }
+
+          // Accepter les agents qui ont une timezone (même si pas de match parfait)
+          if (agent.availability?.timeZone) {
+            console.log("Region filtering - Agent has timezone:", {
+              agentId: agent._id,
+              gigId: gig._id,
+              agentTimezone: agent.availability.timeZone.zoneName || agent.availability.timeZone.toString(),
+              gigDestination: gig.destination_zone.name?.common || gig.destination_zone.toString()
+            });
+            return true;
+          }
+
+          console.log("Region filtering - No timezone info:", {
             agentId: agent._id,
-            gigId: gig._id,
-            destinationZone: gig.destination_zone,
-            agentTimezone: agent.availability.timeZone
+            gigId: gig._id
           });
 
-          return true; // Accepte tous les agents avec timezone pour l'instant
+          return false; // Rejeter les agents sans timezone
         });
         break;
     }
@@ -853,18 +930,26 @@ export const findGigsForAgent = async (
 
   const finalWeights = { ...defaultWeights, ...weights };
 
-  // Filtrer d'abord les gigs qui ont la même catégorie que l'industrie de l'agent
+  // Filtrer d'abord les gigs qui ont une industrie correspondante à l'agent
   const industryMatches = gigs.filter((gig) => {
     if (
-      !gig.category ||
       !agent.professionalSummary ||
       !agent.professionalSummary.industries
     ) {
-      console.log("Skipping gig due to missing data:", {
+      console.log("Skipping gig due to missing agent data:", {
         gigId: gig._id,
-        gigCategory: gig.category,
         hasProfessionalSummary: !!agent.professionalSummary,
         hasIndustries: !!agent.professionalSummary?.industries,
+      });
+      return false;
+    }
+
+    // Nouveau schéma: vérifier gig.industries ou gig.category (backward compatibility)
+    if (!gig.category && (!gig.industries || gig.industries.length === 0)) {
+      console.log("Skipping gig due to missing industry data:", {
+        gigId: gig._id,
+        gigCategory: gig.category,
+        gigIndustries: gig.industries,
       });
       return false;
     }
@@ -878,26 +963,36 @@ export const findGigsForAgent = async (
         .replace(/\s+/g, "");
     };
 
-    const gigCategory = normalizeString(gig.category);
+    let isMatch = false;
 
-    const isMatch = agent.professionalSummary.industries.some((industry) => {
-      const normalizedIndustry = normalizeString(industry);
-      const isExactMatch = normalizedIndustry === gigCategory;
-      const isPartialMatch =
-        normalizedIndustry.includes(gigCategory) ||
-        gigCategory.includes(normalizedIndustry);
-
-      console.log("Comparing industry:", {
-        gigId: gig._id,
-        gigCategory: gig.category,
-        normalizedGigCategory: gigCategory,
-        agentIndustry: industry,
-        normalizedAgentIndustry: normalizedIndustry,
-        isExactMatch,
-        isPartialMatch,
+    // Vérifier avec la catégorie (backward compatibility)
+    if (gig.category) {
+      const gigCategory = normalizeString(gig.category);
+      isMatch = agent.professionalSummary.industries.some((industry) => {
+        const normalizedIndustry = normalizeString(industry);
+        const isExactMatch = normalizedIndustry === gigCategory;
+        const isPartialMatch =
+          normalizedIndustry.includes(gigCategory) ||
+          gigCategory.includes(normalizedIndustry);
+        return isExactMatch || isPartialMatch;
       });
+    }
 
-      return isExactMatch || isPartialMatch;
+    // Vérifier avec les industries (nouveau schéma)
+    if (!isMatch && gig.industries && gig.industries.length > 0) {
+      isMatch = agent.professionalSummary.industries.some((agentIndustryId) => {
+        return gig.industries.some(gigIndustryId => 
+          gigIndustryId.toString() === agentIndustryId.toString()
+        );
+      });
+    }
+
+    console.log("Industry matching for gig:", {
+      gigId: gig._id,
+      gigCategory: gig.category,
+      gigIndustries: gig.industries,
+      agentIndustries: agent.professionalSummary.industries,
+      isMatch,
     });
 
     return isMatch;
