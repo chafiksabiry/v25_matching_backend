@@ -26,8 +26,7 @@ const technicalSkillSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Index pour optimiser les recherches
-technicalSkillSchema.index({ name: 1 });
+// Index pour optimiser les recherches (name déjà indexé via unique: true)
 technicalSkillSchema.index({ category: 1 });
 technicalSkillSchema.index({ isActive: 1 });
 

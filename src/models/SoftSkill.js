@@ -26,8 +26,7 @@ const softSkillSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Index pour optimiser les recherches
-softSkillSchema.index({ name: 1 });
+// Index pour optimiser les recherches (name déjà indexé via unique: true)
 softSkillSchema.index({ category: 1 });
 softSkillSchema.index({ isActive: 1 });
 

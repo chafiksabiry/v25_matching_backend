@@ -26,8 +26,7 @@ const industrySchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Index pour optimiser les recherches
-industrySchema.index({ name: 1 });
+// Index pour optimiser les recherches (name déjà indexé via unique: true)
 industrySchema.index({ category: 1 });
 industrySchema.index({ isActive: 1 });
 
