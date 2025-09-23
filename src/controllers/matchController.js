@@ -692,13 +692,13 @@ export const findMatchesForGigById = async (req, res) => {
 
     // Get weights from request body or use defaults
     const weights = req.body.weights || { 
-      skills: 0.20, 
-      languages: 0.15, 
-      experience: 0.20, 
-      region: 0.15,
-      timezone: 0.10, 
-      industry: 0.10,
-      activity: 0.10
+      skills: 0, 
+      languages: 0, 
+      experience: 0, 
+      region: 0,
+      timezone: 0, 
+      industry: 0,
+      activity: 0
     };
 
     console.log('🔍 Received weights from frontend:', weights);
@@ -794,7 +794,7 @@ export const findMatchesForGigById = async (req, res) => {
           return null;
         }
 
-        // Language matching - utiliser les données populées
+      // Language matching - utiliser les données populées
       const requiredLanguages = gig.skills?.languages || [];
       const agentLanguages = agent.personalInfo?.languages || [];
       
@@ -1575,7 +1575,7 @@ export const findMatchesForGigById = async (req, res) => {
     if (failedMatches > 0) {
       console.warn(`⚠️ ${failedMatches} agents failed to process and were excluded from results`);
     }
-    
+
     // ⭐ VÉRIFIER SI TOUS LES WEIGHTS SONT À 0
     const allWeightsZero = Object.values(weights).every(weight => weight === 0);
     
