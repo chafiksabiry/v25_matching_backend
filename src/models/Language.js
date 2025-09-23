@@ -36,9 +36,7 @@ const languageSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Index pour optimiser les recherches
-languageSchema.index({ name: 1 });
-languageSchema.index({ code: 1 });
+// Index pour optimiser les recherches (name et code déjà indexés via unique: true)
 languageSchema.index({ iso639_1: 1 });
 languageSchema.index({ isActive: 1 });
 

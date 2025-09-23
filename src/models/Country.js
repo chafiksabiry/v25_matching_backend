@@ -1,27 +1,6 @@
-import { Document, model, Schema } from 'mongoose';
+import { model, Schema } from 'mongoose';
 
-export interface ICountry extends Document {
-  name: {
-    common: string;
-    official: string;
-    nativeName: {
-      [languageCode: string]: {
-        official: string;
-        common: string;
-      };
-    };
-  };
-  cca2: string;
-  flags?: {
-    png?: string;
-    svg?: string;
-    alt?: string;
-  };
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export const CountrySchema = new Schema<ICountry>(
+const CountrySchema = new Schema(
   {
     name: {
       common: { type: String, required: true },
@@ -56,4 +35,7 @@ export const CountrySchema = new Schema<ICountry>(
 CountrySchema.index({ 'name.common': 1 });
 CountrySchema.index({ 'name.official': 1 });
 
-export const Country = model<ICountry>('Country', CountrySchema);
+const Country = model('Country', CountrySchema);
+
+export default Country;
+export { CountrySchema };

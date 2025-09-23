@@ -26,8 +26,7 @@ const professionalSkillSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Index pour optimiser les recherches
-professionalSkillSchema.index({ name: 1 });
+// Index pour optimiser les recherches (name déjà indexé via unique: true)
 professionalSkillSchema.index({ category: 1 });
 professionalSkillSchema.index({ isActive: 1 });
 

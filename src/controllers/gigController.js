@@ -1,4 +1,4 @@
-import { Gig } from '../models/Gig.js';
+import Gig from '../models/Gig.js';
 import { StatusCodes } from 'http-status-codes';
 import Agent from '../models/Agent.js';
 import { findMatches } from '../utils/matchingUtils.js';

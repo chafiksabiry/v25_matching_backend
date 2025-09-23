@@ -1,7 +1,7 @@
 import { model, Schema } from 'mongoose';
 import mongoose from 'mongoose';
 
-export const GigSchema = new Schema(
+const GigSchema = new Schema(
   {
     title: { type: String, required: false },
     description: { type: String, required: false },
@@ -113,4 +113,7 @@ export const GigSchema = new Schema(
 );
 
 
-export const Gig = model('Gig', GigSchema);
+const Gig = model('Gig', GigSchema);
+
+export default Gig;
+export { GigSchema };

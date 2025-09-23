@@ -1,15 +1,6 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Schema } from 'mongoose';
 
-export interface ICurrency extends Document {
-  code: string;
-  name: string;
-  symbol: string;
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-const currencySchema = new Schema<ICurrency>(
+const currencySchema = new Schema(
   {
     code: {
       type: String,
@@ -41,9 +32,11 @@ const currencySchema = new Schema<ICurrency>(
   }
 );
 
-// Index pour améliorer les performances de recherche
-currencySchema.index({ code: 1 });
+// Index pour améliorer les performances de recherche (code déjà indexé via unique: true)
 currencySchema.index({ name: 1 });
 currencySchema.index({ isActive: 1 });
 
-export const Currency = mongoose.model<ICurrency>('Currency', currencySchema);
+const Currency = mongoose.model('Currency', currencySchema);
+
+export default Currency;
+export { currencySchema };
