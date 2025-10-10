@@ -273,7 +273,10 @@ export const getAllMatches = async (req, res) => {
   try {
     const matches = await Match.find()
       .populate('agentId')
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: { path: 'commission.currency' }
+      });
     res.status(StatusCodes.OK).json(matches);
   } catch (error) {
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
@@ -285,7 +288,10 @@ export const getMatchById = async (req, res) => {
   try {
     const match = await Match.findById(req.params.id)
       .populate('agentId')
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: { path: 'commission.currency' }
+      });
     
     if (!match) {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Match not found' });
@@ -339,7 +345,10 @@ export const getMatchById = async (req, res) => {
 export const getMatchesForAgent = async (req, res) => {
   try {
     const matches = await Match.find({ agentId: req.params.agentId })
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: { path: 'commission.currency' }
+      });
     res.status(StatusCodes.OK).json(matches);
   } catch (error) {
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
@@ -2143,7 +2152,10 @@ export const createGigAgentFromMatch = async (req, res) => {
     // Retourner la réponse avec les détails
     const populatedGigAgent = await GigAgent.findById(savedGigAgent._id)
       .populate('agentId')
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: { path: 'commission.currency' }
+      });
 
     res.status(StatusCodes.CREATED).json({
       message: 'Assignation créée avec succès',

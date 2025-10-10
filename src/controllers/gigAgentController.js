@@ -9,7 +9,10 @@ export const getAllGigAgents = async (req, res) => {
   try {
     const gigAgents = await GigAgent.find()
       .populate('agentId')
-      .populate('gigId')
+      .populate({
+        path: 'gigId',
+        populate: { path: 'commission.currency' }
+      })
       .sort({ createdAt: -1 });
     
     res.status(StatusCodes.OK).json(gigAgents);
@@ -24,7 +27,10 @@ export const getGigAgentById = async (req, res) => {
   try {
     const gigAgent = await GigAgent.findById(req.params.id)
       .populate('agentId')
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: { path: 'commission.currency' }
+      });
     
     if (!gigAgent) {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'GigAgent not found' });
@@ -41,7 +47,10 @@ export const getGigAgentById = async (req, res) => {
 export const getGigAgentsForAgent = async (req, res) => {
   try {
     const gigAgents = await GigAgent.find({ agentId: req.params.agentId })
-      .populate('gigId')
+      .populate({
+        path: 'gigId',
+        populate: { path: 'commission.currency' }
+      })
       .sort({ createdAt: -1 });
     
     res.status(StatusCodes.OK).json(gigAgents);
@@ -146,7 +155,10 @@ export const createGigAgent = async (req, res) => {
     // Retourner la réponse avec les détails
     const populatedGigAgent = await GigAgent.findById(savedGigAgent._id)
       .populate('agentId')
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: { path: 'commission.currency' }
+      });
 
     res.status(StatusCodes.CREATED).json({
       message: 'Assignation créée avec succès',
@@ -896,7 +908,10 @@ export const updateGigAgent = async (req, res) => {
       req.params.id,
       updateData,
       { new: true, runValidators: true }
-    ).populate('agentId').populate('gigId');
+    ).populate('agentId').populate({
+      path: 'gigId',
+      populate: { path: 'commission.currency' }
+    });
 
     if (!gigAgent) {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'GigAgent not found' });
@@ -935,7 +950,10 @@ export const resendEmailNotification = async (req, res) => {
   try {
     const gigAgent = await GigAgent.findById(req.params.id)
       .populate('agentId')
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: { path: 'commission.currency' }
+      });
 
     if (!gigAgent) {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'GigAgent not found' });
@@ -971,7 +989,10 @@ export const getInvitedGigsForAgent = async (req, res) => {
       agentId: req.params.agentId,
       enrollmentStatus: 'invited'
     })
-    .populate('gigId')
+    .populate({
+      path: 'gigId',
+      populate: { path: 'commission.currency' }
+    })
     .sort({ createdAt: -1 });
     
     res.status(StatusCodes.OK).json(gigAgents);
@@ -994,7 +1015,10 @@ export const getInvitedAgentsForCompany = async (req, res) => {
       gigId: { $in: gigIds }
     })
     .populate('agentId')
-    .populate('gigId')
+    .populate({
+      path: 'gigId',
+      populate: { path: 'commission.currency' }
+    })
     .sort({ createdAt: -1 });
     
     // Get unique agents
@@ -1018,7 +1042,10 @@ export const getEnrolledGigsForAgent = async (req, res) => {
       agentId: req.params.agentId,
       enrollmentStatus: 'enrolled'
     })
-    .populate('gigId')
+    .populate({
+      path: 'gigId',
+      populate: { path: 'commission.currency' }
+    })
     .sort({ createdAt: -1 });
     
     res.status(StatusCodes.OK).json(gigAgents);
@@ -1040,7 +1067,10 @@ export const getEnrollmentRequestsForCompany = async (req, res) => {
       enrollmentStatus: 'requested',
       gigId: { $in: gigIds }
     })
-    .populate('gigId')
+    .populate({
+      path: 'gigId',
+      populate: { path: 'commission.currency' }
+    })
     .populate('agentId')
     .sort({ createdAt: -1 });
     
@@ -1064,7 +1094,10 @@ export const getActiveAgentsForCompany = async (req, res) => {
       gigId: { $in: gigIds }
     })
     .populate('agentId')
-    .populate('gigId')
+    .populate({
+      path: 'gigId',
+      populate: { path: 'commission.currency' }
+    })
     .sort({ createdAt: -1 });
     
     // Retourner tous les GigAgents actifs
@@ -1112,7 +1145,10 @@ export const agentAcceptInvitation = async (req, res) => {
     // Récupérer le gigAgent mis à jour avec les relations
     const updatedGigAgent = await GigAgent.findById(gigAgent._id)
       .populate('agentId')
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: { path: 'commission.currency' }
+      });
 
     res.status(StatusCodes.OK).json({
       message: 'Invitation accepted successfully',
@@ -1164,7 +1200,10 @@ export const acceptEnrollmentRequest = async (req, res) => {
     // Récupérer le gigAgent mis à jour avec les relations
     const updatedGigAgent = await GigAgent.findById(gigAgent._id)
       .populate('agentId')
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: { path: 'commission.currency' }
+      });
 
     res.status(StatusCodes.OK).json({
       message: 'Enrollment request accepted successfully',
@@ -1211,7 +1250,10 @@ export const agentRejectInvitation = async (req, res) => {
     // Récupérer le gigAgent mis à jour avec les relations
     const updatedGigAgent = await GigAgent.findById(gigAgent._id)
       .populate('agentId')
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: { path: 'commission.currency' }
+      });
 
     res.status(StatusCodes.OK).json({
       message: 'Invitation rejected successfully',
@@ -1273,7 +1315,10 @@ export const sendEnrollmentRequest = async (req, res) => {
     // Récupérer le gigAgent mis à jour avec les relations
     const updatedGigAgent = await GigAgent.findById(gigAgent._id)
       .populate('agentId')
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: { path: 'commission.currency' }
+      });
 
     res.status(StatusCodes.OK).json({
       message: 'Enrollment request sent successfully',
@@ -1295,7 +1340,10 @@ export const getGigAgentsByStatus = async (req, res) => {
     
     const gigAgents = await GigAgent.find({ status })
       .populate('agentId')
-      .populate('gigId')
+      .populate({
+        path: 'gigId',
+        populate: { path: 'commission.currency' }
+      })
       .sort({ createdAt: -1 });
 
     res.status(StatusCodes.OK).json({

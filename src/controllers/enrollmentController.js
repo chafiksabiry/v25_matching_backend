@@ -88,13 +88,19 @@ export const acceptEnrollment = async (req, res) => {
     if (token) {
       gigAgent = await GigAgent.findOne({ invitationToken: token })
         .populate('agentId')
-        .populate('gigId');
+        .populate({
+          path: 'gigId',
+          populate: { path: 'commission.currency' }
+        });
     }
     // Option 2: Accepter via ID (depuis la plateforme)
     else if (enrollmentId) {
       gigAgent = await GigAgent.findById(enrollmentId)
         .populate('agentId')
-        .populate('gigId');
+        .populate({
+          path: 'gigId',
+          populate: { path: 'commission.currency' }
+        });
     }
     else {
       return res.status(StatusCodes.BAD_REQUEST).json({ 
@@ -165,13 +171,19 @@ export const rejectEnrollment = async (req, res) => {
     if (token) {
       gigAgent = await GigAgent.findOne({ invitationToken: token })
         .populate('agentId')
-        .populate('gigId');
+        .populate({
+          path: 'gigId',
+          populate: { path: 'commission.currency' }
+        });
     }
     // Option 2: Refuser via ID (depuis la plateforme)
     else if (enrollmentId) {
       gigAgent = await GigAgent.findById(enrollmentId)
         .populate('agentId')
-        .populate('gigId');
+        .populate({
+          path: 'gigId',
+          populate: { path: 'commission.currency' }
+        });
     }
     else {
       return res.status(StatusCodes.BAD_REQUEST).json({ 
@@ -309,7 +321,10 @@ export const resendEnrollmentInvitation = async (req, res) => {
 
     const gigAgent = await GigAgent.findById(id)
       .populate('agentId')
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: { path: 'commission.currency' }
+      });
 
     if (!gigAgent) {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Enrôlement non trouvé' });
@@ -404,7 +419,10 @@ export const acceptEnrollmentById = async (req, res) => {
 
     const gigAgent = await GigAgent.findById(id)
       .populate('agentId')
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: { path: 'commission.currency' }
+      });
 
     if (!gigAgent) {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Enrôlement non trouvé' });
@@ -520,7 +538,10 @@ export const rejectEnrollmentById = async (req, res) => {
 
     const gigAgent = await GigAgent.findById(id)
       .populate('agentId')
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: { path: 'commission.currency' }
+      });
 
     if (!gigAgent) {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Enrôlement non trouvé' });
@@ -628,7 +649,10 @@ export const acceptEnrollmentRequest = async (req, res) => {
 
     const gigAgent = await GigAgent.findById(enrollmentId)
       .populate('agentId')
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: { path: 'commission.currency' }
+      });
 
     if (!gigAgent) {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Demande d\'enrôlement non trouvée' });
@@ -686,7 +710,10 @@ export const rejectEnrollmentRequest = async (req, res) => {
 
     const gigAgent = await GigAgent.findById(enrollmentId)
       .populate('agentId')
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: { path: 'commission.currency' }
+      });
 
     if (!gigAgent) {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Demande d\'enrôlement non trouvée' });
