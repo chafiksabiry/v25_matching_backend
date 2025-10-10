@@ -318,6 +318,25 @@ const agentSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Gig'
   }],
+  // 🆕 Gigs tracking with status
+  gigs: [{
+    gigId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Gig',
+      required: true
+    },
+    status: {
+      type: String,
+      enum: ['invited', 'requested', 'enrolled', 'rejected', 'expired', 'cancelled'],
+      required: true
+    },
+    enrollmentDate: Date,
+    invitationDate: Date,
+    updatedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   achievements: [achievementSchema],
   lastUpdated: {
     type: Date,

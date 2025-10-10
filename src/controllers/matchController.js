@@ -276,7 +276,11 @@ export const getAllMatches = async (req, res) => {
       .populate('agentId')
       .populate({
         path: 'gigId',
-        populate: { path: 'commission.currency' }
+        populate: [
+          { path: 'commission.currency' },
+          { path: 'destination_zone' },
+          { path: 'availability.time_zone' }
+        ]
       });
     res.status(StatusCodes.OK).json(matches);
   } catch (error) {
@@ -291,7 +295,11 @@ export const getMatchById = async (req, res) => {
       .populate('agentId')
       .populate({
         path: 'gigId',
-        populate: { path: 'commission.currency' }
+        populate: [
+          { path: 'commission.currency' },
+          { path: 'destination_zone' },
+          { path: 'availability.time_zone' }
+        ]
       });
     
     if (!match) {
@@ -348,7 +356,11 @@ export const getMatchesForAgent = async (req, res) => {
     const matches = await Match.find({ agentId: req.params.agentId })
       .populate({
         path: 'gigId',
-        populate: { path: 'commission.currency' }
+        populate: [
+          { path: 'commission.currency' },
+          { path: 'destination_zone' },
+          { path: 'availability.time_zone' }
+        ]
       });
     res.status(StatusCodes.OK).json(matches);
   } catch (error) {
@@ -2155,7 +2167,11 @@ export const createGigAgentFromMatch = async (req, res) => {
       .populate('agentId')
       .populate({
         path: 'gigId',
-        populate: { path: 'commission.currency' }
+        populate: [
+          { path: 'commission.currency' },
+          { path: 'destination_zone' },
+          { path: 'availability.time_zone' }
+        ]
       });
 
     res.status(StatusCodes.CREATED).json({

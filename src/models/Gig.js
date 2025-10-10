@@ -102,6 +102,25 @@ const GigSchema = new Schema(
     },
     highlights: [{ type: String, required: false }],
     deliverables: [{ type: String, required: false }],
+    // 🆕 Agents tracking with status
+    agents: [{
+      agentId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Agent',
+        required: true
+      },
+      status: {
+        type: String,
+        enum: ['invited', 'requested', 'enrolled', 'rejected', 'expired', 'cancelled'],
+        required: true
+      },
+      enrollmentDate: Date,
+      invitationDate: Date,
+      updatedAt: {
+        type: Date,
+        default: Date.now
+      }
+    }],
     status: { 
       type: String, 
       enum: ['to_activate', 'active', 'inactive', 'archived'], 

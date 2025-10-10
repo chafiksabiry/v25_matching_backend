@@ -1,0 +1,304 @@
+{
+  "info": {
+    "name": "Agent-Gig Relationship API Tests",
+    "description": "Tests pour le nouveau système de synchronisation des relations Agent-Gig avec statuts",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Invitation Flow",
+      "item": [
+        {
+          "name": "1.1 Company Invite Agent",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"agentId\": \"68347eb86e2a220b4066a877\",\n  \"gigId\": \"687d22e341c851ddf8e90462\",\n  \"notes\": \"Perfect match for this position\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/gig-agents",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "gig-agents"]
+            },
+            "description": "Crée une invitation - Synchronise automatiquement dans Agent.gigs et Gig.agents avec status 'invited'"
+          }
+        },
+        {
+          "name": "1.2 Get Agent Invited Gigs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/api/gig-agents/agent-gigs/68347eb86e2a220b4066a877?status=invited",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "gig-agents", "agent-gigs", "68347eb86e2a220b4066a877"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "invited"
+                }
+              ]
+            },
+            "description": "Récupère tous les gigs avec status 'invited' pour cet agent"
+          }
+        },
+        {
+          "name": "1.3 Agent Accept Invitation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Excited to join this gig!\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/gig-agents/invitations/{{GIGAGENT_ID}}/accept",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "gig-agents", "invitations", "{{GIGAGENT_ID}}", "accept"]
+            },
+            "description": "Agent accepte l'invitation - Status devient 'enrolled'"
+          }
+        },
+        {
+          "name": "1.4 Get Agent Enrolled Gigs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/api/gig-agents/agent-gigs/68347eb86e2a220b4066a877?status=enrolled",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "gig-agents", "agent-gigs", "68347eb86e2a220b4066a877"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "enrolled"
+                }
+              ]
+            },
+            "description": "Récupère tous les gigs avec status 'enrolled' pour cet agent"
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Request Flow",
+      "item": [
+        {
+          "name": "2.1 Agent Request Enrollment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"I would love to work on this gig\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/gig-agents/enrollment-request/68347eb86e2a220b4066a877/687d22e341c851ddf8e90462",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "gig-agents", "enrollment-request", "68347eb86e2a220b4066a877", "687d22e341c851ddf8e90462"]
+            },
+            "description": "Agent demande à rejoindre un gig - Status 'requested'"
+          }
+        },
+        {
+          "name": "2.2 Get Gig Requested Agents",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/api/gig-agents/gig-agents/687d22e341c851ddf8e90462?status=requested",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "gig-agents", "gig-agents", "687d22e341c851ddf8e90462"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "requested"
+                }
+              ]
+            },
+            "description": "Récupère tous les agents avec status 'requested' pour ce gig"
+          }
+        },
+        {
+          "name": "2.3 Company Accept Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Welcome to the team!\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/gig-agents/enrollment-requests/{{GIGAGENT_ID}}/accept",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "gig-agents", "enrollment-requests", "{{GIGAGENT_ID}}", "accept"]
+            },
+            "description": "Company accepte la demande - Status devient 'enrolled'"
+          }
+        },
+        {
+          "name": "2.4 Get Gig Enrolled Agents",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/api/gig-agents/gig-agents/687d22e341c851ddf8e90462?status=enrolled",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "gig-agents", "gig-agents", "687d22e341c851ddf8e90462"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "enrolled"
+                }
+              ]
+            },
+            "description": "Récupère tous les agents avec status 'enrolled' pour ce gig"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Rejection Flow",
+      "item": [
+        {
+          "name": "3.1 Agent Reject Invitation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Not interested at this time\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/gig-agents/invitations/{{GIGAGENT_ID}}/reject",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "gig-agents", "invitations", "{{GIGAGENT_ID}}", "reject"]
+            },
+            "description": "Agent rejette l'invitation - Status devient 'rejected'"
+          }
+        },
+        {
+          "name": "3.2 Get Agent Rejected Gigs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/api/gig-agents/agent-gigs/68347eb86e2a220b4066a877?status=rejected",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "gig-agents", "agent-gigs", "68347eb86e2a220b4066a877"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "rejected"
+                }
+              ]
+            },
+            "description": "Récupère tous les gigs avec status 'rejected' pour cet agent"
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Get All Data",
+      "item": [
+        {
+          "name": "4.1 Get All Agent Gigs (All Status)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/api/gig-agents/agent-gigs/68347eb86e2a220b4066a877",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "gig-agents", "agent-gigs", "68347eb86e2a220b4066a877"]
+            },
+            "description": "Récupère tous les gigs de l'agent, peu importe le statut"
+          }
+        },
+        {
+          "name": "4.2 Get All Gig Agents (All Status)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/api/gig-agents/gig-agents/687d22e341c851ddf8e90462",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "gig-agents", "gig-agents", "687d22e341c851ddf8e90462"]
+            },
+            "description": "Récupère tous les agents du gig, peu importe le statut"
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Legacy Endpoints (Still Work)",
+      "item": [
+        {
+          "name": "5.1 Get Invited Gigs (Legacy)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/api/gig-agents/invited/agent/68347eb86e2a220b4066a877",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "gig-agents", "invited", "agent", "68347eb86e2a220b4066a877"]
+            },
+            "description": "Ancien endpoint - Toujours fonctionnel"
+          }
+        },
+        {
+          "name": "5.2 Get Enrolled Gigs (Legacy)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/api/gig-agents/enrolled/agent/68347eb86e2a220b4066a877",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "gig-agents", "enrolled", "agent", "68347eb86e2a220b4066a877"]
+            },
+            "description": "Ancien endpoint - Toujours fonctionnel"
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "BASE_URL",
+      "value": "https://api-matching.harx.ai",
+      "type": "string"
+    },
+    {
+      "key": "GIGAGENT_ID",
+      "value": "REMPLACER_PAR_ID_GIGAGENT",
+      "type": "string"
+    }
+  ]
+}
+

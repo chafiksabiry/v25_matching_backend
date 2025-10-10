@@ -2,6 +2,8 @@ import GigAgent from '../models/GigAgent.js';
 import Agent from '../models/Agent.js';
 import Gig from '../models/Gig.js';
 import Currency from '../models/Currency.js';
+import Timezone from '../models/Timezone.js';
+import Country from '../models/Country.js';
 import { StatusCodes } from 'http-status-codes';
 import { sendEnrollmentInvitation as sendEmailInvitation, sendEnrollmentNotification as sendEmailNotification } from '../services/emailService.js';
 
@@ -91,7 +93,11 @@ export const acceptEnrollment = async (req, res) => {
         .populate('agentId')
         .populate({
           path: 'gigId',
-          populate: { path: 'commission.currency' }
+          populate: [
+            { path: 'commission.currency' },
+            { path: 'destination_zone' },
+            { path: 'availability.time_zone' }
+          ]
         });
     }
     // Option 2: Accepter via ID (depuis la plateforme)
@@ -100,7 +106,11 @@ export const acceptEnrollment = async (req, res) => {
         .populate('agentId')
         .populate({
           path: 'gigId',
-          populate: { path: 'commission.currency' }
+          populate: [
+            { path: 'commission.currency' },
+            { path: 'destination_zone' },
+            { path: 'availability.time_zone' }
+          ]
         });
     }
     else {
@@ -174,7 +184,11 @@ export const rejectEnrollment = async (req, res) => {
         .populate('agentId')
         .populate({
           path: 'gigId',
-          populate: { path: 'commission.currency' }
+          populate: [
+            { path: 'commission.currency' },
+            { path: 'destination_zone' },
+            { path: 'availability.time_zone' }
+          ]
         });
     }
     // Option 2: Refuser via ID (depuis la plateforme)
@@ -183,7 +197,11 @@ export const rejectEnrollment = async (req, res) => {
         .populate('agentId')
         .populate({
           path: 'gigId',
-          populate: { path: 'commission.currency' }
+          populate: [
+            { path: 'commission.currency' },
+            { path: 'destination_zone' },
+            { path: 'availability.time_zone' }
+          ]
         });
     }
     else {
@@ -324,7 +342,11 @@ export const resendEnrollmentInvitation = async (req, res) => {
       .populate('agentId')
       .populate({
         path: 'gigId',
-        populate: { path: 'commission.currency' }
+        populate: [
+          { path: 'commission.currency' },
+          { path: 'destination_zone' },
+          { path: 'availability.time_zone' }
+        ]
       });
 
     if (!gigAgent) {
@@ -422,7 +444,11 @@ export const acceptEnrollmentById = async (req, res) => {
       .populate('agentId')
       .populate({
         path: 'gigId',
-        populate: { path: 'commission.currency' }
+        populate: [
+          { path: 'commission.currency' },
+          { path: 'destination_zone' },
+          { path: 'availability.time_zone' }
+        ]
       });
 
     if (!gigAgent) {
@@ -541,7 +567,11 @@ export const rejectEnrollmentById = async (req, res) => {
       .populate('agentId')
       .populate({
         path: 'gigId',
-        populate: { path: 'commission.currency' }
+        populate: [
+          { path: 'commission.currency' },
+          { path: 'destination_zone' },
+          { path: 'availability.time_zone' }
+        ]
       });
 
     if (!gigAgent) {
@@ -652,7 +682,11 @@ export const acceptEnrollmentRequest = async (req, res) => {
       .populate('agentId')
       .populate({
         path: 'gigId',
-        populate: { path: 'commission.currency' }
+        populate: [
+          { path: 'commission.currency' },
+          { path: 'destination_zone' },
+          { path: 'availability.time_zone' }
+        ]
       });
 
     if (!gigAgent) {
@@ -713,7 +747,11 @@ export const rejectEnrollmentRequest = async (req, res) => {
       .populate('agentId')
       .populate({
         path: 'gigId',
-        populate: { path: 'commission.currency' }
+        populate: [
+          { path: 'commission.currency' },
+          { path: 'destination_zone' },
+          { path: 'availability.time_zone' }
+        ]
       });
 
     if (!gigAgent) {
