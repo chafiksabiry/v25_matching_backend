@@ -1062,12 +1062,12 @@ export const agentAcceptInvitation = async (req, res) => {
       });
     }
 
-    // Vérifier que l'invitation n'a pas expiré
-    if (gigAgent.isInvitationExpired()) {
-      return res.status(StatusCodes.BAD_REQUEST).json({ 
-        message: 'Invitation has expired' 
-      });
-    }
+    // ✅ Permettre l'acceptation même si l'invitation est expirée
+    // if (gigAgent.isInvitationExpired()) {
+    //   return res.status(StatusCodes.BAD_REQUEST).json({ 
+    //     message: 'Invitation has expired' 
+    //   });
+    // }
 
     // Accepter l'enrollment avec les notes optionnelles
     await gigAgent.acceptEnrollment(req.body.notes);
@@ -1168,12 +1168,12 @@ export const agentRejectInvitation = async (req, res) => {
       });
     }
 
-    // Vérifier que l'invitation n'a pas expiré
-    if (gigAgent.isInvitationExpired()) {
-      return res.status(StatusCodes.BAD_REQUEST).json({ 
-        message: 'Invitation has expired' 
-      });
-    }
+    // ✅ Permettre le rejet même si l'invitation est expirée
+    // if (gigAgent.isInvitationExpired()) {
+    //   return res.status(StatusCodes.BAD_REQUEST).json({ 
+    //     message: 'Invitation has expired' 
+    //   });
+    // }
 
     // Rejeter l'enrollment avec les notes optionnelles
     await gigAgent.rejectEnrollment(req.body.notes);

@@ -106,18 +106,18 @@ export const acceptEnrollment = async (req, res) => {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Invitation invalide' });
     }
 
-    // Vérifier si l'invitation a expiré
-    if (gigAgent.isInvitationExpired()) {
-      await gigAgent.expireInvitation();
-      return res.status(StatusCodes.GONE).json({ message: 'Cette invitation a expiré' });
-    }
+    // ✅ Permettre l'acceptation même si l'invitation est expirée
+    // if (gigAgent.isInvitationExpired()) {
+    //   await gigAgent.expireInvitation();
+    //   return res.status(StatusCodes.GONE).json({ message: 'Cette invitation a expiré' });
+    // }
 
-    // Vérifier si l'enrôlement peut être effectué
-    if (!gigAgent.canEnroll()) {
-      return res.status(StatusCodes.BAD_REQUEST).json({ 
-        message: 'Cette invitation ne peut plus être utilisée' 
-      });
-    }
+    // // Vérifier si l'enrôlement peut être effectué
+    // if (!gigAgent.canEnroll()) {
+    //   return res.status(StatusCodes.BAD_REQUEST).json({ 
+    //     message: 'Cette invitation ne peut plus être utilisée' 
+    //   });
+    // }
 
     // Accepter l'enrôlement
     await gigAgent.acceptEnrollment(notes);
@@ -183,18 +183,18 @@ export const rejectEnrollment = async (req, res) => {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Invitation invalide' });
     }
 
-    // Vérifier si l'invitation a expiré
-    if (gigAgent.isInvitationExpired()) {
-      await gigAgent.expireInvitation();
-      return res.status(StatusCodes.GONE).json({ message: 'Cette invitation a expiré' });
-    }
+    // ✅ Permettre le rejet même si l'invitation est expirée
+    // if (gigAgent.isInvitationExpired()) {
+    //   await gigAgent.expireInvitation();
+    //   return res.status(StatusCodes.GONE).json({ message: 'Cette invitation a expiré' });
+    // }
 
-    // Vérifier si l'enrôlement peut être effectué
-    if (!gigAgent.canEnroll()) {
-      return res.status(StatusCodes.BAD_REQUEST).json({ 
-        message: 'Cette invitation ne peut plus être utilisée' 
-      });
-    }
+    // // Vérifier si l'enrôlement peut être effectué
+    // if (!gigAgent.canEnroll()) {
+    //   return res.status(StatusCodes.BAD_REQUEST).json({ 
+    //     message: 'Cette invitation ne peut plus être utilisée' 
+    //   });
+    // }
 
     // Refuser l'enrôlement
     await gigAgent.rejectEnrollment(notes);
