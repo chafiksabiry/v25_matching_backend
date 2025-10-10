@@ -1,5 +1,6 @@
 import Agent from '../models/Agent.js';
 import Gig from '../models/Gig.js';
+import Company from '../models/Company.js';
 
 /**
  * Synchronise la relation Agent-Gig dans les deux collections
@@ -142,7 +143,15 @@ export const getAgentGigsWithDetails = async (agentId, statusFilter = null) => {
         populate: [
           { path: 'commission.currency' },
           { path: 'destination_zone' },
-          { path: 'availability.time_zone' }
+          { path: 'availability.time_zone' },
+          { path: 'companyId' },
+          { path: 'industries' },
+          { path: 'activities' },
+          { path: 'team.territories' },
+          { path: 'skills.technical.skill' },
+          { path: 'skills.professional.skill' },
+          { path: 'skills.soft.skill' },
+          { path: 'skills.languages.language' }
         ]
       });
 
@@ -182,7 +191,19 @@ export const getAgentGigsWithDetails = async (agentId, statusFilter = null) => {
 export const getGigAgentsWithDetails = async (gigId, statusFilter = null) => {
   try {
     const gig = await Gig.findById(gigId)
-      .populate('agents.agentId');
+      .populate({
+        path: 'agents.agentId',
+        populate: [
+          { path: 'personalInfo.country' },
+          { path: 'personalInfo.languages.language' },
+          { path: 'professionalSummary.industries' },
+          { path: 'professionalSummary.activities' },
+          { path: 'skills.technical.skill' },
+          { path: 'skills.professional.skill' },
+          { path: 'skills.soft.skill' },
+          { path: 'availability.timeZone' }
+        ]
+      });
 
     if (!gig) {
       throw new Error('Gig not found');
