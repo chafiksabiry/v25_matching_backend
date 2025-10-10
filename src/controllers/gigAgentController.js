@@ -1316,35 +1316,35 @@ export const agentRejectInvitation = async (req, res) => {
     //   });
     // }
 
-    // Rejeter l'enrollment avec les notes optionnelles
-    await gigAgent.rejectEnrollment(req.body.notes);
+    const agentId = gigAgent.agentId;
+    const gigId = gigAgent.gigId;
 
-    // 🆕 Synchroniser le statut dans Agent.gigs et Gig.agents
+    // 🆕 Supprimer complètement la relation au lieu de la marquer comme rejected
     try {
-      await syncAgentGigRelationship(
-        gigAgent.agentId, 
-        gigAgent.gigId, 
-        'rejected'
+      // 1. Supprimer de Agent.gigs
+      await Agent.findByIdAndUpdate(
+        agentId,
+        { $pull: { gigs: { gigId: gigId } } }
       );
-    } catch (syncError) {
-      console.error('Erreur lors de la synchronisation:', syncError);
+
+      // 2. Supprimer de Gig.agents
+      await Gig.findByIdAndUpdate(
+        gigId,
+        { $pull: { agents: { agentId: agentId } } }
+      );
+
+      // 3. Supprimer le document GigAgent
+      await GigAgent.findByIdAndDelete(req.params.id);
+
+      console.log(`✅ Invitation rejected and deleted: Agent ${agentId} <-> Gig ${gigId}`);
+
+    } catch (deleteError) {
+      console.error('Erreur lors de la suppression:', deleteError);
+      throw deleteError;
     }
 
-    // Récupérer le gigAgent mis à jour avec les relations
-    const updatedGigAgent = await GigAgent.findById(gigAgent._id)
-      .populate('agentId')
-      .populate({
-        path: 'gigId',
-        populate: [
-          { path: 'commission.currency' },
-          { path: 'destination_zone' },
-          { path: 'availability.time_zone' }
-        ]
-      });
-
     res.status(StatusCodes.OK).json({
-      message: 'Invitation rejected successfully',
-      gigAgent: updatedGigAgent
+      message: 'Invitation rejected and removed successfully'
     });
 
   } catch (error) {
