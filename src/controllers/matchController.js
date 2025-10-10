@@ -16,6 +16,36 @@ import { findLanguageMatches, getLanguageLevelScore } from '../utils/matchingAlg
 import { sendMatchingNotification } from '../services/emailService.js';
 import mongoose from 'mongoose';
 
+// 🆕 Fonction helper pour extraire les données propres d'un objet MongoDB
+const extractCleanData = (obj) => {
+  if (!obj) return null;
+  
+  // Si c'est un ObjectId, retourner en string
+  if (typeof obj === 'object' && obj._bsontype === 'ObjectId') {
+    return obj.toString();
+  }
+  
+  // Si c'est un objet Mongoose avec _id, extraire les données pertinentes
+  if (typeof obj === 'object' && obj._id) {
+    const clean = {
+      _id: obj._id.toString()
+    };
+    
+    // Ajouter les propriétés utiles si elles existent
+    if (obj.name) clean.name = obj.name;
+    if (obj.title) clean.title = obj.title;
+    if (obj.code) clean.code = obj.code;
+    if (obj.description) clean.description = obj.description;
+    if (obj.category) clean.category = obj.category;
+    if (obj.nativeName) clean.nativeName = obj.nativeName;
+    
+    return clean;
+  }
+  
+  // Sinon retourner tel quel
+  return obj;
+};
+
 // Function to get language names from IDs
 const getLanguageNames = async (languageIds) => {
   try {
@@ -857,7 +887,7 @@ export const findMatchesForGigById = async (req, res) => {
           if (isLevelMatch) {
 
             matchingLanguages.push({
-              language: reqLang.language,
+              language: extractCleanData(reqLang.language),
               languageName: reqLangName,
               requiredLevel: reqLang.proficiency,
               agentLevel: agentLang.proficiency
@@ -865,7 +895,7 @@ export const findMatchesForGigById = async (req, res) => {
           } else {
 
             insufficientLanguages.push({
-              language: reqLang.language,
+              language: extractCleanData(reqLang.language),
               languageName: reqLangName,
               requiredLevel: reqLang.proficiency,
               agentLevel: agentLang.proficiency
@@ -873,7 +903,7 @@ export const findMatchesForGigById = async (req, res) => {
           }
         } else {
           missingLanguages.push({
-            language: reqLang.language,
+            language: extractCleanData(reqLang.language),
             languageName: reqLangName,
             requiredLevel: reqLang.proficiency
           });
@@ -1383,7 +1413,7 @@ export const findMatchesForGigById = async (req, res) => {
             phone: agent.personalInfo?.phone || '',
             languages: agent.personalInfo?.languages?.map(lang => ({
               _id: lang._id,
-              language: lang.language,
+              language: extractCleanData(lang.language),
               languageName: lang.language?.name || 'Unknown Language',
               proficiency: lang.proficiency,
               iso639_1: lang.iso639_1
@@ -1468,7 +1498,7 @@ export const findMatchesForGigById = async (req, res) => {
           phone: agent.personalInfo?.phone || '',
           languages: agent.personalInfo?.languages?.map(lang => ({
             _id: lang._id,
-            language: lang.language,
+            language: extractCleanData(lang.language),
             languageName: lang.language?.name || 'Unknown Language',
             proficiency: lang.proficiency,
             iso639_1: lang.iso639_1

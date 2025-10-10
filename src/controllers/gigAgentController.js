@@ -197,23 +197,23 @@ const calculateMatchDetails = async (agent, gig) => {
 
       if (isLevelMatch) {
         matchingLanguages.push({
-          language: reqLang.language,
-          languageName: reqLang.language,
+          language: extractCleanData(reqLang.language),
+          languageName: extractCleanData(reqLang.language),
           requiredLevel: reqLang.proficiency,
           agentLevel: agentLang.proficiency
         });
       } else {
         insufficientLanguages.push({
-          language: reqLang.language,
-          languageName: reqLang.language,
+          language: extractCleanData(reqLang.language),
+          languageName: extractCleanData(reqLang.language),
           requiredLevel: reqLang.proficiency,
           agentLevel: agentLang.proficiency
         });
       }
     } else {
       missingLanguages.push({
-        language: reqLang.language,
-        languageName: reqLang.language,
+        language: extractCleanData(reqLang.language),
+        languageName: extractCleanData(reqLang.language),
         requiredLevel: reqLang.proficiency
       });
     }
@@ -247,16 +247,16 @@ const calculateMatchDetails = async (agent, gig) => {
     if (agentSkill) {
       // ⭐ NOUVEAU: Ignorer les niveaux - si l'agent a la skill, c'est un match
       matchingSkills.push({
-        skill: reqSkill.skill,
-        skillName: reqSkill.skill,
+        skill: extractCleanData(reqSkill.skill),
+        skillName: extractCleanData(reqSkill.skill),
         requiredLevel: reqSkill.level,
         agentLevel: agentSkill.level,
         type: reqSkill.type
       });
     } else {
       missingSkills.push({
-        skill: reqSkill.skill,
-        skillName: reqSkill.skill,
+        skill: extractCleanData(reqSkill.skill),
+        skillName: extractCleanData(reqSkill.skill),
         type: reqSkill.type,
         requiredLevel: reqSkill.level
       });
@@ -399,9 +399,9 @@ const calculateIndustryMatch = (agent, gig) => {
 
     if (isExactMatch || isPartialMatch) {
       matchingIndustries.push({
-        industry: gig.category,
-        industryName: gig.category,
-        agentIndustryName: industry
+        industry: extractCleanData(gig.category),
+        industryName: extractCleanData(gig.category),
+        agentIndustryName: extractCleanData(industry)
       });
       return true;
     }
@@ -410,8 +410,8 @@ const calculateIndustryMatch = (agent, gig) => {
 
   if (!hasMatchingIndustry) {
     missingIndustries.push({
-      industry: gig.category,
-      industryName: gig.category
+      industry: extractCleanData(gig.category),
+      industryName: extractCleanData(gig.category)
     });
   }
 
@@ -472,14 +472,14 @@ const calculateActivityMatch = (agent, gig) => {
 
     if (agentActivity) {
       matchingActivities.push({
-        activity: gigActivity,
-        activityName: gigActivity,
-        agentActivityName: agentActivity
+        activity: extractCleanData(gigActivity),
+        activityName: extractCleanData(gigActivity),
+        agentActivityName: extractCleanData(agentActivity)
       });
     } else {
       missingActivities.push({
-        activity: gigActivity,
-        activityName: gigActivity
+        activity: extractCleanData(gigActivity),
+        activityName: extractCleanData(gigActivity)
       });
     }
   });
@@ -702,6 +702,36 @@ const normalizeSkill = (skill) => {
   }
   
   return skill.toLowerCase().trim();
+};
+
+// 🆕 Fonction helper pour extraire les données propres d'un objet MongoDB
+const extractCleanData = (obj) => {
+  if (!obj) return null;
+  
+  // Si c'est un ObjectId, retourner en string
+  if (typeof obj === 'object' && obj._bsontype === 'ObjectId') {
+    return obj.toString();
+  }
+  
+  // Si c'est un objet Mongoose avec _id, extraire les données pertinentes
+  if (typeof obj === 'object' && obj._id) {
+    const clean = {
+      _id: obj._id.toString()
+    };
+    
+    // Ajouter les propriétés utiles si elles existent
+    if (obj.name) clean.name = obj.name;
+    if (obj.title) clean.title = obj.title;
+    if (obj.code) clean.code = obj.code;
+    if (obj.description) clean.description = obj.description;
+    if (obj.category) clean.category = obj.category;
+    if (obj.nativeName) clean.nativeName = obj.nativeName;
+    
+    return clean;
+  }
+  
+  // Sinon retourner tel quel
+  return obj;
 };
 
 // Fonction pour obtenir le score de niveau de langue (importée depuis matchController)
