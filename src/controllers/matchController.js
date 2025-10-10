@@ -4,6 +4,7 @@ import Gig from '../models/Gig.js';
 import GigAgent from '../models/GigAgent.js';
 import Timezone from '../models/Timezone.js';
 import Country from '../models/Country.js';
+import Currency from '../models/Currency.js';
 import TechnicalSkill from '../models/TechnicalSkill.js';
 import ProfessionalSkill from '../models/ProfessionalSkill.js';
 import SoftSkill from '../models/SoftSkill.js';

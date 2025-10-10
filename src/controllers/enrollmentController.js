@@ -1,6 +1,7 @@
 import GigAgent from '../models/GigAgent.js';
 import Agent from '../models/Agent.js';
 import Gig from '../models/Gig.js';
+import Currency from '../models/Currency.js';
 import { StatusCodes } from 'http-status-codes';
 import { sendEnrollmentInvitation as sendEmailInvitation, sendEnrollmentNotification as sendEmailNotification } from '../services/emailService.js';
 
