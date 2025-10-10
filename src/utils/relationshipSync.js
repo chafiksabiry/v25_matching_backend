@@ -7,7 +7,7 @@ import Company from '../models/Company.js';
  * @param {String} agentId - ID de l'agent
  * @param {String} gigId - ID du gig
  * @param {String} status - Statut de la relation (invited, requested, enrolled, rejected, expired, cancelled)
- * @param {Object} options - Options additionnelles (enrollmentDate, invitationDate)
+ * @param {Object} options - Options additionnelles (enrollmentDate, invitationDate, gigAgentId)
  */
 export const syncAgentGigRelationship = async (agentId, gigId, status, options = {}) => {
   try {
@@ -21,6 +21,9 @@ export const syncAgentGigRelationship = async (agentId, gigId, status, options =
     }
     if (options.invitationDate) {
       updateData.invitationDate = options.invitationDate;
+    }
+    if (options.gigAgentId) {
+      updateData.gigAgentId = options.gigAgentId;
     }
 
     // Mettre à jour dans Agent.gigs

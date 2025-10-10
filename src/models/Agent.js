@@ -325,6 +325,11 @@ const agentSchema = new mongoose.Schema({
       ref: 'Gig',
       required: true
     },
+    gigAgentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'GigAgent',
+      required: false
+    },
     status: {
       type: String,
       enum: ['invited', 'requested', 'enrolled', 'rejected', 'expired', 'cancelled'],

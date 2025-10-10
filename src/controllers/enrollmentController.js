@@ -6,6 +6,7 @@ import Timezone from '../models/Timezone.js';
 import Country from '../models/Country.js';
 import { StatusCodes } from 'http-status-codes';
 import { sendEnrollmentInvitation as sendEmailInvitation, sendEnrollmentNotification as sendEmailNotification } from '../services/emailService.js';
+import { syncAgentGigRelationship } from '../utils/relationshipSync.js';
 
 // Envoyer une invitation d'enrôlement à un agent
 export const sendEnrollmentInvitation = async (req, res) => {
@@ -50,6 +51,21 @@ export const sendEnrollmentInvitation = async (req, res) => {
     gigAgent.invitationExpiresAt = expiryDate;
 
     await gigAgent.save();
+
+    // 🆕 Synchroniser la relation Agent-Gig dès l'invitation
+    try {
+      await syncAgentGigRelationship(
+        agentId,
+        gigId,
+        'invited',
+        { 
+          invitationDate: new Date(),
+          gigAgentId: gigAgent._id
+        }
+      );
+    } catch (syncError) {
+      console.error('Erreur lors de la synchronisation:', syncError);
+    }
 
     // Envoyer l'email d'invitation
     try {
@@ -654,6 +670,21 @@ export const requestEnrollment = async (req, res) => {
     }
 
     await gigAgent.save();
+
+    // 🆕 Synchroniser la relation Agent-Gig dès la demande
+    try {
+      await syncAgentGigRelationship(
+        agentId,
+        gigId,
+        'requested',
+        { 
+          invitationDate: new Date(),
+          gigAgentId: gigAgent._id
+        }
+      );
+    } catch (syncError) {
+      console.error('Erreur lors de la synchronisation:', syncError);
+    }
 
     res.status(StatusCodes.CREATED).json({
       message: 'Demande d\'enrôlement envoyée avec succès',

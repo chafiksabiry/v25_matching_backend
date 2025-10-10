@@ -174,7 +174,10 @@ export const createGigAgent = async (req, res) => {
         agentId, 
         gigId, 
         'invited',
-        { invitationDate: new Date() }
+        { 
+          invitationDate: new Date(),
+          gigAgentId: savedGigAgent._id
+        }
       );
     } catch (syncError) {
       console.error('Erreur lors de la synchronisation:', syncError);
@@ -1188,7 +1191,10 @@ export const agentAcceptInvitation = async (req, res) => {
         gigAgent.agentId, 
         gigAgent.gigId, 
         'enrolled',
-        { enrollmentDate: new Date() }
+        { 
+          enrollmentDate: new Date(),
+          gigAgentId: gigAgent._id
+        }
       );
     } catch (syncError) {
       console.error('Erreur lors de la synchronisation:', syncError);
@@ -1259,7 +1265,10 @@ export const acceptEnrollmentRequest = async (req, res) => {
         gigAgent.agentId, 
         gigAgent.gigId, 
         'enrolled',
-        { enrollmentDate: new Date() }
+        { 
+          enrollmentDate: new Date(),
+          gigAgentId: gigAgent._id
+        }
       );
     } catch (syncError) {
       console.error('Erreur lors de la synchronisation:', syncError);
@@ -1405,7 +1414,10 @@ export const sendEnrollmentRequest = async (req, res) => {
         req.params.agentId, 
         req.params.gigId, 
         'requested',
-        { invitationDate: new Date() }
+        { 
+          invitationDate: new Date(),
+          gigAgentId: gigAgent._id
+        }
       );
     } catch (syncError) {
       console.error('Erreur lors de la synchronisation:', syncError);
