@@ -248,7 +248,7 @@ const createEmailContent = (agentName, gigTitle, gigDescription, matchDetails, g
           <div class="gig-subtitle">A perfect opportunity waiting for you</div>
         </div>
         <div class="cta-section">
-          <a href="#" class="cta-button">🤝 Join</a>
+          <a href="${config.JOIN_URL}" class="cta-button">🤝 Join</a>
         </div>
         <div class="footer">
           <p><span class="highlight">HARX Technologies Inc</span> - Intelligent Matching Platform</p>
