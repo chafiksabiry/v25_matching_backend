@@ -4,6 +4,7 @@ import Gig from '../models/Gig.js';
 import GigAgent from '../models/GigAgent.js';
 import Timezone from '../models/Timezone.js';
 import Country from '../models/Country.js';
+import Currency from '../models/Currency.js';
 import TechnicalSkill from '../models/TechnicalSkill.js';
 import ProfessionalSkill from '../models/ProfessionalSkill.js';
 import SoftSkill from '../models/SoftSkill.js';
@@ -15,6 +16,36 @@ import { findMatches } from '../utils/matchingUtils.js';
 import { findLanguageMatches, getLanguageLevelScore } from '../utils/matchingAlgorithm.js';
 import { sendMatchingNotification } from '../services/emailService.js';
 import mongoose from 'mongoose';
+
+// 🆕 Fonction helper pour extraire les données propres d'un objet MongoDB
+const extractCleanData = (obj) => {
+  if (!obj) return null;
+  
+  // Si c'est un ObjectId, retourner en string
+  if (typeof obj === 'object' && obj._bsontype === 'ObjectId') {
+    return obj.toString();
+  }
+  
+  // Si c'est un objet Mongoose avec _id, extraire les données pertinentes
+  if (typeof obj === 'object' && obj._id) {
+    const clean = {
+      _id: obj._id.toString()
+    };
+    
+    // Ajouter les propriétés utiles si elles existent
+    if (obj.name) clean.name = obj.name;
+    if (obj.title) clean.title = obj.title;
+    if (obj.code) clean.code = obj.code;
+    if (obj.description) clean.description = obj.description;
+    if (obj.category) clean.category = obj.category;
+    if (obj.nativeName) clean.nativeName = obj.nativeName;
+    
+    return clean;
+  }
+  
+  // Sinon retourner tel quel
+  return obj;
+};
 
 // Function to get language names from IDs
 const getLanguageNames = async (languageIds) => {
@@ -243,7 +274,14 @@ export const getAllMatches = async (req, res) => {
   try {
     const matches = await Match.find()
       .populate('agentId')
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: [
+          { path: 'commission.currency' },
+          { path: 'destination_zone' },
+          { path: 'availability.time_zone' }
+        ]
+      });
     res.status(StatusCodes.OK).json(matches);
   } catch (error) {
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
@@ -255,7 +293,14 @@ export const getMatchById = async (req, res) => {
   try {
     const match = await Match.findById(req.params.id)
       .populate('agentId')
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: [
+          { path: 'commission.currency' },
+          { path: 'destination_zone' },
+          { path: 'availability.time_zone' }
+        ]
+      });
     
     if (!match) {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Match not found' });
@@ -309,7 +354,14 @@ export const getMatchById = async (req, res) => {
 export const getMatchesForAgent = async (req, res) => {
   try {
     const matches = await Match.find({ agentId: req.params.agentId })
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: [
+          { path: 'commission.currency' },
+          { path: 'destination_zone' },
+          { path: 'availability.time_zone' }
+        ]
+      });
     res.status(StatusCodes.OK).json(matches);
   } catch (error) {
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
@@ -857,7 +909,7 @@ export const findMatchesForGigById = async (req, res) => {
           if (isLevelMatch) {
 
             matchingLanguages.push({
-              language: reqLang.language,
+              language: extractCleanData(reqLang.language),
               languageName: reqLangName,
               requiredLevel: reqLang.proficiency,
               agentLevel: agentLang.proficiency
@@ -865,7 +917,7 @@ export const findMatchesForGigById = async (req, res) => {
           } else {
 
             insufficientLanguages.push({
-              language: reqLang.language,
+              language: extractCleanData(reqLang.language),
               languageName: reqLangName,
               requiredLevel: reqLang.proficiency,
               agentLevel: agentLang.proficiency
@@ -873,7 +925,7 @@ export const findMatchesForGigById = async (req, res) => {
           }
         } else {
           missingLanguages.push({
-            language: reqLang.language,
+            language: extractCleanData(reqLang.language),
             languageName: reqLangName,
             requiredLevel: reqLang.proficiency
           });
@@ -1383,7 +1435,7 @@ export const findMatchesForGigById = async (req, res) => {
             phone: agent.personalInfo?.phone || '',
             languages: agent.personalInfo?.languages?.map(lang => ({
               _id: lang._id,
-              language: lang.language,
+              language: extractCleanData(lang.language),
               languageName: lang.language?.name || 'Unknown Language',
               proficiency: lang.proficiency,
               iso639_1: lang.iso639_1
@@ -1468,7 +1520,7 @@ export const findMatchesForGigById = async (req, res) => {
           phone: agent.personalInfo?.phone || '',
           languages: agent.personalInfo?.languages?.map(lang => ({
             _id: lang._id,
-            language: lang.language,
+            language: extractCleanData(lang.language),
             languageName: lang.language?.name || 'Unknown Language',
             proficiency: lang.proficiency,
             iso639_1: lang.iso639_1
@@ -2113,7 +2165,14 @@ export const createGigAgentFromMatch = async (req, res) => {
     // Retourner la réponse avec les détails
     const populatedGigAgent = await GigAgent.findById(savedGigAgent._id)
       .populate('agentId')
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: [
+          { path: 'commission.currency' },
+          { path: 'destination_zone' },
+          { path: 'availability.time_zone' }
+        ]
+      });
 
     res.status(StatusCodes.CREATED).json({
       message: 'Assignation créée avec succès',

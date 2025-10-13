@@ -56,7 +56,8 @@ export const sendMatchingNotification = async (agent, gig, matchDetails) => {
     }
 
     // Create email content
-    const emailContent = createEmailContent(agentName, gigTitle, gigDescription, matchDetails, globalScore);
+    const gigId = gig._id || gig.id;
+    const emailContent = createEmailContent(agentName, gigTitle, gigDescription, matchDetails, globalScore, gigId);
 
     const emailParams = {
       sender: {
@@ -69,7 +70,7 @@ export const sendMatchingNotification = async (agent, gig, matchDetails) => {
       }],
       subject: `🎯 Exclusive Invitation to Join a New Gig: ${gigTitle}`,
       htmlContent: emailContent,
-      textContent: createTextVersion(agentName, gigTitle, gigDescription, matchDetails, globalScore)
+      textContent: createTextVersion(agentName, gigTitle, gigDescription, matchDetails, globalScore, gigId)
     };
 
     const result = await brevoApiInstance.sendTransacEmail(emailParams);
@@ -122,7 +123,9 @@ export const sendMatchingNotification = async (agent, gig, matchDetails) => {
 /**
  * Creates the HTML content of the email
  */
-const createEmailContent = (agentName, gigTitle, gigDescription, matchDetails, globalScore) => {
+const createEmailContent = (agentName, gigTitle, gigDescription, matchDetails, globalScore, gigId) => {
+  const joinUrl = `${config.BASE_URL}/repdashboard/gig/${gigId}`;
+  
   return `
     <!DOCTYPE html>
     <html lang="en">
@@ -248,7 +251,7 @@ const createEmailContent = (agentName, gigTitle, gigDescription, matchDetails, g
           <div class="gig-subtitle">A perfect opportunity waiting for you</div>
         </div>
         <div class="cta-section">
-          <a href="#" class="cta-button">🤝 Join</a>
+          <a href="${joinUrl}" class="cta-button">🤝 Join</a>
         </div>
         <div class="footer">
           <p><span class="highlight">HARX Technologies Inc</span> - Intelligent Matching Platform</p>
@@ -264,7 +267,9 @@ const createEmailContent = (agentName, gigTitle, gigDescription, matchDetails, g
 /**
  * Crée la version texte de l'email
  */
-const createTextVersion = (agentName, gigTitle, gigDescription, matchDetails, globalScore) => {
+const createTextVersion = (agentName, gigTitle, gigDescription, matchDetails, globalScore, gigId) => {
+  const joinUrl = `${config.BASE_URL}/repdashboard/gig/${gigId}`;
+  
   return `
 🎯 EXCLUSIVE GIG INVITATION
 
@@ -280,7 +285,7 @@ NEXT STEPS
 2. Accept the invitation if interested
 3. Contact us for any questions
 
-Ready to join this Gig? Log into your personal dashboard for more information.
+Ready to join this Gig? Click here: ${joinUrl}
 
 ---
 HARX Technologies Inc - Intelligent Matching Platform

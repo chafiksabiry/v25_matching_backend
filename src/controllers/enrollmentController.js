@@ -1,8 +1,12 @@
 import GigAgent from '../models/GigAgent.js';
 import Agent from '../models/Agent.js';
 import Gig from '../models/Gig.js';
+import Currency from '../models/Currency.js';
+import Timezone from '../models/Timezone.js';
+import Country from '../models/Country.js';
 import { StatusCodes } from 'http-status-codes';
 import { sendEnrollmentInvitation as sendEmailInvitation, sendEnrollmentNotification as sendEmailNotification } from '../services/emailService.js';
+import { syncAgentGigRelationship } from '../utils/relationshipSync.js';
 
 // Envoyer une invitation d'enrôlement à un agent
 export const sendEnrollmentInvitation = async (req, res) => {
@@ -48,6 +52,21 @@ export const sendEnrollmentInvitation = async (req, res) => {
 
     await gigAgent.save();
 
+    // 🆕 Synchroniser la relation Agent-Gig dès l'invitation
+    try {
+      await syncAgentGigRelationship(
+        agentId,
+        gigId,
+        'invited',
+        { 
+          invitationDate: new Date(),
+          gigAgentId: gigAgent._id
+        }
+      );
+    } catch (syncError) {
+      console.error('Erreur lors de la synchronisation:', syncError);
+    }
+
     // Envoyer l'email d'invitation
     try {
       await sendEmailInvitation(agent, gig, invitationToken, expiryDate);
@@ -88,13 +107,27 @@ export const acceptEnrollment = async (req, res) => {
     if (token) {
       gigAgent = await GigAgent.findOne({ invitationToken: token })
         .populate('agentId')
-        .populate('gigId');
+        .populate({
+          path: 'gigId',
+          populate: [
+            { path: 'commission.currency' },
+            { path: 'destination_zone' },
+            { path: 'availability.time_zone' }
+          ]
+        });
     }
     // Option 2: Accepter via ID (depuis la plateforme)
     else if (enrollmentId) {
       gigAgent = await GigAgent.findById(enrollmentId)
         .populate('agentId')
-        .populate('gigId');
+        .populate({
+          path: 'gigId',
+          populate: [
+            { path: 'commission.currency' },
+            { path: 'destination_zone' },
+            { path: 'availability.time_zone' }
+          ]
+        });
     }
     else {
       return res.status(StatusCodes.BAD_REQUEST).json({ 
@@ -106,18 +139,18 @@ export const acceptEnrollment = async (req, res) => {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Invitation invalide' });
     }
 
-    // Vérifier si l'invitation a expiré
-    if (gigAgent.isInvitationExpired()) {
-      await gigAgent.expireInvitation();
-      return res.status(StatusCodes.GONE).json({ message: 'Cette invitation a expiré' });
-    }
+    // ✅ Permettre l'acceptation même si l'invitation est expirée
+    // if (gigAgent.isInvitationExpired()) {
+    //   await gigAgent.expireInvitation();
+    //   return res.status(StatusCodes.GONE).json({ message: 'Cette invitation a expiré' });
+    // }
 
-    // Vérifier si l'enrôlement peut être effectué
-    if (!gigAgent.canEnroll()) {
-      return res.status(StatusCodes.BAD_REQUEST).json({ 
-        message: 'Cette invitation ne peut plus être utilisée' 
-      });
-    }
+    // // Vérifier si l'enrôlement peut être effectué
+    // if (!gigAgent.canEnroll()) {
+    //   return res.status(StatusCodes.BAD_REQUEST).json({ 
+    //     message: 'Cette invitation ne peut plus être utilisée' 
+    //   });
+    // }
 
     // Accepter l'enrôlement
     await gigAgent.acceptEnrollment(notes);
@@ -165,13 +198,27 @@ export const rejectEnrollment = async (req, res) => {
     if (token) {
       gigAgent = await GigAgent.findOne({ invitationToken: token })
         .populate('agentId')
-        .populate('gigId');
+        .populate({
+          path: 'gigId',
+          populate: [
+            { path: 'commission.currency' },
+            { path: 'destination_zone' },
+            { path: 'availability.time_zone' }
+          ]
+        });
     }
     // Option 2: Refuser via ID (depuis la plateforme)
     else if (enrollmentId) {
       gigAgent = await GigAgent.findById(enrollmentId)
         .populate('agentId')
-        .populate('gigId');
+        .populate({
+          path: 'gigId',
+          populate: [
+            { path: 'commission.currency' },
+            { path: 'destination_zone' },
+            { path: 'availability.time_zone' }
+          ]
+        });
     }
     else {
       return res.status(StatusCodes.BAD_REQUEST).json({ 
@@ -183,18 +230,18 @@ export const rejectEnrollment = async (req, res) => {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Invitation invalide' });
     }
 
-    // Vérifier si l'invitation a expiré
-    if (gigAgent.isInvitationExpired()) {
-      await gigAgent.expireInvitation();
-      return res.status(StatusCodes.GONE).json({ message: 'Cette invitation a expiré' });
-    }
+    // ✅ Permettre le rejet même si l'invitation est expirée
+    // if (gigAgent.isInvitationExpired()) {
+    //   await gigAgent.expireInvitation();
+    //   return res.status(StatusCodes.GONE).json({ message: 'Cette invitation a expiré' });
+    // }
 
-    // Vérifier si l'enrôlement peut être effectué
-    if (!gigAgent.canEnroll()) {
-      return res.status(StatusCodes.BAD_REQUEST).json({ 
-        message: 'Cette invitation ne peut plus être utilisée' 
-      });
-    }
+    // // Vérifier si l'enrôlement peut être effectué
+    // if (!gigAgent.canEnroll()) {
+    //   return res.status(StatusCodes.BAD_REQUEST).json({ 
+    //     message: 'Cette invitation ne peut plus être utilisée' 
+    //   });
+    // }
 
     // Refuser l'enrôlement
     await gigAgent.rejectEnrollment(notes);
@@ -309,7 +356,14 @@ export const resendEnrollmentInvitation = async (req, res) => {
 
     const gigAgent = await GigAgent.findById(id)
       .populate('agentId')
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: [
+          { path: 'commission.currency' },
+          { path: 'destination_zone' },
+          { path: 'availability.time_zone' }
+        ]
+      });
 
     if (!gigAgent) {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Enrôlement non trouvé' });
@@ -404,7 +458,14 @@ export const acceptEnrollmentById = async (req, res) => {
 
     const gigAgent = await GigAgent.findById(id)
       .populate('agentId')
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: [
+          { path: 'commission.currency' },
+          { path: 'destination_zone' },
+          { path: 'availability.time_zone' }
+        ]
+      });
 
     if (!gigAgent) {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Enrôlement non trouvé' });
@@ -520,7 +581,14 @@ export const rejectEnrollmentById = async (req, res) => {
 
     const gigAgent = await GigAgent.findById(id)
       .populate('agentId')
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: [
+          { path: 'commission.currency' },
+          { path: 'destination_zone' },
+          { path: 'availability.time_zone' }
+        ]
+      });
 
     if (!gigAgent) {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Enrôlement non trouvé' });
@@ -603,6 +671,21 @@ export const requestEnrollment = async (req, res) => {
 
     await gigAgent.save();
 
+    // 🆕 Synchroniser la relation Agent-Gig dès la demande
+    try {
+      await syncAgentGigRelationship(
+        agentId,
+        gigId,
+        'requested',
+        { 
+          invitationDate: new Date(),
+          gigAgentId: gigAgent._id
+        }
+      );
+    } catch (syncError) {
+      console.error('Erreur lors de la synchronisation:', syncError);
+    }
+
     res.status(StatusCodes.CREATED).json({
       message: 'Demande d\'enrôlement envoyée avec succès',
       gigAgent: {
@@ -628,7 +711,14 @@ export const acceptEnrollmentRequest = async (req, res) => {
 
     const gigAgent = await GigAgent.findById(enrollmentId)
       .populate('agentId')
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: [
+          { path: 'commission.currency' },
+          { path: 'destination_zone' },
+          { path: 'availability.time_zone' }
+        ]
+      });
 
     if (!gigAgent) {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Demande d\'enrôlement non trouvée' });
@@ -686,7 +776,14 @@ export const rejectEnrollmentRequest = async (req, res) => {
 
     const gigAgent = await GigAgent.findById(enrollmentId)
       .populate('agentId')
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: [
+          { path: 'commission.currency' },
+          { path: 'destination_zone' },
+          { path: 'availability.time_zone' }
+        ]
+      });
 
     if (!gigAgent) {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Demande d\'enrôlement non trouvée' });
