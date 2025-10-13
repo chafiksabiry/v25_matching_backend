@@ -1,15 +1,26 @@
 import GigAgent from '../models/GigAgent.js';
 import Agent from '../models/Agent.js';
 import Gig from '../models/Gig.js';
+import Currency from '../models/Currency.js';
+import Timezone from '../models/Timezone.js';
+import Country from '../models/Country.js';
 import { StatusCodes } from 'http-status-codes';
 import { sendMatchingNotification } from '../services/emailService.js';
+import { syncAgentGigRelationship, getAgentGigsWithDetails, getGigAgentsWithDetails } from '../utils/relationshipSync.js';
 
 // Get all gig agents
 export const getAllGigAgents = async (req, res) => {
   try {
     const gigAgents = await GigAgent.find()
       .populate('agentId')
-      .populate('gigId')
+      .populate({
+        path: 'gigId',
+        populate: [
+          { path: 'commission.currency' },
+          { path: 'destination_zone' },
+          { path: 'availability.time_zone' }
+        ]
+      })
       .sort({ createdAt: -1 });
     
     res.status(StatusCodes.OK).json(gigAgents);
@@ -24,7 +35,14 @@ export const getGigAgentById = async (req, res) => {
   try {
     const gigAgent = await GigAgent.findById(req.params.id)
       .populate('agentId')
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: [
+          { path: 'commission.currency' },
+          { path: 'destination_zone' },
+          { path: 'availability.time_zone' }
+        ]
+      });
     
     if (!gigAgent) {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'GigAgent not found' });
@@ -41,7 +59,14 @@ export const getGigAgentById = async (req, res) => {
 export const getGigAgentsForAgent = async (req, res) => {
   try {
     const gigAgents = await GigAgent.find({ agentId: req.params.agentId })
-      .populate('gigId')
+      .populate({
+        path: 'gigId',
+        populate: [
+          { path: 'commission.currency' },
+          { path: 'destination_zone' },
+          { path: 'availability.time_zone' }
+        ]
+      })
       .sort({ createdAt: -1 });
     
     res.status(StatusCodes.OK).json(gigAgents);
@@ -143,10 +168,32 @@ export const createGigAgent = async (req, res) => {
       // Ne pas échouer la création si l'email échoue
     }
 
+    // 🆕 Synchroniser la relation dans Agent.gigs et Gig.agents
+    try {
+      await syncAgentGigRelationship(
+        agentId, 
+        gigId, 
+        'invited',
+        { 
+          invitationDate: new Date(),
+          gigAgentId: savedGigAgent._id
+        }
+      );
+    } catch (syncError) {
+      console.error('Erreur lors de la synchronisation:', syncError);
+    }
+
     // Retourner la réponse avec les détails
     const populatedGigAgent = await GigAgent.findById(savedGigAgent._id)
       .populate('agentId')
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: [
+          { path: 'commission.currency' },
+          { path: 'destination_zone' },
+          { path: 'availability.time_zone' }
+        ]
+      });
 
     res.status(StatusCodes.CREATED).json({
       message: 'Assignation créée avec succès',
@@ -197,23 +244,23 @@ const calculateMatchDetails = async (agent, gig) => {
 
       if (isLevelMatch) {
         matchingLanguages.push({
-          language: reqLang.language,
-          languageName: reqLang.language,
+          language: extractCleanData(reqLang.language),
+          languageName: extractCleanData(reqLang.language),
           requiredLevel: reqLang.proficiency,
           agentLevel: agentLang.proficiency
         });
       } else {
         insufficientLanguages.push({
-          language: reqLang.language,
-          languageName: reqLang.language,
+          language: extractCleanData(reqLang.language),
+          languageName: extractCleanData(reqLang.language),
           requiredLevel: reqLang.proficiency,
           agentLevel: agentLang.proficiency
         });
       }
     } else {
       missingLanguages.push({
-        language: reqLang.language,
-        languageName: reqLang.language,
+        language: extractCleanData(reqLang.language),
+        languageName: extractCleanData(reqLang.language),
         requiredLevel: reqLang.proficiency
       });
     }
@@ -247,16 +294,16 @@ const calculateMatchDetails = async (agent, gig) => {
     if (agentSkill) {
       // ⭐ NOUVEAU: Ignorer les niveaux - si l'agent a la skill, c'est un match
       matchingSkills.push({
-        skill: reqSkill.skill,
-        skillName: reqSkill.skill,
+        skill: extractCleanData(reqSkill.skill),
+        skillName: extractCleanData(reqSkill.skill),
         requiredLevel: reqSkill.level,
         agentLevel: agentSkill.level,
         type: reqSkill.type
       });
     } else {
       missingSkills.push({
-        skill: reqSkill.skill,
-        skillName: reqSkill.skill,
+        skill: extractCleanData(reqSkill.skill),
+        skillName: extractCleanData(reqSkill.skill),
         type: reqSkill.type,
         requiredLevel: reqSkill.level
       });
@@ -399,9 +446,9 @@ const calculateIndustryMatch = (agent, gig) => {
 
     if (isExactMatch || isPartialMatch) {
       matchingIndustries.push({
-        industry: gig.category,
-        industryName: gig.category,
-        agentIndustryName: industry
+        industry: extractCleanData(gig.category),
+        industryName: extractCleanData(gig.category),
+        agentIndustryName: extractCleanData(industry)
       });
       return true;
     }
@@ -410,8 +457,8 @@ const calculateIndustryMatch = (agent, gig) => {
 
   if (!hasMatchingIndustry) {
     missingIndustries.push({
-      industry: gig.category,
-      industryName: gig.category
+      industry: extractCleanData(gig.category),
+      industryName: extractCleanData(gig.category)
     });
   }
 
@@ -472,14 +519,14 @@ const calculateActivityMatch = (agent, gig) => {
 
     if (agentActivity) {
       matchingActivities.push({
-        activity: gigActivity,
-        activityName: gigActivity,
-        agentActivityName: agentActivity
+        activity: extractCleanData(gigActivity),
+        activityName: extractCleanData(gigActivity),
+        agentActivityName: extractCleanData(agentActivity)
       });
     } else {
       missingActivities.push({
-        activity: gigActivity,
-        activityName: gigActivity
+        activity: extractCleanData(gigActivity),
+        activityName: extractCleanData(gigActivity)
       });
     }
   });
@@ -704,6 +751,36 @@ const normalizeSkill = (skill) => {
   return skill.toLowerCase().trim();
 };
 
+// 🆕 Fonction helper pour extraire les données propres d'un objet MongoDB
+const extractCleanData = (obj) => {
+  if (!obj) return null;
+  
+  // Si c'est un ObjectId, retourner en string
+  if (typeof obj === 'object' && obj._bsontype === 'ObjectId') {
+    return obj.toString();
+  }
+  
+  // Si c'est un objet Mongoose avec _id, extraire les données pertinentes
+  if (typeof obj === 'object' && obj._id) {
+    const clean = {
+      _id: obj._id.toString()
+    };
+    
+    // Ajouter les propriétés utiles si elles existent
+    if (obj.name) clean.name = obj.name;
+    if (obj.title) clean.title = obj.title;
+    if (obj.code) clean.code = obj.code;
+    if (obj.description) clean.description = obj.description;
+    if (obj.category) clean.category = obj.category;
+    if (obj.nativeName) clean.nativeName = obj.nativeName;
+    
+    return clean;
+  }
+  
+  // Sinon retourner tel quel
+  return obj;
+};
+
 // Fonction pour obtenir le score de niveau de langue (importée depuis matchController)
 const getLanguageLevelScore = (level) => {
   const levels = {
@@ -866,7 +943,14 @@ export const updateGigAgent = async (req, res) => {
       req.params.id,
       updateData,
       { new: true, runValidators: true }
-    ).populate('agentId').populate('gigId');
+    ).populate('agentId').populate({
+      path: 'gigId',
+      populate: [
+        { path: 'commission.currency' },
+        { path: 'destination_zone' },
+        { path: 'availability.time_zone' }
+      ]
+    });
 
     if (!gigAgent) {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'GigAgent not found' });
@@ -905,7 +989,14 @@ export const resendEmailNotification = async (req, res) => {
   try {
     const gigAgent = await GigAgent.findById(req.params.id)
       .populate('agentId')
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: [
+          { path: 'commission.currency' },
+          { path: 'destination_zone' },
+          { path: 'availability.time_zone' }
+        ]
+      });
 
     if (!gigAgent) {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'GigAgent not found' });
@@ -941,7 +1032,10 @@ export const getInvitedGigsForAgent = async (req, res) => {
       agentId: req.params.agentId,
       enrollmentStatus: 'invited'
     })
-    .populate('gigId')
+    .populate({
+      path: 'gigId',
+      populate: { path: 'commission.currency' }
+    })
     .sort({ createdAt: -1 });
     
     res.status(StatusCodes.OK).json(gigAgents);
@@ -964,7 +1058,10 @@ export const getInvitedAgentsForCompany = async (req, res) => {
       gigId: { $in: gigIds }
     })
     .populate('agentId')
-    .populate('gigId')
+    .populate({
+      path: 'gigId',
+      populate: { path: 'commission.currency' }
+    })
     .sort({ createdAt: -1 });
     
     // Get unique agents
@@ -988,7 +1085,10 @@ export const getEnrolledGigsForAgent = async (req, res) => {
       agentId: req.params.agentId,
       enrollmentStatus: 'enrolled'
     })
-    .populate('gigId')
+    .populate({
+      path: 'gigId',
+      populate: { path: 'commission.currency' }
+    })
     .sort({ createdAt: -1 });
     
     res.status(StatusCodes.OK).json(gigAgents);
@@ -1010,7 +1110,10 @@ export const getEnrollmentRequestsForCompany = async (req, res) => {
       enrollmentStatus: 'requested',
       gigId: { $in: gigIds }
     })
-    .populate('gigId')
+    .populate({
+      path: 'gigId',
+      populate: { path: 'commission.currency' }
+    })
     .populate('agentId')
     .sort({ createdAt: -1 });
     
@@ -1034,7 +1137,10 @@ export const getActiveAgentsForCompany = async (req, res) => {
       gigId: { $in: gigIds }
     })
     .populate('agentId')
-    .populate('gigId')
+    .populate({
+      path: 'gigId',
+      populate: { path: 'commission.currency' }
+    })
     .sort({ createdAt: -1 });
     
     // Retourner tous les GigAgents actifs
@@ -1062,12 +1168,12 @@ export const agentAcceptInvitation = async (req, res) => {
       });
     }
 
-    // Vérifier que l'invitation n'a pas expiré
-    if (gigAgent.isInvitationExpired()) {
-      return res.status(StatusCodes.BAD_REQUEST).json({ 
-        message: 'Invitation has expired' 
-      });
-    }
+    // ✅ Permettre l'acceptation même si l'invitation est expirée
+    // if (gigAgent.isInvitationExpired()) {
+    //   return res.status(StatusCodes.BAD_REQUEST).json({ 
+    //     message: 'Invitation has expired' 
+    //   });
+    // }
 
     // Accepter l'enrollment avec les notes optionnelles
     await gigAgent.acceptEnrollment(req.body.notes);
@@ -1079,10 +1185,32 @@ export const agentAcceptInvitation = async (req, res) => {
       { new: true }
     );
 
+    // 🆕 Synchroniser le statut dans Agent.gigs et Gig.agents
+    try {
+      await syncAgentGigRelationship(
+        gigAgent.agentId, 
+        gigAgent.gigId, 
+        'enrolled',
+        { 
+          enrollmentDate: new Date(),
+          gigAgentId: gigAgent._id
+        }
+      );
+    } catch (syncError) {
+      console.error('Erreur lors de la synchronisation:', syncError);
+    }
+
     // Récupérer le gigAgent mis à jour avec les relations
     const updatedGigAgent = await GigAgent.findById(gigAgent._id)
       .populate('agentId')
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: [
+          { path: 'commission.currency' },
+          { path: 'destination_zone' },
+          { path: 'availability.time_zone' }
+        ]
+      });
 
     res.status(StatusCodes.OK).json({
       message: 'Invitation accepted successfully',
@@ -1131,10 +1259,32 @@ export const acceptEnrollmentRequest = async (req, res) => {
       { new: true }
     );
 
+    // 🆕 Synchroniser le statut dans Agent.gigs et Gig.agents
+    try {
+      await syncAgentGigRelationship(
+        gigAgent.agentId, 
+        gigAgent.gigId, 
+        'enrolled',
+        { 
+          enrollmentDate: new Date(),
+          gigAgentId: gigAgent._id
+        }
+      );
+    } catch (syncError) {
+      console.error('Erreur lors de la synchronisation:', syncError);
+    }
+
     // Récupérer le gigAgent mis à jour avec les relations
     const updatedGigAgent = await GigAgent.findById(gigAgent._id)
       .populate('agentId')
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: [
+          { path: 'commission.currency' },
+          { path: 'destination_zone' },
+          { path: 'availability.time_zone' }
+        ]
+      });
 
     res.status(StatusCodes.OK).json({
       message: 'Enrollment request accepted successfully',
@@ -1168,24 +1318,42 @@ export const agentRejectInvitation = async (req, res) => {
       });
     }
 
-    // Vérifier que l'invitation n'a pas expiré
-    if (gigAgent.isInvitationExpired()) {
-      return res.status(StatusCodes.BAD_REQUEST).json({ 
-        message: 'Invitation has expired' 
-      });
+    // ✅ Permettre le rejet même si l'invitation est expirée
+    // if (gigAgent.isInvitationExpired()) {
+    //   return res.status(StatusCodes.BAD_REQUEST).json({ 
+    //     message: 'Invitation has expired' 
+    //   });
+    // }
+
+    const agentId = gigAgent.agentId;
+    const gigId = gigAgent.gigId;
+
+    // 🆕 Supprimer complètement la relation au lieu de la marquer comme rejected
+    try {
+      // 1. Supprimer de Agent.gigs
+      await Agent.findByIdAndUpdate(
+        agentId,
+        { $pull: { gigs: { gigId: gigId } } }
+      );
+
+      // 2. Supprimer de Gig.agents
+      await Gig.findByIdAndUpdate(
+        gigId,
+        { $pull: { agents: { agentId: agentId } } }
+      );
+
+      // 3. Supprimer le document GigAgent
+      await GigAgent.findByIdAndDelete(req.params.id);
+
+      console.log(`✅ Invitation rejected and deleted: Agent ${agentId} <-> Gig ${gigId}`);
+
+    } catch (deleteError) {
+      console.error('Erreur lors de la suppression:', deleteError);
+      throw deleteError;
     }
 
-    // Rejeter l'enrollment avec les notes optionnelles
-    await gigAgent.rejectEnrollment(req.body.notes);
-
-    // Récupérer le gigAgent mis à jour avec les relations
-    const updatedGigAgent = await GigAgent.findById(gigAgent._id)
-      .populate('agentId')
-      .populate('gigId');
-
     res.status(StatusCodes.OK).json({
-      message: 'Invitation rejected successfully',
-      gigAgent: updatedGigAgent
+      message: 'Invitation rejected and removed successfully'
     });
 
   } catch (error) {
@@ -1240,10 +1408,32 @@ export const sendEnrollmentRequest = async (req, res) => {
     // Enregistrer la demande d'enrollment
     await gigAgent.requestEnrollment(req.body.notes);
 
+    // 🆕 Synchroniser le statut dans Agent.gigs et Gig.agents
+    try {
+      await syncAgentGigRelationship(
+        req.params.agentId, 
+        req.params.gigId, 
+        'requested',
+        { 
+          invitationDate: new Date(),
+          gigAgentId: gigAgent._id
+        }
+      );
+    } catch (syncError) {
+      console.error('Erreur lors de la synchronisation:', syncError);
+    }
+
     // Récupérer le gigAgent mis à jour avec les relations
     const updatedGigAgent = await GigAgent.findById(gigAgent._id)
       .populate('agentId')
-      .populate('gigId');
+      .populate({
+        path: 'gigId',
+        populate: [
+          { path: 'commission.currency' },
+          { path: 'destination_zone' },
+          { path: 'availability.time_zone' }
+        ]
+      });
 
     res.status(StatusCodes.OK).json({
       message: 'Enrollment request sent successfully',
@@ -1265,7 +1455,14 @@ export const getGigAgentsByStatus = async (req, res) => {
     
     const gigAgents = await GigAgent.find({ status })
       .populate('agentId')
-      .populate('gigId')
+      .populate({
+        path: 'gigId',
+        populate: [
+          { path: 'commission.currency' },
+          { path: 'destination_zone' },
+          { path: 'availability.time_zone' }
+        ]
+      })
       .sort({ createdAt: -1 });
 
     res.status(StatusCodes.OK).json({
@@ -1312,5 +1509,53 @@ export const getGigAgentStats = async (req, res) => {
   } catch (error) {
     console.error('Error in getGigAgentStats:', error);
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+// 🆕 Get agent's gigs with full details and status
+export const getAgentGigsWithStatus = async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    const { status } = req.query; // Optionnel : filtrer par statut
+
+    const gigs = await getAgentGigsWithDetails(agentId, status);
+
+    res.status(StatusCodes.OK).json({
+      message: 'Agent gigs retrieved successfully',
+      count: gigs.length,
+      agentId,
+      filterStatus: status || 'all',
+      gigs
+    });
+
+  } catch (error) {
+    console.error('Error in getAgentGigsWithStatus:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ 
+      message: error.message 
+    });
+  }
+};
+
+// 🆕 Get gig's agents with full details and status
+export const getGigAgentsWithStatus = async (req, res) => {
+  try {
+    const { gigId } = req.params;
+    const { status } = req.query; // Optionnel : filtrer par statut
+
+    const agents = await getGigAgentsWithDetails(gigId, status);
+
+    res.status(StatusCodes.OK).json({
+      message: 'Gig agents retrieved successfully',
+      count: agents.length,
+      gigId,
+      filterStatus: status || 'all',
+      agents
+    });
+
+  } catch (error) {
+    console.error('Error in getGigAgentsWithStatus:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ 
+      message: error.message 
+    });
   }
 };

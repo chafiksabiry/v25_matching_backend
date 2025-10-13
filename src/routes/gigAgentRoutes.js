@@ -18,7 +18,9 @@ import {
   acceptEnrollmentRequest,
   agentAcceptInvitation,
   agentRejectInvitation,
-  sendEnrollmentRequest
+  sendEnrollmentRequest,
+  getAgentGigsWithStatus,
+  getGigAgentsWithStatus
 } from '../controllers/gigAgentController.js';
 
 const router = express.Router();
@@ -61,5 +63,12 @@ router.post('/invitations/:id/reject', agentRejectInvitation);
 
 // Route pour qu'un agent envoie une demande d'enrollment
 router.post('/enrollment-request/:agentId/:gigId', sendEnrollmentRequest);
+
+// 🆕 Routes simplifiées pour récupérer les gigs/agents avec populate et status
+// GET /api/gig-agents/agents/:agentId/gigs?status=invited
+router.get('/agents/:agentId/gigs', getAgentGigsWithStatus);
+
+// GET /api/gig-agents/gigs/:gigId/agents?status=enrolled
+router.get('/gigs/:gigId/agents', getGigAgentsWithStatus);
 
 export default router; 
