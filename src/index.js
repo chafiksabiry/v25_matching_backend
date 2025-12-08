@@ -24,7 +24,7 @@ const connectDB = async () => {
   try {
     // Use a fallback connection string for demo purposes if environment variable is not set
     // or if it's set to localhost (which won't work in the browser environment)
-    const connectionString = process.env.MONGODB_URI || 'mongodb://localhost:27017/matching';
+    const connectionString = process.env.MONGODB_URI || 'mongodb://harx:ix5S3vU6BjKn4MHp@207.180.226.2:27017/V25_HarxProd';
     
     await mongoose.connect(connectionString);
     console.log('Connected to MongoDB');
