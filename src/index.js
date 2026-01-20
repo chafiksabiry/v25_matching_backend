@@ -14,11 +14,11 @@ const app = express();
 
 const corsOptions = {
   origin: [
-    'https://v25.harx.ai',
-    'https://v25-preprod.harx.ai',
-    'https://matching.harx.ai/',
+    'https://harx25pageslinks.netlify.app',
+    'https://harx25pageslinks.netlify.app',
+    'https://harxv25matchingfrontend.netlify.app/',
     'http://localhost:5181',
-    'https://preprod-matching.harx.ai/'
+    'hhttps://harxv25matchingfrontend.netlify.app/'
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],

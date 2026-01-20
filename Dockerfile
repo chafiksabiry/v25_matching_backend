@@ -9,7 +9,7 @@ RUN npm install
 COPY . .
 
 ENV MONGODB_URI=mongodb://harx:gcZ62rl8hoME@38.242.208.242:27018/V25_CompanySearchWizard
-ENV QIANKUN_FRONT_URL=https://v25-preprod.harx.ai
+ENV QIANKUN_FRONT_URL=https://harx25pageslinks.netlify.app
 ENV IS_PREPROD=false
 
 ENV AWS_REGION=eu-west-3
