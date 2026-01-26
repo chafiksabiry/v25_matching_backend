@@ -2134,6 +2134,7 @@ export const createGigAgentFromMatch = async (req, res) => {
 
     const savedGigAgent = await gigAgent.save();
 
+    let emailSent = false;
     // Envoyer l'email de notification
     try {
       const emailResult = await sendMatchingNotification(agent, gig, matchDetails);
@@ -2141,10 +2142,12 @@ export const createGigAgentFromMatch = async (req, res) => {
       if (emailResult.success) {
         // Marquer l'email comme envoyé
         await savedGigAgent.markEmailSent();
+        emailSent = true;
+      } else {
+        console.error('❌ SMTP Error detail in matchController:', emailResult.error);
       }
     } catch (emailError) {
-      // Erreur lors de l'envoi de l'email
-      // Ne pas échouer la création si l'email échoue
+      console.error('❌ Exception in matchController sending email:', emailError);
     }
 
     // Retourner la réponse avec les détails
@@ -2162,7 +2165,7 @@ export const createGigAgentFromMatch = async (req, res) => {
     res.status(StatusCodes.CREATED).json({
       message: 'Assignation créée avec succès',
       gigAgent: populatedGigAgent,
-      emailSent: true,
+      emailSent: emailSent,
       matchScore: matchScore
     });
 
