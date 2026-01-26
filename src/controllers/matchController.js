@@ -20,18 +20,18 @@ import mongoose from 'mongoose';
 // 🆕 Fonction helper pour extraire les données propres d'un objet MongoDB
 const extractCleanData = (obj) => {
   if (!obj) return null;
-  
+
   // Si c'est un ObjectId, retourner en string
   if (typeof obj === 'object' && obj._bsontype === 'ObjectId') {
     return obj.toString();
   }
-  
+
   // Si c'est un objet Mongoose avec _id, extraire les données pertinentes
   if (typeof obj === 'object' && obj._id) {
     const clean = {
       _id: obj._id.toString()
     };
-    
+
     // Ajouter les propriétés utiles si elles existent
     if (obj.name) clean.name = obj.name;
     if (obj.title) clean.title = obj.title;
@@ -39,10 +39,10 @@ const extractCleanData = (obj) => {
     if (obj.description) clean.description = obj.description;
     if (obj.category) clean.category = obj.category;
     if (obj.nativeName) clean.nativeName = obj.nativeName;
-    
+
     return clean;
   }
-  
+
   // Sinon retourner tel quel
   return obj;
 };
@@ -51,14 +51,14 @@ const extractCleanData = (obj) => {
 const getLanguageNames = async (languageIds) => {
   try {
     if (!languageIds || languageIds.length === 0) return [];
-    
+
     const languages = await Language.find({ _id: { $in: languageIds } });
     const languageMap = {};
-    
+
     languages.forEach(language => {
       languageMap[language._id.toString()] = language.name;
     });
-    
+
     return languageIds.map(id => ({
       id: id,
       name: languageMap[id.toString()] || 'Unknown Language'
@@ -73,14 +73,14 @@ const getLanguageNames = async (languageIds) => {
 const getIndustryNames = async (industryIds) => {
   try {
     if (!industryIds || industryIds.length === 0) return [];
-    
+
     const industries = await Industry.find({ _id: { $in: industryIds } });
     const industryMap = {};
-    
+
     industries.forEach(industry => {
       industryMap[industry._id.toString()] = industry.name;
     });
-    
+
     return industryIds.map(id => ({
       id: id,
       name: industryMap[id.toString()] || 'Unknown Industry'
@@ -95,14 +95,14 @@ const getIndustryNames = async (industryIds) => {
 const getActivityNames = async (activityIds) => {
   try {
     if (!activityIds || activityIds.length === 0) return [];
-    
+
     const activities = await Activity.find({ _id: { $in: activityIds } });
     const activityMap = {};
-    
+
     activities.forEach(activity => {
       activityMap[activity._id.toString()] = activity.name;
     });
-    
+
     return activityIds.map(id => ({
       id: id,
       name: activityMap[id.toString()] || 'Unknown Activity'
@@ -116,7 +116,7 @@ const getActivityNames = async (activityIds) => {
 // Language normalization function
 const normalizeLanguage = (language) => {
   if (!language) return '';
-  
+
   // Handle populated Language object case (has name property)
   if (typeof language === 'object' && language.name) {
     language = language.name;
@@ -125,12 +125,12 @@ const normalizeLanguage = (language) => {
   else if (typeof language === 'object' && language.toString) {
     language = language.toString();
   }
-  
+
   // Ensure language is a string before calling toLowerCase
   if (typeof language !== 'string') {
     return '';
   }
-  
+
   const languageMap = {
     'french': 'french',
     'français': 'french',
@@ -158,7 +158,7 @@ const normalizeLanguage = (language) => {
 const getSkillNames = async (skillIds, skillType) => {
   try {
     if (!skillIds || skillIds.length === 0) return [];
-    
+
     let SkillModel;
     switch (skillType) {
       case 'technical':
@@ -173,14 +173,14 @@ const getSkillNames = async (skillIds, skillType) => {
       default:
         return skillIds.map(id => ({ id, name: 'Unknown Skill' }));
     }
-    
+
     const skills = await SkillModel.find({ _id: { $in: skillIds } });
     const skillMap = {};
-    
+
     skills.forEach(skill => {
       skillMap[skill._id.toString()] = skill.name;
     });
-    
+
     return skillIds.map(id => ({
       id: id,
       name: skillMap[id.toString()] || 'Unknown Skill'
@@ -301,7 +301,7 @@ export const getMatchById = async (req, res) => {
           { path: 'availability.time_zone' }
         ]
       });
-    
+
     if (!match) {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Match not found' });
     }
@@ -321,7 +321,7 @@ export const getMatchById = async (req, res) => {
     // Calculer les correspondances de timezone et région
     const gigTimezoneId = match.gigId.availability?.time_zone || match.gigId.availability?.timeZone;
     const agentTimezoneId = match.agentId.availability?.timeZone;
-    
+
     const timezoneMatch = await compareTimezones(gigTimezoneId, agentTimezoneId);
     const regionMatch = await compareRegions(match.gigId.destination_zone, agentTimezoneId);
 
@@ -551,7 +551,7 @@ const compareRegions = async (gigDestinationZone, agentCountryCode) => {
 
     // Comparer les codes de pays
     const isSameRegion = gigDestinationZone.toUpperCase() === agentCountryCode.toUpperCase();
-    
+
     let score = 0;
     let status = "no_match";
     let reason = "";
@@ -609,7 +609,7 @@ const compareSchedules = (gigSchedule, agentAvailability) => {
 
   // Normaliser la structure de disponibilité de l'agent
   let normalizedAgentSchedule = [];
-  
+
   if (agentAvailability.schedule && Array.isArray(agentAvailability.schedule)) {
     // Utiliser la structure détaillée si elle existe
     normalizedAgentSchedule = agentAvailability.schedule;
@@ -674,7 +674,7 @@ const compareSchedules = (gigSchedule, agentAvailability) => {
     }
 
     const agentDay = normalizedAgentSchedule.find(day => day && day.day === gigDay.day);
-    
+
     if (!agentDay || !agentDay.hours) {
       scheduleDetails.missingDays.push(gigDay.day);
       return;
@@ -710,7 +710,7 @@ const compareSchedules = (gigSchedule, agentAvailability) => {
 
   const scheduleScore = matchingDays / totalDays;
   const scheduleStatus = scheduleScore === 1 ? "perfect_match" :
-                       scheduleScore > 0 ? "partial_match" : "no_match";
+    scheduleScore > 0 ? "partial_match" : "no_match";
 
   return {
     score: scheduleScore,
@@ -736,19 +736,19 @@ export const findMatchesForGigById = async (req, res) => {
       .populate('industries', 'name description category')
       .populate('activities', 'name description category')
       .populate('availability.time_zone', 'zoneName countryCode countryName gmtOffset');
-    
+
     if (!gig) {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Gig not found' });
     }
 
 
     // Get weights from request body or use defaults
-    const weights = req.body.weights || { 
-      skills: 0, 
-      languages: 0, 
-      experience: 0, 
+    const weights = req.body.weights || {
+      skills: 0,
+      languages: 0,
+      experience: 0,
       region: 0,
-      timezone: 0, 
+      timezone: 0,
       industry: 0,
       activity: 0
     };
@@ -759,28 +759,28 @@ export const findMatchesForGigById = async (req, res) => {
     // Validate weights
     const validWeightKeys = ['skills', 'languages', 'experience', 'region', 'timezone', 'industry', 'activity', 'activities', 'availability'];
     const invalidKeys = Object.keys(weights).filter(key => !validWeightKeys.includes(key));
-    
+
     console.log('🔍 Valid weight keys:', validWeightKeys);
     console.log('🔍 Invalid keys found:', invalidKeys);
-    
+
     if (invalidKeys.length > 0) {
       console.error('❌ Invalid weight keys detected:', invalidKeys);
-      return res.status(StatusCodes.BAD_REQUEST).json({ 
-        message: `Invalid weight keys: ${invalidKeys.join(', ')}. Valid keys are: ${validWeightKeys.join(', ')}` 
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        message: `Invalid weight keys: ${invalidKeys.join(', ')}. Valid keys are: ${validWeightKeys.join(', ')}`
       });
     }
 
     // Validate weight values (should be between 0 and 1)
-    const invalidWeights = Object.entries(weights).filter(([key, value]) => 
+    const invalidWeights = Object.entries(weights).filter(([key, value]) =>
       typeof value !== 'number' || value < 0 || value > 1
     );
-    
+
     console.log('🔍 Invalid weight values found:', invalidWeights);
-    
+
     if (invalidWeights.length > 0) {
       console.error('❌ Invalid weight values detected:', invalidWeights);
-      return res.status(StatusCodes.BAD_REQUEST).json({ 
-        message: `Invalid weight values. All weights must be numbers between 0 and 1. Invalid: ${invalidWeights.map(([key, value]) => `${key}=${value}`).join(', ')}` 
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        message: `Invalid weight values. All weights must be numbers between 0 and 1. Invalid: ${invalidWeights.map(([key, value]) => `${key}=${value}`).join(', ')}`
       });
     }
 
@@ -820,7 +820,7 @@ export const findMatchesForGigById = async (req, res) => {
     // ⚠️ NOUVEAU: Pas de pré-filtrage - évaluer tous les agents
     // Le filtrage se fera uniquement dans la phase séquentielle selon les poids
     console.log(`📊 Évaluation de ${agents.length} agents sans pré-filtrage`);
-    
+
     // Validate agents data
     if (!agents || agents.length === 0) {
       return res.status(StatusCodes.OK).json({
@@ -832,7 +832,7 @@ export const findMatchesForGigById = async (req, res) => {
         message: 'No agents available for matching'
       });
     }
-    
+
     // Garder tous les agents pour l'évaluation complète
     const agentsWithActivities = agents;
 
@@ -846,592 +846,677 @@ export const findMatchesForGigById = async (req, res) => {
           return null;
         }
 
-      // Language matching - utiliser les données populées
-      const requiredLanguages = gig.skills?.languages || [];
-      const agentLanguages = agent.personalInfo?.languages || [];
-      
+        // Language matching - utiliser les données populées
+        const requiredLanguages = gig.skills?.languages || [];
+        const agentLanguages = agent.personalInfo?.languages || [];
 
 
-      let matchingLanguages = [];
-      let missingLanguages = [];
-      let insufficientLanguages = [];
 
-      requiredLanguages.forEach(reqLang => {
-        if (!reqLang?.language) return;
-        
-        // Utiliser les données populées directement
-        const reqLangId = reqLang.language?._id?.toString() || reqLang.language?.toString();
-        const reqLangName = reqLang.language?.name || 'Unknown Language';
-        
+        let matchingLanguages = [];
+        let missingLanguages = [];
+        let insufficientLanguages = [];
+
+        requiredLanguages.forEach(reqLang => {
+          if (!reqLang?.language) return;
+
+          // Utiliser les données populées directement
+          const reqLangId = reqLang.language?._id?.toString() || reqLang.language?.toString();
+          const reqLangName = reqLang.language?.name || 'Unknown Language';
 
 
-        const agentLang = agentLanguages.find(
-          lang => {
-            const agentLangId = lang?.language?._id?.toString() || lang?.language?.toString();
-            return agentLangId === reqLangId;
-          }
-        );
 
-        if (agentLang) {
-          const agentLangName = agentLang.language?.name || 'Unknown Language';
+          const agentLang = agentLanguages.find(
+            lang => {
+              const agentLangId = lang?.language?._id?.toString() || lang?.language?.toString();
+              return agentLangId === reqLangId;
+            }
+          );
 
-          
-          // Normalize proficiency levels for comparison
-          const normalizedReqLevel = normalizeLanguage(reqLang.proficiency);
-          const normalizedAgentLevel = normalizeLanguage(agentLang.proficiency);
-          
-          // Check if the required level is native or C2
-          const isNativeRequired = ['native', 'natif', 'c2'].includes(normalizedReqLevel);
-          
-          // For native/C2 level, only accept native, natif or C2 proficiency
-          let isLevelMatch = isNativeRequired 
-            ? ['native', 'natif', 'c2'].includes(normalizedAgentLevel)
-            : getLanguageLevelScore(normalizedAgentLevel) >= getLanguageLevelScore(normalizedReqLevel);
+          if (agentLang) {
+            const agentLangName = agentLang.language?.name || 'Unknown Language';
 
-          // Vérification de sécurité : forcer la logique correcte
-          const agentScore = getLanguageLevelScore(normalizedAgentLevel);
-          const requiredScore = getLanguageLevelScore(normalizedReqLevel);
-          
 
-          
-          // Si l'agent a un niveau inférieur, c'est forcément un no_match
-          if (agentScore < requiredScore) {
-            isLevelMatch = false;
+            // Normalize proficiency levels for comparison
+            const normalizedReqLevel = normalizeLanguage(reqLang.proficiency);
+            const normalizedAgentLevel = normalizeLanguage(agentLang.proficiency);
 
+            // Check if the required level is native or C2
+            const isNativeRequired = ['native', 'natif', 'c2'].includes(normalizedReqLevel);
+
+            // For native/C2 level, only accept native, natif or C2 proficiency
+            let isLevelMatch = isNativeRequired
+              ? ['native', 'natif', 'c2'].includes(normalizedAgentLevel)
+              : getLanguageLevelScore(normalizedAgentLevel) >= getLanguageLevelScore(normalizedReqLevel);
+
+            // Vérification de sécurité : forcer la logique correcte
+            const agentScore = getLanguageLevelScore(normalizedAgentLevel);
+            const requiredScore = getLanguageLevelScore(normalizedReqLevel);
+
+
+
+            // Si l'agent a un niveau inférieur, c'est forcément un no_match
+            if (agentScore < requiredScore) {
+              isLevelMatch = false;
+
+            } else {
+              // Si l'agent a un niveau suffisant, confirmer le match
+              isLevelMatch = true;
+
+            }
+
+
+
+            if (isLevelMatch) {
+
+              matchingLanguages.push({
+                language: extractCleanData(reqLang.language),
+                languageName: reqLangName,
+                requiredLevel: reqLang.proficiency,
+                agentLevel: agentLang.proficiency
+              });
+            } else {
+
+              insufficientLanguages.push({
+                language: extractCleanData(reqLang.language),
+                languageName: reqLangName,
+                requiredLevel: reqLang.proficiency,
+                agentLevel: agentLang.proficiency
+              });
+            }
           } else {
-            // Si l'agent a un niveau suffisant, confirmer le match
-            isLevelMatch = true;
-
-          }
-
-
-
-          if (isLevelMatch) {
-
-            matchingLanguages.push({
+            missingLanguages.push({
               language: extractCleanData(reqLang.language),
               languageName: reqLangName,
-              requiredLevel: reqLang.proficiency,
-              agentLevel: agentLang.proficiency
-            });
-          } else {
-
-            insufficientLanguages.push({
-              language: extractCleanData(reqLang.language),
-              languageName: reqLangName,
-              requiredLevel: reqLang.proficiency,
-              agentLevel: agentLang.proficiency
+              requiredLevel: reqLang.proficiency
             });
           }
+        });
+
+        // Industry matching - comparer les IDs des industries
+        // Extraire les IDs des industries (gérer les formats $oid et ObjectId)
+        const gigIndustryIds = (gig.industries || []).map(industry => {
+          if (typeof industry === 'object' && industry.$oid) {
+            return industry.$oid;
+          } else if (typeof industry === 'object' && industry._id) {
+            return industry._id;
+          } else {
+            return industry;
+          }
+        });
+
+        const agentIndustryIds = (agent.professionalSummary?.industries || []).map(industry => {
+          if (typeof industry === 'object' && industry.$oid) {
+            return industry.$oid;
+          } else if (typeof industry === 'object' && industry._id) {
+            return industry._id;
+          } else {
+            return industry;
+          }
+        });
+
+
+        // Récupérer les noms des industries pour l'affichage
+        const [gigIndustryNames, agentIndustryNames] = await Promise.all([
+          getIndustryNames(gigIndustryIds),
+          getIndustryNames(agentIndustryIds)
+        ]);
+
+        // Créer les mappings pour les industries
+        const gigIndustryMap = {};
+        const agentIndustryMap = {};
+
+        gigIndustryNames.forEach(industry => {
+          gigIndustryMap[industry.id.toString()] = industry.name;
+        });
+
+        agentIndustryNames.forEach(industry => {
+          agentIndustryMap[industry.id.toString()] = industry.name;
+        });
+
+        let matchingIndustries = [];
+        let missingIndustries = [];
+        let industryMatchStatus;
+
+        // Gérer le cas où le gig n'a pas d'industries définies
+        let industryScore;
+        if (gigIndustryIds.length === 0) {
+          // Si le gig n'a pas d'industries, considérer comme un match neutre
+          industryScore = 1; // Score parfait si pas d'industries requises
+          industryMatchStatus = "neutral_match";
+
         } else {
-          missingLanguages.push({
-            language: extractCleanData(reqLang.language),
-            languageName: reqLangName,
-            requiredLevel: reqLang.proficiency
+          // Vérifier si l'agent a au moins une des industries requises par le gig
+          gigIndustryIds.forEach(gigIndustryId => {
+            if (!gigIndustryId) return;
+
+            const gigIndustryIdStr = gigIndustryId.toString();
+            const gigIndustryName = gigIndustryMap[gigIndustryIdStr] || 'Unknown Industry';
+
+            const agentHasIndustry = agentIndustryIds.some(
+              agentIndustryId => agentIndustryId && agentIndustryId.toString() === gigIndustryIdStr
+            );
+
+            if (agentHasIndustry) {
+              const agentIndustryName = agentIndustryMap[gigIndustryIdStr] || 'Unknown Industry';
+              matchingIndustries.push({
+                industry: gigIndustryId,
+                industryName: gigIndustryName,
+                agentIndustryName: agentIndustryName
+              });
+            } else {
+              missingIndustries.push({
+                industry: gigIndustryId,
+                industryName: gigIndustryName
+              });
+            }
           });
-        }
-      });
 
-      // Industry matching - comparer les IDs des industries
-      // Extraire les IDs des industries (gérer les formats $oid et ObjectId)
-      const gigIndustryIds = (gig.industries || []).map(industry => {
-        if (typeof industry === 'object' && industry.$oid) {
-          return industry.$oid;
-        } else if (typeof industry === 'object' && industry._id) {
-          return industry._id;
-        } else {
-          return industry;
-        }
-      });
-      
-      const agentIndustryIds = (agent.professionalSummary?.industries || []).map(industry => {
-        if (typeof industry === 'object' && industry.$oid) {
-          return industry.$oid;
-        } else if (typeof industry === 'object' && industry._id) {
-          return industry._id;
-        } else {
-          return industry;
-        }
-      });
+          // Calculer le score des industries (proportionnel)
+          industryScore = matchingIndustries.length / gigIndustryIds.length;
 
-
-      // Récupérer les noms des industries pour l'affichage
-      const [gigIndustryNames, agentIndustryNames] = await Promise.all([
-        getIndustryNames(gigIndustryIds),
-        getIndustryNames(agentIndustryIds)
-      ]);
-      
-      // Créer les mappings pour les industries
-      const gigIndustryMap = {};
-      const agentIndustryMap = {};
-      
-      gigIndustryNames.forEach(industry => {
-        gigIndustryMap[industry.id.toString()] = industry.name;
-      });
-      
-      agentIndustryNames.forEach(industry => {
-        agentIndustryMap[industry.id.toString()] = industry.name;
-      });
-
-      let matchingIndustries = [];
-      let missingIndustries = [];
-      let industryMatchStatus;
-
-      // Gérer le cas où le gig n'a pas d'industries définies
-      let industryScore;
-      if (gigIndustryIds.length === 0) {
-        // Si le gig n'a pas d'industries, considérer comme un match neutre
-        industryScore = 1; // Score parfait si pas d'industries requises
-        industryMatchStatus = "neutral_match";
-
-      } else {
-        // Vérifier si l'agent a au moins une des industries requises par le gig
-        gigIndustryIds.forEach(gigIndustryId => {
-          if (!gigIndustryId) return;
-          
-          const gigIndustryIdStr = gigIndustryId.toString();
-          const gigIndustryName = gigIndustryMap[gigIndustryIdStr] || 'Unknown Industry';
-          
-          const agentHasIndustry = agentIndustryIds.some(
-            agentIndustryId => agentIndustryId && agentIndustryId.toString() === gigIndustryIdStr
-          );
-
-          if (agentHasIndustry) {
-            const agentIndustryName = agentIndustryMap[gigIndustryIdStr] || 'Unknown Industry';
-            matchingIndustries.push({
-              industry: gigIndustryId,
-              industryName: gigIndustryName,
-              agentIndustryName: agentIndustryName
-            });
+          // Nouvelle logique : accepter au moins une industrie commune
+          if (matchingIndustries.length === 0) {
+            // Aucune industrie ne matche
+            industryMatchStatus = "no_match";
+          } else if (matchingIndustries.length === gigIndustryIds.length) {
+            // Toutes les industries matchent
+            industryMatchStatus = "perfect_match";
           } else {
-            missingIndustries.push({
-              industry: gigIndustryId,
-              industryName: gigIndustryName
-            });
+            // Au moins une industrie matche, mais pas toutes
+            industryMatchStatus = "partial_match";
+          }
+
+        }
+
+        // Activity matching - comparer les IDs des activités
+        // Extraire les IDs des activités (gérer les formats $oid et ObjectId)
+        const gigActivityIds = (gig.activities || []).map(activity => {
+          if (typeof activity === 'object' && activity.$oid) {
+            return activity.$oid;
+          } else if (typeof activity === 'object' && activity._id) {
+            return activity._id;
+          } else {
+            return activity;
           }
         });
 
-        // Calculer le score des industries (proportionnel)
-        industryScore = matchingIndustries.length / gigIndustryIds.length;
-        
-        // Nouvelle logique : accepter au moins une industrie commune
-        if (matchingIndustries.length === 0) {
-          // Aucune industrie ne matche
-          industryMatchStatus = "no_match";
-        } else if (matchingIndustries.length === gigIndustryIds.length) {
-          // Toutes les industries matchent
-          industryMatchStatus = "perfect_match";
-        } else {
-          // Au moins une industrie matche, mais pas toutes
-          industryMatchStatus = "partial_match";
-        }
-
-      }
-
-      // Activity matching - comparer les IDs des activités
-      // Extraire les IDs des activités (gérer les formats $oid et ObjectId)
-      const gigActivityIds = (gig.activities || []).map(activity => {
-        if (typeof activity === 'object' && activity.$oid) {
-          return activity.$oid;
-        } else if (typeof activity === 'object' && activity._id) {
-          return activity._id;
-        } else {
-          return activity;
-        }
-      });
-      
-      const agentActivityIds = (agent.professionalSummary?.activities || []).map(activity => {
-        if (typeof activity === 'object' && activity.$oid) {
-          return activity.$oid;
-        } else if (typeof activity === 'object' && activity._id) {
-          return activity._id;
-        } else {
-          return activity;
-        }
-      });
-
-      // Récupérer les noms des activités pour l'affichage
-      const [gigActivityNames, agentActivityNames] = await Promise.all([
-        getActivityNames(gigActivityIds),
-        getActivityNames(agentActivityIds)
-      ]);
-      
-      // Créer les mappings pour les activités
-      const gigActivityMap = {};
-      const agentActivityMap = {};
-      
-      gigActivityNames.forEach(activity => {
-        gigActivityMap[activity.id.toString()] = activity.name;
-      });
-      
-      agentActivityNames.forEach(activity => {
-        agentActivityMap[activity.id.toString()] = activity.name;
-      });
-
-      let matchingActivities = [];
-      let missingActivities = [];
-      let activityMatchStatus;
-
-      // Gérer le cas où le gig n'a pas d'activités définies
-      let activityScore;
-      if (gigActivityIds.length === 0) {
-        // Si le gig n'a pas d'activités, considérer comme un match neutre
-        activityScore = 1; // Score parfait si pas d'activités requises
-        activityMatchStatus = "neutral_match";
-      } else {
-        // Vérifier si l'agent a au moins une des activités requises par le gig
-        gigActivityIds.forEach(gigActivityId => {
-          if (!gigActivityId) return;
-          
-          const gigActivityIdStr = gigActivityId.toString();
-          const gigActivityName = gigActivityMap[gigActivityIdStr] || 'Unknown Activity';
-          
-          const agentHasActivity = agentActivityIds.some(
-            agentActivityId => agentActivityId && agentActivityId.toString() === gigActivityIdStr
-          );
-
-          if (agentHasActivity) {
-            const agentActivityName = agentActivityMap[gigActivityIdStr] || 'Unknown Activity';
-            matchingActivities.push({
-              activity: gigActivityId,
-              activityName: gigActivityName,
-              agentActivityName: agentActivityName
-            });
+        const agentActivityIds = (agent.professionalSummary?.activities || []).map(activity => {
+          if (typeof activity === 'object' && activity.$oid) {
+            return activity.$oid;
+          } else if (typeof activity === 'object' && activity._id) {
+            return activity._id;
           } else {
-            missingActivities.push({
-              activity: gigActivityId,
-              activityName: gigActivityName
-            });
+            return activity;
           }
         });
 
-        // Calculer le score des activités (proportionnel)
-        activityScore = matchingActivities.length / gigActivityIds.length;
-        
-        // Nouvelle logique : accepter au moins une activité commune
-        if (matchingActivities.length === 0) {
-          // Aucune activité ne matche
-          activityMatchStatus = "no_match";
-        } else if (matchingActivities.length === gigActivityIds.length) {
-          // Toutes les activités matchent
-          activityMatchStatus = "perfect_match";
+        // Récupérer les noms des activités pour l'affichage
+        const [gigActivityNames, agentActivityNames] = await Promise.all([
+          getActivityNames(gigActivityIds),
+          getActivityNames(agentActivityIds)
+        ]);
+
+        // Créer les mappings pour les activités
+        const gigActivityMap = {};
+        const agentActivityMap = {};
+
+        gigActivityNames.forEach(activity => {
+          gigActivityMap[activity.id.toString()] = activity.name;
+        });
+
+        agentActivityNames.forEach(activity => {
+          agentActivityMap[activity.id.toString()] = activity.name;
+        });
+
+        let matchingActivities = [];
+        let missingActivities = [];
+        let activityMatchStatus;
+
+        // Gérer le cas où le gig n'a pas d'activités définies
+        let activityScore;
+        if (gigActivityIds.length === 0) {
+          // Si le gig n'a pas d'activités, considérer comme un match neutre
+          activityScore = 1; // Score parfait si pas d'activités requises
+          activityMatchStatus = "neutral_match";
         } else {
-          // Au moins une activité matche, mais pas toutes
-          activityMatchStatus = "partial_match";
+          // Vérifier si l'agent a au moins une des activités requises par le gig
+          gigActivityIds.forEach(gigActivityId => {
+            if (!gigActivityId) return;
+
+            const gigActivityIdStr = gigActivityId.toString();
+            const gigActivityName = gigActivityMap[gigActivityIdStr] || 'Unknown Activity';
+
+            const agentHasActivity = agentActivityIds.some(
+              agentActivityId => agentActivityId && agentActivityId.toString() === gigActivityIdStr
+            );
+
+            if (agentHasActivity) {
+              const agentActivityName = agentActivityMap[gigActivityIdStr] || 'Unknown Activity';
+              matchingActivities.push({
+                activity: gigActivityId,
+                activityName: gigActivityName,
+                agentActivityName: agentActivityName
+              });
+            } else {
+              missingActivities.push({
+                activity: gigActivityId,
+                activityName: gigActivityName
+              });
+            }
+          });
+
+          // Calculer le score des activités (proportionnel)
+          activityScore = matchingActivities.length / gigActivityIds.length;
+
+          // Nouvelle logique : accepter au moins une activité commune
+          if (matchingActivities.length === 0) {
+            // Aucune activité ne matche
+            activityMatchStatus = "no_match";
+          } else if (matchingActivities.length === gigActivityIds.length) {
+            // Toutes les activités matchent
+            activityMatchStatus = "perfect_match";
+          } else {
+            // Au moins une activité matche, mais pas toutes
+            activityMatchStatus = "partial_match";
+          }
         }
-      }
 
-      // Skills matching - utiliser les données populées directement
-      const gigTechnicalSkills = gig.skills?.technical || [];
-      const gigProfessionalSkills = gig.skills?.professional || [];
-      const gigSoftSkills = gig.skills?.soft || [];
-      
-      const agentTechnicalSkills = agent.skills?.technical || [];
-      const agentProfessionalSkills = agent.skills?.professional || [];
-      const agentSoftSkills = agent.skills?.soft || [];
+        // Skills matching - utiliser les données populées directement
+        const gigTechnicalSkills = gig.skills?.technical || [];
+        const gigProfessionalSkills = gig.skills?.professional || [];
+        const gigSoftSkills = gig.skills?.soft || [];
 
-      // Experience matching
-      const gigRequiredExperience = parseInt(gig.seniority?.yearsExperience) || 0;
-      const agentExperience = parseInt(agent.professionalSummary?.yearsOfExperience) || 0;
+        const agentTechnicalSkills = agent.skills?.technical || [];
+        const agentProfessionalSkills = agent.skills?.professional || [];
+        const agentSoftSkills = agent.skills?.soft || [];
 
-      let experienceMatch = {
-        score: 0,
-        details: {
-          gigRequiredExperience,
-          agentExperience,
-          difference: agentExperience - gigRequiredExperience,
-          reason: ''
-        },
-        status: 'no_match'
-      };
+        // Experience matching
+        const gigRequiredExperience = parseInt(gig.seniority?.yearsExperience) || 0;
+        const agentExperience = parseInt(agent.professionalSummary?.yearsOfExperience) || 0;
 
-      if (agentExperience >= gigRequiredExperience) {
-        if (agentExperience === gigRequiredExperience) {
-          experienceMatch = {
-            score: 1,
-            details: {
-              gigRequiredExperience,
-              agentExperience,
-              difference: 0,
-              reason: 'Perfect match - agent has exactly the required experience'
-            },
-            status: 'perfect_match'
-          };
-        } else {
-          // Score parfait pour expérience supérieure, limité à 1.0
-          experienceMatch = {
-            score: 1.0,
-            details: {
-              gigRequiredExperience,
-              agentExperience,
-              difference: agentExperience - gigRequiredExperience,
-              reason: `Agent has ${agentExperience - gigRequiredExperience} more years of experience than required`
-            },
-            status: 'perfect_match'
-          };
-        }
-      } else {
-        experienceMatch = {
-          score: Math.max(0, 1 - (gigRequiredExperience - agentExperience) * 0.2),
+        let experienceMatch = {
+          score: 0,
           details: {
             gigRequiredExperience,
             agentExperience,
             difference: agentExperience - gigRequiredExperience,
-            reason: `Agent has ${gigRequiredExperience - agentExperience} fewer years of experience than required`
+            reason: ''
           },
-          status: 'partial_match'
+          status: 'no_match'
         };
-      }
-      
-      // Créer les listes de compétences requises et de l'agent avec les données populées
-      const requiredSkills = [
-        ...gigTechnicalSkills.map(s => ({ 
-          skill: s.skill, 
-          level: s.level, 
-          type: 'technical',
-          name: s.skill?.name || 'Unknown Skill'
-        })),
-        ...gigProfessionalSkills.map(s => ({ 
-          skill: s.skill, 
-          level: s.level, 
-          type: 'professional',
-          name: s.skill?.name || 'Unknown Skill'
-        })),
-        ...gigSoftSkills.map(s => ({ 
-          skill: s.skill, 
-          level: s.level, 
-          type: 'soft',
-          name: s.skill?.name || 'Unknown Skill'
-        }))
-      ];
 
-      const agentSkills = [
-        ...agentTechnicalSkills.map(s => ({ 
-          skill: s.skill, 
-          level: s.level, 
-          type: 'technical',
-          name: s.skill?.name || 'Unknown Skill'
-        })),
-        ...agentProfessionalSkills.map(s => ({ 
-          skill: s.skill, 
-          level: s.level, 
-          type: 'professional',
-          name: s.skill?.name || 'Unknown Skill'
-        })),
-        ...agentSoftSkills.map(s => ({ 
-          skill: s.skill, 
-          level: s.level, 
-          type: 'soft',
-          name: s.skill?.name || 'Unknown Skill'
-        }))
-      ];
-
-
-
-      let matchingSkills = [];
-      let missingSkills = [];
-      let insufficientSkills = [];
-
-      // Check if agent has all required skills by ID
-      const hasAllRequiredSkills = requiredSkills.every(reqSkill => {
-        if (!reqSkill?.skill) return true;
-        
-        // Comparer les IDs des skills (avec gestion des objets populés)
-        const reqSkillId = reqSkill.skill?._id?.toString() || reqSkill.skill?.toString();
-        const agentSkill = agentSkills.find(
-          skill => {
-            const agentSkillId = skill?.skill?._id?.toString() || skill?.skill?.toString();
-            return agentSkillId === reqSkillId && skill.type === reqSkill.type;
+        if (agentExperience >= gigRequiredExperience) {
+          if (agentExperience === gigRequiredExperience) {
+            experienceMatch = {
+              score: 1,
+              details: {
+                gigRequiredExperience,
+                agentExperience,
+                difference: 0,
+                reason: 'Perfect match - agent has exactly the required experience'
+              },
+              status: 'perfect_match'
+            };
+          } else {
+            // Score parfait pour expérience supérieure, limité à 1.0
+            experienceMatch = {
+              score: 1.0,
+              details: {
+                gigRequiredExperience,
+                agentExperience,
+                difference: agentExperience - gigRequiredExperience,
+                reason: `Agent has ${agentExperience - gigRequiredExperience} more years of experience than required`
+              },
+              status: 'perfect_match'
+            };
           }
-        );
-
-        if (agentSkill) {
-          // Si l'agent a la skill (même ID), c'est un match, peu importe le niveau
-          matchingSkills.push({
-            skill: reqSkill.skill,
-            skillName: reqSkill.name,
-            requiredLevel: reqSkill.level,
-            agentLevel: agentSkill.level,
-            type: reqSkill.type,
-            agentSkillName: agentSkill.name
-          });
-          return true;
         } else {
-          missingSkills.push({
-            skill: reqSkill.skill,
-            skillName: reqSkill.name,
-            type: reqSkill.type,
-            requiredLevel: reqSkill.level
-          });
-          return false;
+          experienceMatch = {
+            score: Math.max(0, 1 - (gigRequiredExperience - agentExperience) * 0.2),
+            details: {
+              gigRequiredExperience,
+              agentExperience,
+              difference: agentExperience - gigRequiredExperience,
+              reason: `Agent has ${gigRequiredExperience - agentExperience} fewer years of experience than required`
+            },
+            status: 'partial_match'
+          };
         }
-      });
 
-          // Timezone matching
-    const gigTimezoneId = gig.availability?.time_zone;
-    const agentTimezoneId = agent.availability?.timeZone;
-    
-    // Utiliser les données de timezone populées directement
-    const gigTimezoneData = gig.availability?.time_zone;
-    const agentTimezoneData = agent.availability?.timeZone;
-    
-    const timezoneMatch = await compareTimezones(gigTimezoneData, agentTimezoneData);
-
-    // Region matching - utiliser les données de timezone populées
-    const agentCountryCode = agent.availability?.timeZone?.countryCode;
-    const regionMatch = await compareRegions(gig.destination_zone, agentCountryCode);
-
-    // Schedule matching
-    console.log(`🗓️ Debugging availability for agent ${agent._id}:`);
-    console.log(`   Gig schedule:`, JSON.stringify(gig.availability?.schedule, null, 2));
-    console.log(`   Agent availability:`, JSON.stringify(agent.availability, null, 2));
-    const scheduleMatch = compareSchedules(gig.availability?.schedule, agent.availability);
-    console.log(`   Schedule match result:`, JSON.stringify(scheduleMatch, null, 2));
-
-      // Calculer le score des langues (proportionnel)
-      const languageScore = requiredLanguages.length > 0 ? 
-                           matchingLanguages.length / requiredLanguages.length : 
-                           1; // Si aucune langue requise, score parfait
-      
-      // Determine match status based on direct matches - accepter partial_match
-      const languageMatchStatus = matchingLanguages.length === requiredLanguages.length ? "perfect_match" : 
-                                 matchingLanguages.length > 0 ? "partial_match" : "no_match";
-      
-      // Skills match status - être plus flexible si l'agent n'a pas de compétences définies
-      let skillsMatchStatus;
-      const agentSkillsData = agent.skills || {};
-      const hasNoSkills = (!agentSkillsData.technical || agentSkillsData.technical.length === 0) &&
-                         (!agentSkillsData.professional || agentSkillsData.professional.length === 0) &&
-                         (!agentSkillsData.soft || agentSkillsData.soft.length === 0);
-      
-      if (hasNoSkills) {
-        // Si l'agent n'a pas de compétences définies, on considère que c'est un no_match
-        skillsMatchStatus = "no_match";
-      } else {
-        // Sinon, on utilise la logique normale
-        skillsMatchStatus = hasAllRequiredSkills ? "perfect_match" : "no_match";
-      }
-
-
-
-      // Overall match status - être moins strict et permettre des correspondances partielles
-      const overallMatchStatus = (languageMatchStatus === "perfect_match" && 
-                                skillsMatchStatus === "perfect_match" && 
-                                industryMatchStatus === "perfect_match" &&
-                                activityMatchStatus === "perfect_match" &&
-                                experienceMatch.status === "perfect_match" &&
-                                timezoneMatch.status === "perfect_match" &&
-                                regionMatch.status === "perfect_match" &&
-                                scheduleMatch.status === "perfect_match") ? "perfect_match" :
-                                (languageMatchStatus === "no_match" && 
-                                 skillsMatchStatus === "no_match" && 
-                                 industryMatchStatus === "no_match" &&
-                                 activityMatchStatus === "no_match" &&
-                                 experienceMatch.status === "no_match" &&
-                                 timezoneMatch.status === "no_match" &&
-                                 regionMatch.status === "no_match" &&
-                                 scheduleMatch.status === "no_match") ? "no_match" :
-                                "partial_match";
-
-      // ⭐ CALCUL DU SCORE TOTAL SELON LE CAS
-      let normalizedTotalScore = 0;
-      
-      // Vérifier si tous les weights sont à 0
-      const allWeightsZero = Object.values(weights).every(weight => weight === 0);
-      
-      if (allWeightsZero) {
-        // CAS SPÉCIAL: Tous weights = 0 → Diviser par 8 (tous les critères)
-        const allScores = [
-          languageScore,
-          industryScore,
-          activityScore,
-          experienceMatch.status === "perfect_match" ? 1 : 0, // ⭐ BINAIRE
-          timezoneMatch.status === "perfect_match" ? 1 : 0, // ⭐ BINAIRE
-          regionMatch.status === "perfect_match" ? 1 : 0, // ⭐ BINAIRE
-          scheduleMatch.score,
-          // Ajouter un 8ème critère (skills) - utiliser 1 si perfect_match, 0 sinon
-          skillsMatchStatus === "perfect_match" ? 1 : 0
+        // Créer les listes de compétences requises et de l'agent avec les données populées
+        const requiredSkills = [
+          ...gigTechnicalSkills.map(s => ({
+            skill: s.skill,
+            level: s.level,
+            type: 'technical',
+            name: s.skill?.name || 'Unknown Skill'
+          })),
+          ...gigProfessionalSkills.map(s => ({
+            skill: s.skill,
+            level: s.level,
+            type: 'professional',
+            name: s.skill?.name || 'Unknown Skill'
+          })),
+          ...gigSoftSkills.map(s => ({
+            skill: s.skill,
+            level: s.level,
+            type: 'soft',
+            name: s.skill?.name || 'Unknown Skill'
+          }))
         ];
-        
-        const totalScore = allScores.reduce((a, b) => a + b, 0);
-        normalizedTotalScore = totalScore / 8; // Diviser par 8 critères
-          
-        console.log(`🧮 Score total pour agent ${agent._id}: (${allScores.join(' + ')}) ÷ 8 = ${normalizedTotalScore.toFixed(3)}`);
-      } else {
-        // CAS NORMAL: Score pondéré - IGNORER les weights = 0
-        let totalScore = 0;
-        let totalWeights = 0;
-        
-        // Ajouter seulement les critères avec weight > 0
-        if (weights.languages > 0) {
-          totalScore += languageScore * weights.languages;
-          totalWeights += weights.languages;
-        }
-        
-        if ((weights.industry || weights.weight || 0) > 0) {
-          const industryWeight = weights.industry || weights.weight || 0;
-          totalScore += industryScore * industryWeight;
-          totalWeights += industryWeight;
-        }
-        
-        if (weights.activity > 0) {
-          totalScore += activityScore * weights.activity;
-          totalWeights += weights.activity;
-        }
-        
-        if (weights.experience > 0) {
-          totalScore += experienceMatch.score * weights.experience;
-          totalWeights += weights.experience;
-        }
-        
-        if (weights.timezone > 0) {
-          totalScore += timezoneMatch.score * weights.timezone;
-          totalWeights += weights.timezone;
-        }
-        
-        if (weights.region > 0) {
-          totalScore += regionMatch.score * weights.region;
-          totalWeights += weights.region;
-        }
-        
-        if ((weights.availability || weights.schedule || 0) > 0) {
-          const availabilityWeight = weights.availability || weights.schedule || 0;
-          totalScore += scheduleMatch.score * availabilityWeight;
-          totalWeights += availabilityWeight;
-        }
-        
-        if (weights.skills > 0) {
-          const skillsScore = requiredSkills.length > 0 ? matchingSkills.length / requiredSkills.length : 1;
-          totalScore += skillsScore * weights.skills;
-          totalWeights += weights.skills;
-        }
-        
-        normalizedTotalScore = totalWeights > 0 ? totalScore / totalWeights : 0;
-        
-        console.log(`🧮 Score pondéré pour agent ${agent._id}: totalScore=${totalScore.toFixed(3)}, totalWeights=${totalWeights}, final=${normalizedTotalScore.toFixed(3)}`);
-      }
 
-      return {
-        agentId: agent._id,
-        // ⭐ NOUVEAU: Score total de matching
-        totalMatchingScore: parseFloat(normalizedTotalScore.toFixed(3)),
-        agentInfo: {
-          // Données de base
-          _id: agent._id,
-          userId: agent.userId,
-          plan: agent.plan,
-          status: agent.status,
-          isBasicProfileCompleted: agent.isBasicProfileCompleted,
-          
-          // Personal Info complet
-          personalInfo: {
+        const agentSkills = [
+          ...agentTechnicalSkills.map(s => ({
+            skill: s.skill,
+            level: s.level,
+            type: 'technical',
+            name: s.skill?.name || 'Unknown Skill'
+          })),
+          ...agentProfessionalSkills.map(s => ({
+            skill: s.skill,
+            level: s.level,
+            type: 'professional',
+            name: s.skill?.name || 'Unknown Skill'
+          })),
+          ...agentSoftSkills.map(s => ({
+            skill: s.skill,
+            level: s.level,
+            type: 'soft',
+            name: s.skill?.name || 'Unknown Skill'
+          }))
+        ];
+
+
+
+        let matchingSkills = [];
+        let missingSkills = [];
+        let insufficientSkills = [];
+
+        // Check if agent has all required skills by ID
+        const hasAllRequiredSkills = requiredSkills.every(reqSkill => {
+          if (!reqSkill?.skill) return true;
+
+          // Comparer les IDs des skills (avec gestion des objets populés)
+          const reqSkillId = reqSkill.skill?._id?.toString() || reqSkill.skill?.toString();
+          const agentSkill = agentSkills.find(
+            skill => {
+              const agentSkillId = skill?.skill?._id?.toString() || skill?.skill?.toString();
+              return agentSkillId === reqSkillId && skill.type === reqSkill.type;
+            }
+          );
+
+          if (agentSkill) {
+            // Si l'agent a la skill (même ID), c'est un match, peu importe le niveau
+            matchingSkills.push({
+              skill: reqSkill.skill,
+              skillName: reqSkill.name,
+              requiredLevel: reqSkill.level,
+              agentLevel: agentSkill.level,
+              type: reqSkill.type,
+              agentSkillName: agentSkill.name
+            });
+            return true;
+          } else {
+            missingSkills.push({
+              skill: reqSkill.skill,
+              skillName: reqSkill.name,
+              type: reqSkill.type,
+              requiredLevel: reqSkill.level
+            });
+            return false;
+          }
+        });
+
+        // Timezone matching
+        const gigTimezoneId = gig.availability?.time_zone;
+        const agentTimezoneId = agent.availability?.timeZone;
+
+        // Utiliser les données de timezone populées directement
+        const gigTimezoneData = gig.availability?.time_zone;
+        const agentTimezoneData = agent.availability?.timeZone;
+
+        const timezoneMatch = await compareTimezones(gigTimezoneData, agentTimezoneData);
+
+        // Region matching - utiliser les données de timezone populées
+        const agentCountryCode = agent.availability?.timeZone?.countryCode;
+        const regionMatch = await compareRegions(gig.destination_zone, agentCountryCode);
+
+        // Schedule matching
+        console.log(`🗓️ Debugging availability for agent ${agent._id}:`);
+        console.log(`   Gig schedule:`, JSON.stringify(gig.availability?.schedule, null, 2));
+        console.log(`   Agent availability:`, JSON.stringify(agent.availability, null, 2));
+        const scheduleMatch = compareSchedules(gig.availability?.schedule, agent.availability);
+        console.log(`   Schedule match result:`, JSON.stringify(scheduleMatch, null, 2));
+
+        // Calculer le score des langues (proportionnel)
+        const languageScore = requiredLanguages.length > 0 ?
+          matchingLanguages.length / requiredLanguages.length :
+          1; // Si aucune langue requise, score parfait
+
+        // Determine match status based on direct matches - accepter partial_match
+        const languageMatchStatus = matchingLanguages.length === requiredLanguages.length ? "perfect_match" :
+          matchingLanguages.length > 0 ? "partial_match" : "no_match";
+
+        // Skills match status - être plus flexible si l'agent n'a pas de compétences définies
+        let skillsMatchStatus;
+        const agentSkillsData = agent.skills || {};
+        const hasNoSkills = (!agentSkillsData.technical || agentSkillsData.technical.length === 0) &&
+          (!agentSkillsData.professional || agentSkillsData.professional.length === 0) &&
+          (!agentSkillsData.soft || agentSkillsData.soft.length === 0);
+
+        if (hasNoSkills) {
+          // Si l'agent n'a pas de compétences définies, on considère que c'est un no_match
+          skillsMatchStatus = "no_match";
+        } else {
+          // Sinon, on utilise la logique normale
+          skillsMatchStatus = hasAllRequiredSkills ? "perfect_match" : "no_match";
+        }
+
+
+
+        // Overall match status - être moins strict et permettre des correspondances partielles
+        const overallMatchStatus = (languageMatchStatus === "perfect_match" &&
+          skillsMatchStatus === "perfect_match" &&
+          industryMatchStatus === "perfect_match" &&
+          activityMatchStatus === "perfect_match" &&
+          experienceMatch.status === "perfect_match" &&
+          timezoneMatch.status === "perfect_match" &&
+          regionMatch.status === "perfect_match" &&
+          scheduleMatch.status === "perfect_match") ? "perfect_match" :
+          (languageMatchStatus === "no_match" &&
+            skillsMatchStatus === "no_match" &&
+            industryMatchStatus === "no_match" &&
+            activityMatchStatus === "no_match" &&
+            experienceMatch.status === "no_match" &&
+            timezoneMatch.status === "no_match" &&
+            regionMatch.status === "no_match" &&
+            scheduleMatch.status === "no_match") ? "no_match" :
+            "partial_match";
+
+        // ⭐ CALCUL DU SCORE TOTAL SELON LE CAS
+        let normalizedTotalScore = 0;
+
+        // Vérifier si tous les weights sont à 0
+        const allWeightsZero = Object.values(weights).every(weight => weight === 0);
+
+        if (allWeightsZero) {
+          // CAS SPÉCIAL: Tous weights = 0 → Diviser par 8 (tous les critères)
+          const allScores = [
+            languageScore,
+            industryScore,
+            activityScore,
+            experienceMatch.status === "perfect_match" ? 1 : 0, // ⭐ BINAIRE
+            timezoneMatch.status === "perfect_match" ? 1 : 0, // ⭐ BINAIRE
+            regionMatch.status === "perfect_match" ? 1 : 0, // ⭐ BINAIRE
+            scheduleMatch.score,
+            // Ajouter un 8ème critère (skills) - utiliser 1 si perfect_match, 0 sinon
+            skillsMatchStatus === "perfect_match" ? 1 : 0
+          ];
+
+          const totalScore = allScores.reduce((a, b) => a + b, 0);
+          normalizedTotalScore = totalScore / 8; // Diviser par 8 critères
+
+          console.log(`🧮 Score total pour agent ${agent._id}: (${allScores.join(' + ')}) ÷ 8 = ${normalizedTotalScore.toFixed(3)}`);
+        } else {
+          // CAS NORMAL: Score pondéré - IGNORER les weights = 0
+          let totalScore = 0;
+          let totalWeights = 0;
+
+          // Ajouter seulement les critères avec weight > 0
+          if (weights.languages > 0) {
+            totalScore += languageScore * weights.languages;
+            totalWeights += weights.languages;
+          }
+
+          if ((weights.industry || weights.weight || 0) > 0) {
+            const industryWeight = weights.industry || weights.weight || 0;
+            totalScore += industryScore * industryWeight;
+            totalWeights += industryWeight;
+          }
+
+          if (weights.activity > 0) {
+            totalScore += activityScore * weights.activity;
+            totalWeights += weights.activity;
+          }
+
+          if (weights.experience > 0) {
+            totalScore += experienceMatch.score * weights.experience;
+            totalWeights += weights.experience;
+          }
+
+          if (weights.timezone > 0) {
+            totalScore += timezoneMatch.score * weights.timezone;
+            totalWeights += weights.timezone;
+          }
+
+          if (weights.region > 0) {
+            totalScore += regionMatch.score * weights.region;
+            totalWeights += weights.region;
+          }
+
+          if ((weights.availability || weights.schedule || 0) > 0) {
+            const availabilityWeight = weights.availability || weights.schedule || 0;
+            totalScore += scheduleMatch.score * availabilityWeight;
+            totalWeights += availabilityWeight;
+          }
+
+          if (weights.skills > 0) {
+            const skillsScore = requiredSkills.length > 0 ? matchingSkills.length / requiredSkills.length : 1;
+            totalScore += skillsScore * weights.skills;
+            totalWeights += weights.skills;
+          }
+
+          normalizedTotalScore = totalWeights > 0 ? totalScore / totalWeights : 0;
+
+          console.log(`🧮 Score pondéré pour agent ${agent._id}: totalScore=${totalScore.toFixed(3)}, totalWeights=${totalWeights}, final=${normalizedTotalScore.toFixed(3)}`);
+        }
+
+        return {
+          agentId: agent._id,
+          // ⭐ NOUVEAU: Score total de matching
+          totalMatchingScore: parseFloat(normalizedTotalScore.toFixed(3)),
+          agentInfo: {
+            // Données de base
+            _id: agent._id,
+            userId: agent.userId,
+            plan: agent.plan,
+            status: agent.status,
+            isBasicProfileCompleted: agent.isBasicProfileCompleted,
+
+            // Personal Info complet
+            personalInfo: {
+              name: agent.personalInfo?.name || '',
+              country: agent.personalInfo?.country || (agent.availability?.timeZone ? {
+                _id: agent.availability.timeZone._id,
+                name: agent.availability.timeZone.countryName,
+                code: agent.availability.timeZone.countryCode
+              } : null),
+              email: agent.personalInfo?.email || '',
+              phone: agent.personalInfo?.phone || '',
+              languages: agent.personalInfo?.languages?.map(lang => ({
+                _id: lang._id,
+                language: extractCleanData(lang.language),
+                languageName: lang.language?.name || 'Unknown Language',
+                proficiency: lang.proficiency,
+                iso639_1: lang.iso639_1
+              })) || [],
+              presentationVideo: agent.personalInfo?.presentationVideo
+            },
+
+            // Availability complet
+            availability: {
+              schedule: agent.availability?.schedule || [],
+              timeZone: agent.availability?.timeZone,
+              flexibility: agent.availability?.flexibility || []
+            },
+
+            // Professional Summary complet
+            professionalSummary: {
+              yearsOfExperience: agent.professionalSummary?.yearsOfExperience || 0,
+              currentRole: agent.professionalSummary?.currentRole || '',
+              industries: agent.professionalSummary?.industries?.map(industry => ({
+                _id: industry._id,
+                name: industry.name,
+                description: industry.description
+              })) || [],
+              activities: agent.professionalSummary?.activities?.map(activity => ({
+                _id: activity._id,
+                name: activity.name,
+                description: activity.description
+              })) || [],
+              keyExpertise: agent.professionalSummary?.keyExpertise || [],
+              notableCompanies: agent.professionalSummary?.notableCompanies || [],
+              profileDescription: agent.professionalSummary?.profileDescription || ''
+            },
+
+            // Skills complet
+            skills: {
+              technical: agent.skills?.technical?.map(s => ({
+                _id: s._id,
+                skill: s.skill,
+                level: s.level,
+                details: s.details,
+                name: s.skill?.name || 'Unknown Skill'
+              })) || [],
+              professional: agent.skills?.professional?.map(s => ({
+                _id: s._id,
+                skill: s.skill,
+                level: s.level,
+                details: s.details,
+                name: s.skill?.name || 'Unknown Skill'
+              })) || [],
+              soft: agent.skills?.soft?.map(s => ({
+                _id: s._id,
+                skill: s.skill,
+                level: s.level,
+                details: s.details,
+                name: s.skill?.name || 'Unknown Skill'
+              })) || [],
+              contactCenter: agent.skills?.contactCenter || []
+            },
+
+            // Experience complet
+            experience: agent.experience || [],
+
+            // Favorite gigs
+            favoriteGigs: agent.favoriteGigs || [],
+
+            // Achievements
+            achievements: agent.achievements || [],
+
+            // Onboarding progress
+            onboardingProgress: agent.onboardingProgress,
+
+            // Timestamps
+            createdAt: agent.createdAt,
+            updatedAt: agent.updatedAt,
+            lastUpdated: agent.lastUpdated,
+
+            // Données de compatibilité (pour l'ancien format)
             name: agent.personalInfo?.name || '',
-            country: agent.personalInfo?.country || (agent.availability?.timeZone ? {
-              _id: agent.availability.timeZone._id,
-              name: agent.availability.timeZone.countryName,
-              code: agent.availability.timeZone.countryCode
-            } : null),
             email: agent.personalInfo?.email || '',
+            photo: agent.personalInfo?.photo || null,
+            location: agent.personalInfo?.location || '',
             phone: agent.personalInfo?.phone || '',
             languages: agent.personalInfo?.languages?.map(lang => ({
               _id: lang._id,
@@ -1440,159 +1525,74 @@ export const findMatchesForGigById = async (req, res) => {
               proficiency: lang.proficiency,
               iso639_1: lang.iso639_1
             })) || [],
-            presentationVideo: agent.personalInfo?.presentationVideo
+            timezone: {
+              timezoneId: agent.availability?.timeZone,
+              timezoneName: agent.availability?.timeZone?.zoneName || 'Unknown',
+              gmtOffset: agent.availability?.timeZone?.gmtOffset || null,
+              gmtDisplay: agent.availability?.timeZone?.gmtOffset ? `GMT ${agent.availability.timeZone.gmtOffset >= 0 ? '+' : ''}${Math.round(agent.availability.timeZone.gmtOffset / 3600)}` : 'Unknown',
+              countryCode: agent.availability?.timeZone?.countryCode || 'Unknown',
+              countryName: agent.availability?.timeZone?.countryName || 'Unknown'
+            }
           },
-          
-          // Availability complet
-          availability: {
-            schedule: agent.availability?.schedule || [],
-            timeZone: agent.availability?.timeZone,
-            flexibility: agent.availability?.flexibility || []
+          languageMatch: {
+            score: languageScore,
+            details: {
+              matchingLanguages,
+              missingLanguages,
+              insufficientLanguages,
+              matchStatus: languageMatchStatus
+            }
           },
-          
-          // Professional Summary complet
-          professionalSummary: {
-            yearsOfExperience: agent.professionalSummary?.yearsOfExperience || 0,
-            currentRole: agent.professionalSummary?.currentRole || '',
-            industries: agent.professionalSummary?.industries?.map(industry => ({
-              _id: industry._id,
-              name: industry.name,
-              description: industry.description
-            })) || [],
-            activities: agent.professionalSummary?.activities?.map(activity => ({
-              _id: activity._id,
-              name: activity.name,
-              description: activity.description
-            })) || [],
-            keyExpertise: agent.professionalSummary?.keyExpertise || [],
-            notableCompanies: agent.professionalSummary?.notableCompanies || [],
-            profileDescription: agent.professionalSummary?.profileDescription || ''
+          skillsMatch: {
+            score: requiredSkills.length > 0 ? matchingSkills.length / requiredSkills.length : 1,
+            details: {
+              matchingSkills,
+              missingSkills,
+              insufficientSkills,
+              matchStatus: skillsMatchStatus
+            }
           },
-          
-          // Skills complet
-          skills: {
-            technical: agent.skills?.technical?.map(s => ({
-              _id: s._id,
-              skill: s.skill,
-              level: s.level,
-              details: s.details,
-              name: s.skill?.name || 'Unknown Skill'
-            })) || [],
-            professional: agent.skills?.professional?.map(s => ({
-              _id: s._id,
-              skill: s.skill,
-              level: s.level,
-              details: s.details,
-              name: s.skill?.name || 'Unknown Skill'
-            })) || [],
-            soft: agent.skills?.soft?.map(s => ({
-              _id: s._id,
-              skill: s.skill,
-              level: s.level,
-              details: s.details,
-              name: s.skill?.name || 'Unknown Skill'
-            })) || [],
-            contactCenter: agent.skills?.contactCenter || []
+          industryMatch: {
+            score: industryScore,
+            details: {
+              matchingIndustries,
+              missingIndustries,
+              matchStatus: industryMatchStatus
+            }
           },
-          
-          // Experience complet
-          experience: agent.experience || [],
-          
-          // Favorite gigs
-          favoriteGigs: agent.favoriteGigs || [],
-          
-          // Achievements
-          achievements: agent.achievements || [],
-          
-          // Onboarding progress
-          onboardingProgress: agent.onboardingProgress,
-          
-          // Timestamps
-          createdAt: agent.createdAt,
-          updatedAt: agent.updatedAt,
-          lastUpdated: agent.lastUpdated,
-          
-          // Données de compatibilité (pour l'ancien format)
-          name: agent.personalInfo?.name || '',
-          email: agent.personalInfo?.email || '',
-          photo: agent.personalInfo?.photo || null,
-          location: agent.personalInfo?.location || '',
-          phone: agent.personalInfo?.phone || '',
-          languages: agent.personalInfo?.languages?.map(lang => ({
-            _id: lang._id,
-            language: extractCleanData(lang.language),
-            languageName: lang.language?.name || 'Unknown Language',
-            proficiency: lang.proficiency,
-            iso639_1: lang.iso639_1
-          })) || [],
-          timezone: {
-            timezoneId: agent.availability?.timeZone,
-            timezoneName: agent.availability?.timeZone?.zoneName || 'Unknown',
-            gmtOffset: agent.availability?.timeZone?.gmtOffset || null,
-            gmtDisplay: agent.availability?.timeZone?.gmtOffset ? `GMT ${agent.availability.timeZone.gmtOffset >= 0 ? '+' : ''}${Math.round(agent.availability.timeZone.gmtOffset / 3600)}` : 'Unknown',
-            countryCode: agent.availability?.timeZone?.countryCode || 'Unknown',
-            countryName: agent.availability?.timeZone?.countryName || 'Unknown'
-          }
-        },
-        languageMatch: {
-          score: languageScore,
-          details: {
-            matchingLanguages,
-            missingLanguages,
-            insufficientLanguages,
-            matchStatus: languageMatchStatus
-          }
-        },
-        skillsMatch: {
-          score: requiredSkills.length > 0 ? matchingSkills.length / requiredSkills.length : 1,
-          details: {
-            matchingSkills,
-            missingSkills,
-            insufficientSkills,
-            matchStatus: skillsMatchStatus
-          }
-        },
-        industryMatch: {
-          score: industryScore,
-          details: {
-            matchingIndustries,
-            missingIndustries,
-            matchStatus: industryMatchStatus
-          }
-        },
-        activityMatch: {
-          score: activityScore,
-          details: {
-            matchingActivities,
-            missingActivities,
-            matchStatus: activityMatchStatus
-          }
-        },
-        experienceMatch: {
-          score: experienceMatch.status === "perfect_match" ? 1 : 0, // ⭐ BINAIRE: 1 si match, 0 sinon
-          details: experienceMatch.details,
-          matchStatus: experienceMatch.status
-        },
-        timezoneMatch: {
-          score: timezoneMatch.status === "perfect_match" ? 1 : 0, // ⭐ BINAIRE: 1 si match, 0 sinon
-          details: timezoneMatch.details,
-          matchStatus: timezoneMatch.status
-        },
-        regionMatch: {
-          score: regionMatch.status === "perfect_match" ? 1 : 0, // ⭐ BINAIRE: 1 si match, 0 sinon
-          details: regionMatch.details,
-          matchStatus: regionMatch.status
-        },
-        availabilityMatch: {
-          score: scheduleMatch.score,
-          details: scheduleMatch.details,
-          matchStatus: scheduleMatch.status
-        },
-        matchStatus: overallMatchStatus
-      };
+          activityMatch: {
+            score: activityScore,
+            details: {
+              matchingActivities,
+              missingActivities,
+              matchStatus: activityMatchStatus
+            }
+          },
+          experienceMatch: {
+            score: experienceMatch.status === "perfect_match" ? 1 : 0, // ⭐ BINAIRE: 1 si match, 0 sinon
+            details: experienceMatch.details,
+            matchStatus: experienceMatch.status
+          },
+          timezoneMatch: {
+            score: timezoneMatch.status === "perfect_match" ? 1 : 0, // ⭐ BINAIRE: 1 si match, 0 sinon
+            details: timezoneMatch.details,
+            matchStatus: timezoneMatch.status
+          },
+          regionMatch: {
+            score: regionMatch.status === "perfect_match" ? 1 : 0, // ⭐ BINAIRE: 1 si match, 0 sinon
+            details: regionMatch.details,
+            matchStatus: regionMatch.status
+          },
+          availabilityMatch: {
+            score: scheduleMatch.score,
+            details: scheduleMatch.details,
+            matchStatus: scheduleMatch.status
+          },
+          matchStatus: overallMatchStatus
+        };
       } catch (agentError) {
         console.error(`❌ Error processing agent ${agent?._id}:`, agentError);
-        
+
         // Return a default match result for this agent
         return {
           agentId: agent?._id || 'unknown',
@@ -1623,14 +1623,14 @@ export const findMatchesForGigById = async (req, res) => {
     // Filter out null results (agents that failed to process)
     const validMatches = matches.filter(match => match !== null);
     const failedMatches = matches.length - validMatches.length;
-    
+
     if (failedMatches > 0) {
       console.warn(`⚠️ ${failedMatches} agents failed to process and were excluded from results`);
     }
 
     // ⭐ VÉRIFIER SI TOUS LES WEIGHTS SONT À 0
     const allWeightsZero = Object.values(weights).every(weight => weight === 0);
-    
+
     // Tracker pour compter les agents à chaque étape (déclaré en dehors des blocs conditionnels)
     const filteringSteps = {
       totalAgentsEvaluated: validMatches.length,
@@ -1639,21 +1639,21 @@ export const findMatchesForGigById = async (req, res) => {
     };
 
     let filteredMatches = validMatches;
-    
+
     if (allWeightsZero) {
       console.log('🎯 TOUS LES WEIGHTS SONT À 0 - Aucun filtrage, garder tous les agents');
       console.log(`📊 Tous les ${validMatches.length} agents seront retournés avec leurs scores individuels`);
-      
+
       // Pas de filtrage séquentiel, garder tous les agents
       filteredMatches = validMatches;
     } else {
-            // ⭐ NOUVELLE LOGIQUE: Les weights déterminent les PRIORITÉS (pas des seuils)
+      // ⭐ NOUVELLE LOGIQUE: Les weights déterminent les PRIORITÉS (pas des seuils)
       // Plus le weight est élevé, plus le critère est important pour le classement final
       // On ne fait plus de filtrage séquentiel, juste du tri par score total pondéré
       // ⭐ NOUVELLE APPROCHE: Pas de filtrage séquentiel, juste tri par score total pondéré
       // Tous les agents sont gardés, mais triés selon l'importance des critères (weights)
       filteredMatches = validMatches;
-      
+
       console.log(`📊 Tous les ${validMatches.length} agents gardés - Tri selon les priorités (weights)`);
       console.log(`📋 Weights comme priorités:`, Object.entries(weights)
         .sort(([, a], [, b]) => b - a)
@@ -1666,11 +1666,11 @@ export const findMatchesForGigById = async (req, res) => {
     // ⭐ NOUVELLE APPROCHE: Pas de filtrage, tous les agents sont gardés
     // Le tri se fait uniquement par le score total pondéré (totalMatchingScore)
     const finalFilteredMatches = filteredMatches;
-    
+
     // Ajouter le résultat final aux statistiques
     filteringSteps.finalAgentsSelected = finalFilteredMatches.length;
     filteringSteps.totalEliminationRate = "0.0"; // Pas d'élimination, tous gardés
-    
+
     // Calculer les statistiques des scores totaux
     if (finalFilteredMatches.length > 0) {
       const totalScores = finalFilteredMatches.map(m => m.totalMatchingScore);
@@ -1688,7 +1688,7 @@ export const findMatchesForGigById = async (req, res) => {
         median: 0
       };
     }
-    
+
     console.log(`🎯 Filtrage final terminé: ${finalFilteredMatches.length} agents sélectionnés`);
 
 
@@ -1700,7 +1700,7 @@ export const findMatchesForGigById = async (req, res) => {
 
     // Trier les agents par score total décroissant pour avoir les meilleurs en premier
     const sortedMatches = finalFilteredMatches.sort((a, b) => b.totalMatchingScore - a.totalMatchingScore);
-    
+
     // 📊 Log du tri des agents par score décroissant
     console.log('🏆 TOP 10 AGENTS TRIÉS PAR SCORE DÉCROISSANT:');
     sortedMatches.slice(0, 10).forEach((match, index) => {
@@ -1763,7 +1763,7 @@ export const findMatchesForGigById = async (req, res) => {
     };
 
 
-    
+
     // Retourner la réponse finale avec les statistiques de filtrage
     res.json({
       preferedmatches: matchesWithInvitationStatus,
@@ -1784,11 +1784,11 @@ export const findMatchesForGigById = async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error in findMatchesForGigById:', error);
-    
+
     // Provide more detailed error information
     let errorMessage = 'Internal server error';
     let statusCode = StatusCodes.INTERNAL_SERVER_ERROR;
-    
+
     if (error.name === 'CastError') {
       errorMessage = 'Invalid gig ID format';
       statusCode = StatusCodes.BAD_REQUEST;
@@ -1798,8 +1798,8 @@ export const findMatchesForGigById = async (req, res) => {
     } else if (error.message) {
       errorMessage = error.message;
     }
-    
-    res.status(statusCode).json({ 
+
+    res.status(statusCode).json({
       message: errorMessage,
       error: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
@@ -1861,7 +1861,7 @@ export const findMatchesForAgentById = async (req, res) => {
 export const generateOptimalMatches = async (req, res) => {
   try {
     const { weights } = req.body;
-    
+
     // Poids par défaut incluant l'expérience
     const defaultWeights = {
       industry: 0.20,
@@ -1873,10 +1873,10 @@ export const generateOptimalMatches = async (req, res) => {
     };
 
     const finalWeights = { ...defaultWeights, ...weights };
-    
+
     const agents = await Agent.find();
     const gigs = await Gig.find();
-    
+
     const gigMatches = await Promise.all(
       gigs.map(async gig => {
         const result = await findMatches(gig, agents, finalWeights);
@@ -1886,7 +1886,7 @@ export const generateOptimalMatches = async (req, res) => {
         };
       })
     );
-    
+
     res.status(StatusCodes.OK).json({
       gigMatches,
       totalGigs: gigs.length,
@@ -2035,10 +2035,10 @@ export const findSkillsMatchesForGig = async (req, res) => {
 
           if (agentSkill) {
             // ⭐ NOUVEAU: Ignorer les niveaux - si l'agent a la skill, c'est un match
-              matchingSkills.push({
-                skill: reqSkill.skill,
-                requiredLevel: reqSkill.level,
-                agentLevel: agentSkill.level,
+            matchingSkills.push({
+              skill: reqSkill.skill,
+              requiredLevel: reqSkill.level,
+              agentLevel: agentSkill.level,
               score: 1 // Score fixe de 1 pour chaque skill possédée
             });
             totalScore += 1; // Chaque skill compte pour 1 point
@@ -2071,7 +2071,7 @@ export const findSkillsMatchesForGig = async (req, res) => {
     const skillsMatches = findSkillsMatches(gig, agents);
 
     // Récupérer les noms des skills pour les agents
-    const agentSkillIds = skillsMatches.flatMap(match => 
+    const agentSkillIds = skillsMatches.flatMap(match =>
       match.agent.skills?.technical?.map(s => s.skill) || []
     );
     const agentSkillNames = await getSkillNames([...new Set(agentSkillIds)], 'technical');
@@ -2108,7 +2108,7 @@ export const findSkillsMatchesForGig = async (req, res) => {
 export const createGigAgentFromMatch = async (req, res) => {
   try {
     const { gigId, agentId, matchDetails, notes } = req.body;
-    
+
     // Vérifier que le gig et l'agent existent
     const gig = await Gig.findById(gigId);
     if (!gig) {
@@ -2123,8 +2123,8 @@ export const createGigAgentFromMatch = async (req, res) => {
     // Vérifier si une assignation existe déjà
     const existingAssignment = await GigAgent.findOne({ agentId, gigId });
     if (existingAssignment) {
-      return res.status(StatusCodes.CONFLICT).json({ 
-        message: 'Une assignation existe déjà pour cet agent et ce gig' 
+      return res.status(StatusCodes.CONFLICT).json({
+        message: 'Une assignation existe déjà pour cet agent et ce gig'
       });
     }
 
@@ -2134,7 +2134,7 @@ export const createGigAgentFromMatch = async (req, res) => {
     const timezoneScore = matchDetails.timezoneMatch?.score || 0;
     const regionScore = matchDetails.regionMatch?.score || 0;
     const scheduleScore = matchDetails.scheduleMatch?.score || 0;
-    
+
     const matchScore = (languageScore + skillsScore + timezoneScore + regionScore + scheduleScore) / 5;
 
     // Créer la nouvelle assignation
@@ -2152,11 +2152,11 @@ export const createGigAgentFromMatch = async (req, res) => {
     // Envoyer l'email de notification
     try {
       const emailResult = await sendMatchingNotification(agent, gig, matchDetails);
-      
-      // Marquer l'email comme envoyé
-      await savedGigAgent.markEmailSent();
-      
-      // Email de notification envoyé avec succès
+
+      if (emailResult.success) {
+        // Marquer l'email comme envoyé
+        await savedGigAgent.markEmailSent();
+      }
     } catch (emailError) {
       // Erreur lors de l'envoi de l'email
       // Ne pas échouer la création si l'email échoue
@@ -2182,13 +2182,13 @@ export const createGigAgentFromMatch = async (req, res) => {
     });
 
   } catch (error) {
-    
+
     if (error.code === 11000) {
-      return res.status(StatusCodes.CONFLICT).json({ 
-        message: 'Une assignation existe déjà pour cet agent et ce gig' 
+      return res.status(StatusCodes.CONFLICT).json({
+        message: 'Une assignation existe déjà pour cet agent et ce gig'
       });
     }
-    
+
     res.status(StatusCodes.BAD_REQUEST).json({ message: error.message });
   }
 };

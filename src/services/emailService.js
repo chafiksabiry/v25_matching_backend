@@ -23,19 +23,19 @@ export const sendMatchingNotification = async (agent, gig, matchDetails) => {
   try {
     const agentName = agent.personalInfo?.name || 'Agent';
     const agentEmail = agent.personalInfo?.email;
-    
+
     if (!agentEmail) {
       throw new Error('Agent email not found');
     }
 
     const gigTitle = gig.title || 'New Gig';
     const gigDescription = gig.description || 'No description available';
-    
+
     // Calculate global score
     const languageScore = matchDetails.languageMatch?.score || 0;
     const skillsScore = matchDetails.skillsMatch?.details?.matchStatus === 'perfect_match' ? 1 : 0;
     const scheduleScore = matchDetails.scheduleMatch?.score || 0;
-    
+
     const globalScore = Math.round(((languageScore + skillsScore + scheduleScore) / 3) * 100);
 
     // Check if Brevo is available
@@ -74,7 +74,7 @@ export const sendMatchingNotification = async (agent, gig, matchDetails) => {
     };
 
     const result = await brevoApiInstance.sendTransacEmail(emailParams);
-    
+
     console.log('Email sent successfully via Brevo:', {
       messageId: result.messageId,
       to: agentEmail,
@@ -97,25 +97,24 @@ export const sendMatchingNotification = async (agent, gig, matchDetails) => {
       apiKey: config.BREVO_API_KEY ? config.BREVO_API_KEY.substring(0, 10) + '...' : 'missing',
       fromEmail: config.BREVO_FROM_EMAIL
     });
-    
+
     // In case of Brevo error, simulate email sending
     const agentName = agent.personalInfo?.name || 'Agent';
     const agentEmail = agent.personalInfo?.email;
     const gigTitle = gig.title || 'New Gig';
-    
+
     console.log('Simulating email for:', {
       to: agentEmail,
       subject: `🎯 Exclusive Invitation to Join a New Gig: ${gigTitle}`,
       reason: 'Brevo not available'
     });
 
-    // Return simulated success
+    // Return failure instead of simulated success
     return {
-      success: true,
-      messageId: 'simulated-' + Date.now(),
+      success: false,
+      error: error.message,
       to: agentEmail,
-      method: 'simulated',
-      note: 'Email simulated - Brevo not available'
+      method: 'failed'
     };
   }
 };
@@ -125,7 +124,7 @@ export const sendMatchingNotification = async (agent, gig, matchDetails) => {
  */
 const createEmailContent = (agentName, gigTitle, gigDescription, matchDetails, globalScore, gigId) => {
   const joinUrl = `${config.BASE_URL}/repdashboard/gig/${gigId}`;
-  
+
   return `
     <!DOCTYPE html>
     <html lang="en">
@@ -269,7 +268,7 @@ const createEmailContent = (agentName, gigTitle, gigDescription, matchDetails, g
  */
 const createTextVersion = (agentName, gigTitle, gigDescription, matchDetails, globalScore, gigId) => {
   const joinUrl = `${config.BASE_URL}/repdashboard/gig/${gigId}`;
-  
+
   return `
 🎯 EXCLUSIVE GIG INVITATION
 
@@ -319,14 +318,14 @@ export const sendEnrollmentInvitation = async (agent, gig, invitationToken, expi
   try {
     const agentName = agent.personalInfo?.firstName || agent.personalInfo?.name || 'Agent';
     const agentEmail = agent.personalInfo?.email;
-    
+
     if (!agentEmail) {
       throw new Error('Email de l\'agent non trouvé');
     }
 
     const gigTitle = gig.title || 'Nouveau Gig';
     const gigDescription = gig.description || 'Aucune description disponible';
-    
+
     // Formater la date d'expiration
     const formattedExpiryDate = expiryDate.toLocaleDateString('fr-FR', {
       day: '2-digit',
@@ -371,7 +370,7 @@ export const sendEnrollmentInvitation = async (agent, gig, invitationToken, expi
     };
 
     const result = await brevoApiInstance.sendTransacEmail(emailParams);
-    
+
     console.log('Email d\'invitation envoyé avec succès via Brevo:', {
       messageId: result.messageId,
       to: agentEmail,
@@ -387,7 +386,7 @@ export const sendEnrollmentInvitation = async (agent, gig, invitationToken, expi
 
   } catch (error) {
     console.error('Erreur Brevo lors de l\'envoi de l\'invitation:', error.message);
-    
+
     // En cas d'erreur Brevo, simuler l'envoi d'email
     console.log('Simulation d\'envoi d\'email d\'invitation pour:', {
       to: agent.personalInfo?.email,
@@ -416,14 +415,14 @@ export const sendEnrollmentNotification = async (agent, gig, status) => {
   try {
     const agentName = agent.personalInfo?.firstName || agent.personalInfo?.name || 'Agent';
     const agentEmail = agent.personalInfo?.email;
-    
+
     if (!agentEmail) {
       throw new Error('Email de l\'agent non trouvé');
     }
 
     const gigTitle = gig.title || 'Gig';
     const statusText = status === 'accepted' ? 'accepté' : 'refusé';
-    
+
     // Check if Brevo is available
     if (!brevoApiInstance) {
       console.log('Brevo non configuré - simulation de notification pour:', {
@@ -459,7 +458,7 @@ export const sendEnrollmentNotification = async (agent, gig, status) => {
     };
 
     const result = await brevoApiInstance.sendTransacEmail(emailParams);
-    
+
     console.log('Notification d\'enrôlement envoyée avec succès via Brevo:', {
       messageId: result.messageId,
       to: agentEmail,
@@ -475,7 +474,7 @@ export const sendEnrollmentNotification = async (agent, gig, status) => {
 
   } catch (error) {
     console.error('Erreur Brevo lors de l\'envoi de la notification:', error.message);
-    
+
     // En cas d'erreur Brevo, simuler l'envoi d'email
     console.log('Simulation d\'envoi de notification pour:', {
       to: agent.personalInfo?.email,
@@ -498,7 +497,7 @@ export const sendEnrollmentNotification = async (agent, gig, status) => {
  */
 const createEnrollmentEmailContent = (agentName, gigTitle, gigDescription, invitationToken, expiryDate) => {
   const enrollmentUrl = `${config.FRONTEND_URL || 'http://localhost:3000'}/enroll/${invitationToken}`;
-  
+
   return `
     <!DOCTYPE html>
     <html>
@@ -648,7 +647,7 @@ const createEnrollmentNotificationContent = (agentName, gigTitle, status) => {
   const statusText = status === 'accepted' ? 'accepté' : 'refusé';
   const statusColor = status === 'accepted' ? '#38a169' : '#e53e3e';
   const statusIcon = status === 'accepted' ? '✅' : '❌';
-  
+
   return `
     <!DOCTYPE html>
     <html>
@@ -740,7 +739,7 @@ const createEnrollmentNotificationContent = (agentName, gigTitle, status) => {
 const createEnrollmentNotificationTextVersion = (agentName, gigTitle, status) => {
   const statusText = status === 'accepted' ? 'accepté' : 'refusé';
   const statusIcon = status === 'accepted' ? '✅' : '❌';
-  
+
   return `
 📧 CONFIRMATION D'ENRÔLEMENT
 

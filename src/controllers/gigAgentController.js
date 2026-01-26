@@ -22,7 +22,7 @@ export const getAllGigAgents = async (req, res) => {
         ]
       })
       .sort({ createdAt: -1 });
-    
+
     res.status(StatusCodes.OK).json(gigAgents);
   } catch (error) {
     console.error('Error in getAllGigAgents:', error);
@@ -43,7 +43,7 @@ export const getGigAgentById = async (req, res) => {
           { path: 'availability.time_zone' }
         ]
       });
-    
+
     if (!gigAgent) {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'GigAgent not found' });
     }
@@ -68,7 +68,7 @@ export const getGigAgentsForAgent = async (req, res) => {
         ]
       })
       .sort({ createdAt: -1 });
-    
+
     res.status(StatusCodes.OK).json(gigAgents);
   } catch (error) {
     console.error('Error in getGigAgentsForAgent:', error);
@@ -82,7 +82,7 @@ export const getGigAgentsForGig = async (req, res) => {
     const gigAgents = await GigAgent.find({ gigId: req.params.gigId })
       .populate('agentId')
       .sort({ createdAt: -1 });
-    
+
     res.status(StatusCodes.OK).json(gigAgents);
   } catch (error) {
     console.error('Error in getGigAgentsForGig:', error);
@@ -120,8 +120,8 @@ export const createGigAgent = async (req, res) => {
     // Vérifier si une assignation existe déjà
     const existingAssignment = await GigAgent.findOne({ agentId, gigId });
     if (existingAssignment) {
-      return res.status(StatusCodes.CONFLICT).json({ 
-        message: 'Une assignation existe déjà pour cet agent et ce gig' 
+      return res.status(StatusCodes.CONFLICT).json({
+        message: 'Une assignation existe déjà pour cet agent et ce gig'
       });
     }
 
@@ -156,13 +156,18 @@ export const createGigAgent = async (req, res) => {
     const savedGigAgent = await gigAgent.save();
 
     // Envoyer l'email de notification
+    let emailSent = false;
     try {
       const emailResult = await sendMatchingNotification(agent, gig, matchDetails);
-      
-      // Marquer l'email comme envoyé
-      await savedGigAgent.markEmailSent();
-      
-      console.log('Assignation créée avec succès');
+
+      if (emailResult.success) {
+        // Marquer l'email comme envoyé seulement si succès
+        await savedGigAgent.markEmailSent();
+        emailSent = true;
+        console.log('Email d\'invitation envoyé avec succès');
+      } else {
+        console.warn('L\'email n\'a pas été envoyé:', emailResult.error);
+      }
     } catch (emailError) {
       console.error('Erreur lors de l\'envoi de l\'email:', emailError);
       // Ne pas échouer la création si l'email échoue
@@ -171,10 +176,10 @@ export const createGigAgent = async (req, res) => {
     // 🆕 Synchroniser la relation dans Agent.gigs et Gig.agents
     try {
       await syncAgentGigRelationship(
-        agentId, 
-        gigId, 
+        agentId,
+        gigId,
         'invited',
-        { 
+        {
           invitationDate: new Date(),
           gigAgentId: savedGigAgent._id
         }
@@ -198,19 +203,19 @@ export const createGigAgent = async (req, res) => {
     res.status(StatusCodes.CREATED).json({
       message: 'Assignation créée avec succès',
       gigAgent: populatedGigAgent,
-      emailSent: true,
+      emailSent: emailSent,
       matchScore: matchScore
     });
 
   } catch (error) {
     console.error('Error in createGigAgent:', error);
-    
+
     if (error.code === 11000) {
-      return res.status(StatusCodes.CONFLICT).json({ 
-        message: 'Une assignation existe déjà pour cet agent et ce gig' 
+      return res.status(StatusCodes.CONFLICT).json({
+        message: 'Une assignation existe déjà pour cet agent et ce gig'
       });
     }
-    
+
     res.status(StatusCodes.BAD_REQUEST).json({ message: error.message });
   }
 };
@@ -220,14 +225,14 @@ const calculateMatchDetails = async (agent, gig) => {
   // Language matching
   const requiredLanguages = gig.skills?.languages || [];
   const agentLanguages = agent.personalInfo?.languages || [];
-  
+
   let matchingLanguages = [];
   let missingLanguages = [];
   let insufficientLanguages = [];
 
   requiredLanguages.forEach(reqLang => {
     if (!reqLang?.language) return;
-    
+
     const normalizedReqLang = normalizeLanguage(reqLang.language);
     const agentLang = agentLanguages.find(
       lang => lang?.language && normalizeLanguage(lang.language) === normalizedReqLang
@@ -236,9 +241,9 @@ const calculateMatchDetails = async (agent, gig) => {
     if (agentLang) {
       const normalizedReqLevel = normalizeLanguage(reqLang.proficiency);
       const normalizedAgentLevel = normalizeLanguage(agentLang.proficiency);
-      
+
       const isNativeRequired = ['native', 'natif'].includes(normalizedReqLevel);
-      const isLevelMatch = isNativeRequired 
+      const isLevelMatch = isNativeRequired
         ? ['native', 'natif', 'c2'].includes(normalizedAgentLevel)
         : getLanguageLevelScore(normalizedAgentLevel) >= getLanguageLevelScore(normalizedReqLevel);
 
@@ -285,7 +290,7 @@ const calculateMatchDetails = async (agent, gig) => {
 
   requiredSkills.forEach(reqSkill => {
     if (!reqSkill?.skill) return;
-    
+
     const normalizedReqSkill = normalizeSkill(reqSkill.skill);
     const agentSkill = agentSkills.find(
       skill => skill?.skill && normalizeSkill(skill.skill) === normalizedReqSkill && skill.type === reqSkill.type
@@ -312,16 +317,16 @@ const calculateMatchDetails = async (agent, gig) => {
 
   // Industry matching
   const industryMatch = calculateIndustryMatch(agent, gig);
-  
+
   // Activity matching
   const activityMatch = calculateActivityMatch(agent, gig);
-  
+
   // Experience matching
   const experienceMatch = calculateExperienceMatch(agent, gig);
-  
+
   // Timezone matching
   const timezoneMatch = calculateTimezoneMatch(agent, gig);
-  
+
   // Region matching
   const regionMatch = calculateRegionMatch(agent, gig);
 
@@ -329,11 +334,11 @@ const calculateMatchDetails = async (agent, gig) => {
   const scheduleMatch = compareSchedules(gig.availability?.schedule, agent.availability);
 
   // Determine match status
-  const languageMatchStatus = matchingLanguages.length === requiredLanguages.length ? "perfect_match" : 
-                             matchingLanguages.length > 0 ? "partial_match" : "no_match";
-  
-  const skillsMatchStatus = matchingSkills.length === requiredSkills.length ? "perfect_match" : 
-                           matchingSkills.length > 0 ? "partial_match" : "no_match";
+  const languageMatchStatus = matchingLanguages.length === requiredLanguages.length ? "perfect_match" :
+    matchingLanguages.length > 0 ? "partial_match" : "no_match";
+
+  const skillsMatchStatus = matchingSkills.length === requiredSkills.length ? "perfect_match" :
+    matchingSkills.length > 0 ? "partial_match" : "no_match";
 
   return {
     languageMatch: {
@@ -377,7 +382,7 @@ const calculateMatchScore = (matchDetails) => {
   const timezoneScore = matchDetails.timezoneMatch?.score || 0;
   const regionScore = matchDetails.regionMatch?.score || 0;
   const availabilityScore = matchDetails.availabilityMatch?.score || 0;
-  
+
   // Poids par défaut
   const weights = {
     language: 0.15,
@@ -389,7 +394,7 @@ const calculateMatchScore = (matchDetails) => {
     region: 0.05,
     availability: 0.05
   };
-  
+
   return (
     languageScore * weights.language +
     skillsScore * weights.skills +
@@ -417,7 +422,7 @@ const calculateIndustryMatch = (agent, gig) => {
 
   const normalizeString = (str) => {
     if (!str) return "";
-    
+
     // Handle ObjectId case
     if (typeof str === 'object' && str.toString) {
       str = str.toString();
@@ -426,12 +431,12 @@ const calculateIndustryMatch = (agent, gig) => {
     else if (typeof str === 'number') {
       str = str.toString();
     }
-    
+
     // Ensure str is a string before calling toLowerCase
     if (typeof str !== 'string') {
       return "";
     }
-    
+
     return str.toLowerCase().trim().replace(/[^a-z0-9]/g, "").replace(/\s+/g, "");
   };
 
@@ -487,7 +492,7 @@ const calculateActivityMatch = (agent, gig) => {
 
   const normalizeString = (str) => {
     if (!str) return "";
-    
+
     // Handle ObjectId case
     if (typeof str === 'object' && str.toString) {
       str = str.toString();
@@ -496,12 +501,12 @@ const calculateActivityMatch = (agent, gig) => {
     else if (typeof str === 'number') {
       str = str.toString();
     }
-    
+
     // Ensure str is a string before calling toLowerCase
     if (typeof str !== 'string') {
       return "";
     }
-    
+
     return str.toLowerCase().trim().replace(/[^a-z0-9]/g, "").replace(/\s+/g, "");
   };
 
@@ -512,9 +517,9 @@ const calculateActivityMatch = (agent, gig) => {
     const normalizedGigActivity = normalizeString(gigActivity);
     const agentActivity = agent.professionalSummary.activities.find(activity => {
       const normalizedActivity = normalizeString(activity);
-      return normalizedActivity === normalizedGigActivity || 
-             normalizedActivity.includes(normalizedGigActivity) || 
-             normalizedGigActivity.includes(normalizedActivity);
+      return normalizedActivity === normalizedGigActivity ||
+        normalizedActivity.includes(normalizedGigActivity) ||
+        normalizedGigActivity.includes(normalizedActivity);
     });
 
     if (agentActivity) {
@@ -693,7 +698,7 @@ const calculateRegionMatch = (agent, gig) => {
 // Fonction de normalisation des langues (importée depuis matchController)
 const normalizeLanguage = (language) => {
   if (!language) return '';
-  
+
   // Handle populated Language object case (has name property)
   if (typeof language === 'object' && language.name) {
     language = language.name;
@@ -702,12 +707,12 @@ const normalizeLanguage = (language) => {
   else if (typeof language === 'object' && language.toString) {
     language = language.toString();
   }
-  
+
   // Ensure language is a string before calling toLowerCase
   if (typeof language !== 'string') {
     return '';
   }
-  
+
   const languageMap = {
     'french': 'french',
     'français': 'french',
@@ -733,7 +738,7 @@ const normalizeLanguage = (language) => {
 // Fonction de normalisation des compétences (skills)
 const normalizeSkill = (skill) => {
   if (!skill) return '';
-  
+
   // Handle populated Skill object case (has name property)
   if (typeof skill === 'object' && skill.name) {
     skill = skill.name;
@@ -742,30 +747,30 @@ const normalizeSkill = (skill) => {
   else if (typeof skill === 'object' && skill.toString) {
     skill = skill.toString();
   }
-  
+
   // Ensure skill is a string before calling toLowerCase
   if (typeof skill !== 'string') {
     return '';
   }
-  
+
   return skill.toLowerCase().trim();
 };
 
 // 🆕 Fonction helper pour extraire les données propres d'un objet MongoDB
 const extractCleanData = (obj) => {
   if (!obj) return null;
-  
+
   // Si c'est un ObjectId, retourner en string
   if (typeof obj === 'object' && obj._bsontype === 'ObjectId') {
     return obj.toString();
   }
-  
+
   // Si c'est un objet Mongoose avec _id, extraire les données pertinentes
   if (typeof obj === 'object' && obj._id) {
     const clean = {
       _id: obj._id.toString()
     };
-    
+
     // Ajouter les propriétés utiles si elles existent
     if (obj.name) clean.name = obj.name;
     if (obj.title) clean.title = obj.title;
@@ -773,10 +778,10 @@ const extractCleanData = (obj) => {
     if (obj.description) clean.description = obj.description;
     if (obj.category) clean.category = obj.category;
     if (obj.nativeName) clean.nativeName = obj.nativeName;
-    
+
     return clean;
   }
-  
+
   // Sinon retourner tel quel
   return obj;
 };
@@ -822,7 +827,7 @@ const compareSchedules = (gigSchedule, agentAvailability) => {
 
   // Normaliser la structure de disponibilité de l'agent
   let normalizedAgentSchedule = [];
-  
+
   if (agentAvailability.schedule && Array.isArray(agentAvailability.schedule)) {
     // Utiliser la structure détaillée si elle existe
     normalizedAgentSchedule = agentAvailability.schedule;
@@ -881,7 +886,7 @@ const compareSchedules = (gigSchedule, agentAvailability) => {
     }
 
     const agentDay = normalizedAgentSchedule.find(day => day && day.day === gigDay.day);
-    
+
     if (!agentDay || !agentDay.hours) {
       scheduleDetails.missingDays.push(gigDay.day);
       return;
@@ -917,7 +922,7 @@ const compareSchedules = (gigSchedule, agentAvailability) => {
 
   const scheduleScore = matchingDays / totalDays;
   const scheduleStatus = scheduleScore === 1 ? "perfect_match" :
-                       scheduleScore > 0 ? "partial_match" : "no_match";
+    scheduleScore > 0 ? "partial_match" : "no_match";
 
   return {
     score: scheduleScore,
@@ -930,7 +935,7 @@ const compareSchedules = (gigSchedule, agentAvailability) => {
 export const updateGigAgent = async (req, res) => {
   try {
     const { status, notes, agentResponse } = req.body;
-    
+
     const updateData = {};
     if (status) updateData.status = status;
     if (notes) updateData.notes = notes;
@@ -970,13 +975,13 @@ export const updateGigAgent = async (req, res) => {
 export const deleteGigAgent = async (req, res) => {
   try {
     const gigAgent = await GigAgent.findByIdAndDelete(req.params.id);
-    
+
     if (!gigAgent) {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'GigAgent not found' });
     }
 
-    res.status(StatusCodes.OK).json({ 
-      message: 'GigAgent deleted successfully' 
+    res.status(StatusCodes.OK).json({
+      message: 'GigAgent deleted successfully'
     });
   } catch (error) {
     console.error('Error in deleteGigAgent:', error);
@@ -1004,23 +1009,28 @@ export const resendEmailNotification = async (req, res) => {
 
     // Envoyer l'email de notification
     const emailResult = await sendMatchingNotification(
-      gigAgent.agentId, 
-      gigAgent.gigId, 
+      gigAgent.agentId,
+      gigAgent.gigId,
       gigAgent.matchDetails
     );
 
-    // Marquer l'email comme envoyé
-    await gigAgent.markEmailSent();
+    let message = 'Email de notification renvoyé avec succès';
+    if (emailResult.success) {
+      // Marquer l'email comme envoyé
+      await gigAgent.markEmailSent();
+    } else {
+      message = `L'email n'a pas pu être envoyé: ${emailResult.error || 'Erreur inconnue'}`;
+    }
 
     res.status(StatusCodes.OK).json({
-      message: 'Email de notification renvoyé avec succès',
+      message,
       emailResult
     });
 
   } catch (error) {
     console.error('Error in resendEmailNotification:', error);
-    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ 
-      message: `Échec de l'envoi de l'email: ${error.message}` 
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      message: `Échec de l'envoi de l'email: ${error.message}`
     });
   }
 };
@@ -1028,16 +1038,16 @@ export const resendEmailNotification = async (req, res) => {
 // Get invited gigs for an agent
 export const getInvitedGigsForAgent = async (req, res) => {
   try {
-    const gigAgents = await GigAgent.find({ 
+    const gigAgents = await GigAgent.find({
       agentId: req.params.agentId,
       enrollmentStatus: 'invited'
     })
-    .populate({
-      path: 'gigId',
-      populate: { path: 'commission.currency' }
-    })
-    .sort({ createdAt: -1 });
-    
+      .populate({
+        path: 'gigId',
+        populate: { path: 'commission.currency' }
+      })
+      .sort({ createdAt: -1 });
+
     res.status(StatusCodes.OK).json(gigAgents);
   } catch (error) {
     console.error('Error in getInvitedGigsForAgent:', error);
@@ -1053,24 +1063,24 @@ export const getInvitedAgentsForCompany = async (req, res) => {
     const gigIds = gigs.map(gig => gig._id);
 
     // Ensuite, on cherche les GigAgents qui correspondent à ces gigs
-    const gigAgents = await GigAgent.find({ 
+    const gigAgents = await GigAgent.find({
       enrollmentStatus: 'invited',
       gigId: { $in: gigIds }
     })
-    .populate('agentId')
-    .populate({
-      path: 'gigId',
-      populate: { path: 'commission.currency' }
-    })
-    .sort({ createdAt: -1 });
-    
+      .populate('agentId')
+      .populate({
+        path: 'gigId',
+        populate: { path: 'commission.currency' }
+      })
+      .sort({ createdAt: -1 });
+
     // Get unique agents
     const uniqueAgents = Array.from(new Set(gigAgents.map(ga => ga.agentId._id)))
       .map(agentId => {
         const gigAgent = gigAgents.find(ga => ga.agentId._id.equals(agentId));
         return gigAgent.agentId;
       });
-    
+
     res.status(StatusCodes.OK).json(uniqueAgents);
   } catch (error) {
     console.error('Error in getInvitedAgentsForCompany:', error);
@@ -1081,16 +1091,16 @@ export const getInvitedAgentsForCompany = async (req, res) => {
 // Get enrolled gigs for an agent
 export const getEnrolledGigsForAgent = async (req, res) => {
   try {
-    const gigAgents = await GigAgent.find({ 
+    const gigAgents = await GigAgent.find({
       agentId: req.params.agentId,
       enrollmentStatus: 'enrolled'
     })
-    .populate({
-      path: 'gigId',
-      populate: { path: 'commission.currency' }
-    })
-    .sort({ createdAt: -1 });
-    
+      .populate({
+        path: 'gigId',
+        populate: { path: 'commission.currency' }
+      })
+      .sort({ createdAt: -1 });
+
     res.status(StatusCodes.OK).json(gigAgents);
   } catch (error) {
     console.error('Error in getEnrolledGigsForAgent:', error);
@@ -1106,17 +1116,17 @@ export const getEnrollmentRequestsForCompany = async (req, res) => {
     const gigIds = gigs.map(gig => gig._id);
 
     // Ensuite, on cherche les GigAgents qui correspondent à ces gigs
-    const requests = await GigAgent.find({ 
+    const requests = await GigAgent.find({
       enrollmentStatus: 'requested',
       gigId: { $in: gigIds }
     })
-    .populate({
-      path: 'gigId',
-      populate: { path: 'commission.currency' }
-    })
-    .populate('agentId')
-    .sort({ createdAt: -1 });
-    
+      .populate({
+        path: 'gigId',
+        populate: { path: 'commission.currency' }
+      })
+      .populate('agentId')
+      .sort({ createdAt: -1 });
+
     res.status(StatusCodes.OK).json(requests);
   } catch (error) {
     console.error('Error in getEnrollmentRequestsForCompany:', error);
@@ -1132,17 +1142,17 @@ export const getActiveAgentsForCompany = async (req, res) => {
     const gigIds = gigs.map(gig => gig._id);
 
     // Ensuite, on cherche les GigAgents qui correspondent à ces gigs
-    const activeAgents = await GigAgent.find({ 
+    const activeAgents = await GigAgent.find({
       enrollmentStatus: 'enrolled',
       gigId: { $in: gigIds }
     })
-    .populate('agentId')
-    .populate({
-      path: 'gigId',
-      populate: { path: 'commission.currency' }
-    })
-    .sort({ createdAt: -1 });
-    
+      .populate('agentId')
+      .populate({
+        path: 'gigId',
+        populate: { path: 'commission.currency' }
+      })
+      .sort({ createdAt: -1 });
+
     // Retourner tous les GigAgents actifs
     res.status(StatusCodes.OK).json(activeAgents);
   } catch (error) {
@@ -1155,16 +1165,16 @@ export const getActiveAgentsForCompany = async (req, res) => {
 export const agentAcceptInvitation = async (req, res) => {
   try {
     const gigAgent = await GigAgent.findById(req.params.id);
-    
+
     if (!gigAgent) {
-      return res.status(StatusCodes.NOT_FOUND).json({ 
-        message: 'Invitation not found' 
+      return res.status(StatusCodes.NOT_FOUND).json({
+        message: 'Invitation not found'
       });
     }
 
     if (gigAgent.enrollmentStatus !== 'invited') {
-      return res.status(StatusCodes.BAD_REQUEST).json({ 
-        message: 'Only invited enrollments can be accepted by agent' 
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        message: 'Only invited enrollments can be accepted by agent'
       });
     }
 
@@ -1188,10 +1198,10 @@ export const agentAcceptInvitation = async (req, res) => {
     // 🆕 Synchroniser le statut dans Agent.gigs et Gig.agents
     try {
       await syncAgentGigRelationship(
-        gigAgent.agentId, 
-        gigAgent.gigId, 
+        gigAgent.agentId,
+        gigAgent.gigId,
         'enrolled',
-        { 
+        {
           enrollmentDate: new Date(),
           gigAgentId: gigAgent._id
         }
@@ -1219,8 +1229,8 @@ export const agentAcceptInvitation = async (req, res) => {
 
   } catch (error) {
     console.error('Error in agentAcceptInvitation:', error);
-    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ 
-      message: error.message 
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      message: error.message
     });
   }
 };
@@ -1229,16 +1239,16 @@ export const agentAcceptInvitation = async (req, res) => {
 export const acceptEnrollmentRequest = async (req, res) => {
   try {
     const gigAgent = await GigAgent.findById(req.params.id);
-    
+
     if (!gigAgent) {
-      return res.status(StatusCodes.NOT_FOUND).json({ 
-        message: 'Enrollment request not found' 
+      return res.status(StatusCodes.NOT_FOUND).json({
+        message: 'Enrollment request not found'
       });
     }
 
     if (gigAgent.enrollmentStatus !== 'requested') {
-      return res.status(StatusCodes.BAD_REQUEST).json({ 
-        message: 'Only requested enrollments can be accepted' 
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        message: 'Only requested enrollments can be accepted'
       });
     }
 
@@ -1262,10 +1272,10 @@ export const acceptEnrollmentRequest = async (req, res) => {
     // 🆕 Synchroniser le statut dans Agent.gigs et Gig.agents
     try {
       await syncAgentGigRelationship(
-        gigAgent.agentId, 
-        gigAgent.gigId, 
+        gigAgent.agentId,
+        gigAgent.gigId,
         'enrolled',
-        { 
+        {
           enrollmentDate: new Date(),
           gigAgentId: gigAgent._id
         }
@@ -1293,8 +1303,8 @@ export const acceptEnrollmentRequest = async (req, res) => {
 
   } catch (error) {
     console.error('Error in acceptEnrollmentRequest:', error);
-    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ 
-      message: error.message 
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      message: error.message
     });
   }
 };
@@ -1305,16 +1315,16 @@ export const acceptEnrollmentRequest = async (req, res) => {
 export const agentRejectInvitation = async (req, res) => {
   try {
     const gigAgent = await GigAgent.findById(req.params.id);
-    
+
     if (!gigAgent) {
-      return res.status(StatusCodes.NOT_FOUND).json({ 
-        message: 'Invitation not found' 
+      return res.status(StatusCodes.NOT_FOUND).json({
+        message: 'Invitation not found'
       });
     }
 
     if (gigAgent.enrollmentStatus !== 'invited') {
-      return res.status(StatusCodes.BAD_REQUEST).json({ 
-        message: 'Only invited enrollments can be rejected by agent' 
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        message: 'Only invited enrollments can be rejected by agent'
       });
     }
 
@@ -1358,8 +1368,8 @@ export const agentRejectInvitation = async (req, res) => {
 
   } catch (error) {
     console.error('Error in agentRejectInvitation:', error);
-    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ 
-      message: error.message 
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      message: error.message
     });
   }
 };
@@ -1370,21 +1380,21 @@ export const sendEnrollmentRequest = async (req, res) => {
     // Vérifier si le gig existe
     const gig = await Gig.findById(req.params.gigId);
     if (!gig) {
-      return res.status(StatusCodes.NOT_FOUND).json({ 
-        message: 'Gig not found' 
+      return res.status(StatusCodes.NOT_FOUND).json({
+        message: 'Gig not found'
       });
     }
 
     // Vérifier si l'agent existe
     const agent = await Agent.findById(req.params.agentId);
     if (!agent) {
-      return res.status(StatusCodes.NOT_FOUND).json({ 
-        message: 'Agent not found' 
+      return res.status(StatusCodes.NOT_FOUND).json({
+        message: 'Agent not found'
       });
     }
 
     // Vérifier si une relation existe déjà
-    let gigAgent = await GigAgent.findOne({ 
+    let gigAgent = await GigAgent.findOne({
       agentId: req.params.agentId,
       gigId: req.params.gigId
     });
@@ -1392,8 +1402,8 @@ export const sendEnrollmentRequest = async (req, res) => {
     if (gigAgent) {
       // Vérifier si une nouvelle demande est possible
       if (!gigAgent.canRequestEnrollment()) {
-        return res.status(StatusCodes.BAD_REQUEST).json({ 
-          message: 'Cannot request enrollment for this gig at this time' 
+        return res.status(StatusCodes.BAD_REQUEST).json({
+          message: 'Cannot request enrollment for this gig at this time'
         });
       }
     } else {
@@ -1411,10 +1421,10 @@ export const sendEnrollmentRequest = async (req, res) => {
     // 🆕 Synchroniser le statut dans Agent.gigs et Gig.agents
     try {
       await syncAgentGigRelationship(
-        req.params.agentId, 
-        req.params.gigId, 
+        req.params.agentId,
+        req.params.gigId,
         'requested',
-        { 
+        {
           invitationDate: new Date(),
           gigAgentId: gigAgent._id
         }
@@ -1442,8 +1452,8 @@ export const sendEnrollmentRequest = async (req, res) => {
 
   } catch (error) {
     console.error('Error in sendEnrollmentRequest:', error);
-    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ 
-      message: error.message 
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      message: error.message
     });
   }
 };
@@ -1452,7 +1462,7 @@ export const sendEnrollmentRequest = async (req, res) => {
 export const getGigAgentsByStatus = async (req, res) => {
   try {
     const { status } = req.params;
-    
+
     const gigAgents = await GigAgent.find({ status })
       .populate('agentId')
       .populate({
@@ -1490,9 +1500,9 @@ export const getGigAgentStats = async (req, res) => {
 
     const totalCount = await GigAgent.countDocuments();
     const emailSentCount = await GigAgent.countDocuments({ emailSent: true });
-    const pendingResponseCount = await GigAgent.countDocuments({ 
-      status: 'pending', 
-      emailSent: true 
+    const pendingResponseCount = await GigAgent.countDocuments({
+      status: 'pending',
+      emailSent: true
     });
 
     const statsObject = {
@@ -1530,8 +1540,8 @@ export const getAgentGigsWithStatus = async (req, res) => {
 
   } catch (error) {
     console.error('Error in getAgentGigsWithStatus:', error);
-    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ 
-      message: error.message 
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      message: error.message
     });
   }
 };
@@ -1554,8 +1564,8 @@ export const getGigAgentsWithStatus = async (req, res) => {
 
   } catch (error) {
     console.error('Error in getGigAgentsWithStatus:', error);
-    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ 
-      message: error.message 
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      message: error.message
     });
   }
 };
