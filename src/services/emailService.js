@@ -1,16 +1,21 @@
-import * as SibApiV3Sdk from '@getbrevo/brevo';
+import nodemailer from 'nodemailer';
 import config from '../config/config.js';
 
-// Configuration Brevo
-let brevoApiInstance = null;
-
-if (config.BREVO_API_KEY) {
-  const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
-  apiInstance.setApiKey(SibApiV3Sdk.TransactionalEmailsApiApiKeys.apiKey, config.BREVO_API_KEY);
-  brevoApiInstance = apiInstance;
-} else {
-  console.log('Brevo API key not configured - email simulation mode enabled');
-}
+// Transporter configuration helper
+const getTransporter = () => {
+  return nodemailer.createTransport({
+    host: config.SMTP_HOST,
+    port: config.SMTP_PORT,
+    secure: config.SMTP_PORT === 465,
+    auth: {
+      user: config.SMTP_USER,
+      pass: config.SMTP_PASS,
+    },
+    tls: {
+      rejectUnauthorized: false
+    }
+  });
+};
 
 /**
  * Sends a matching notification email to an agent
@@ -31,89 +36,44 @@ export const sendMatchingNotification = async (agent, gig, matchDetails) => {
     const gigTitle = gig.title || 'New Gig';
     const gigDescription = gig.description || 'No description available';
 
-    // Calculate global score
     const languageScore = matchDetails.languageMatch?.score || 0;
     const skillsScore = matchDetails.skillsMatch?.details?.matchStatus === 'perfect_match' ? 1 : 0;
     const scheduleScore = matchDetails.scheduleMatch?.score || 0;
 
     const globalScore = Math.round(((languageScore + skillsScore + scheduleScore) / 3) * 100);
 
-    // Check if Brevo is available
-    if (!brevoApiInstance) {
-      console.log('Brevo not configured - simulating email for:', {
-        to: agentEmail,
-        subject: `🎯 Exclusive Invitation to Join a New Gig: ${gigTitle}`,
-        reason: 'Brevo not configured'
-      });
-
-      return {
-        success: true,
-        messageId: 'simulated-' + Date.now(),
-        to: agentEmail,
-        method: 'simulated',
-        note: 'Email simulated - Brevo not configured'
-      };
-    }
-
-    // Create email content
+    const transporter = getTransporter();
     const gigId = gig._id || gig.id;
-    const emailContent = createEmailContent(agentName, gigTitle, gigDescription, matchDetails, globalScore, gigId);
 
-    const emailParams = {
-      sender: {
-        name: config.BREVO_FROM_NAME,
-        email: config.BREVO_FROM_EMAIL
-      },
-      to: [{
-        email: agentEmail,
-        name: agentName
-      }],
+    const mailOptions = {
+      from: `"${config.SMTP_FROM_NAME}" <${config.SMTP_FROM_EMAIL}>`,
+      to: agentEmail,
       subject: `🎯 Exclusive Invitation to Join a New Gig: ${gigTitle}`,
-      htmlContent: emailContent,
-      textContent: createTextVersion(agentName, gigTitle, gigDescription, matchDetails, globalScore, gigId)
+      html: createEmailContent(agentName, gigTitle, gigDescription, matchDetails, globalScore, gigId),
+      text: createTextVersion(agentName, gigTitle, gigDescription, matchDetails, globalScore, gigId)
     };
 
-    const result = await brevoApiInstance.sendTransacEmail(emailParams);
+    const info = await transporter.sendMail(mailOptions);
 
-    console.log('Email sent successfully via Brevo:', {
-      messageId: result.messageId,
+    console.log('Email sent successfully via SMTP:', {
+      messageId: info.messageId,
       to: agentEmail,
-      subject: emailParams.subject
+      subject: mailOptions.subject
     });
 
     return {
       success: true,
-      messageId: result.messageId,
+      messageId: info.messageId,
       to: agentEmail,
-      method: 'brevo'
+      method: 'smtp'
     };
 
   } catch (error) {
-    console.error('Brevo error:', error.message);
-    console.error('Error details:', {
-      code: error.code,
-      statusCode: error.statusCode,
-      message: error.message,
-      apiKey: config.BREVO_API_KEY ? config.BREVO_API_KEY.substring(0, 10) + '...' : 'missing',
-      fromEmail: config.BREVO_FROM_EMAIL
-    });
-
-    // In case of Brevo error, simulate email sending
-    const agentName = agent.personalInfo?.name || 'Agent';
-    const agentEmail = agent.personalInfo?.email;
-    const gigTitle = gig.title || 'New Gig';
-
-    console.log('Simulating email for:', {
-      to: agentEmail,
-      subject: `🎯 Exclusive Invitation to Join a New Gig: ${gigTitle}`,
-      reason: 'Brevo not available'
-    });
-
-    // Return failure instead of simulated success
+    console.error('SMTP error in sendMatchingNotification:', error.message);
     return {
       success: false,
       error: error.message,
-      to: agentEmail,
+      to: agent.personalInfo?.email,
       method: 'failed'
     };
   }
@@ -293,27 +253,18 @@ This email was sent automatically by HARX Technologies Inc.
   `;
 };
 
-/**
- * Verifies the Brevo configuration
- */
 export const verifyEmailConfiguration = async () => {
   try {
-    console.log('Brevo configuration verified');
+    const transporter = getTransporter();
+    await transporter.verify();
+    console.log('SMTP configuration verified successfully');
     return true;
   } catch (error) {
-    console.error('Brevo configuration error:', error);
+    console.error('SMTP configuration error:', error.message);
     return false;
   }
 };
 
-/**
- * Envoie une invitation d'enrôlement à un agent
- * @param {Object} agent - Informations de l'agent
- * @param {Object} gig - Informations du gig
- * @param {string} invitationToken - Token d'invitation unique
- * @param {Date} expiryDate - Date d'expiration
- * @returns {Promise<Object>} Résultat de l'envoi
- */
 export const sendEnrollmentInvitation = async (agent, gig, invitationToken, expiryDate) => {
   try {
     const agentName = agent.personalInfo?.firstName || agent.personalInfo?.name || 'Agent';
@@ -326,91 +277,45 @@ export const sendEnrollmentInvitation = async (agent, gig, invitationToken, expi
     const gigTitle = gig.title || 'Nouveau Gig';
     const gigDescription = gig.description || 'Aucune description disponible';
 
-    // Formater la date d'expiration
     const formattedExpiryDate = expiryDate.toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
     });
 
-    // Check if Brevo is available
-    if (!brevoApiInstance) {
-      console.log('Brevo non configuré - simulation d\'email pour:', {
-        to: agentEmail,
-        subject: `🎯 Invitation d'enrôlement: ${gigTitle}`,
-        reason: 'Brevo non configuré'
-      });
-
-      return {
-        success: true,
-        messageId: 'simulated-' + Date.now(),
-        to: agentEmail,
-        method: 'simulated',
-        note: 'Email simulé - Brevo non configuré'
-      };
-    }
-
-    // Créer le contenu de l'email
-    const emailContent = createEnrollmentEmailContent(agentName, gigTitle, gigDescription, invitationToken, formattedExpiryDate);
-
-    const emailParams = {
-      sender: {
-        name: config.BREVO_FROM_NAME,
-        email: config.BREVO_FROM_EMAIL
-      },
-      to: [{
-        email: agentEmail,
-        name: agentName
-      }],
+    const transporter = getTransporter();
+    const mailOptions = {
+      from: `"${config.SMTP_FROM_NAME}" <${config.SMTP_FROM_EMAIL}>`,
+      to: agentEmail,
       subject: `🎯 Invitation d'enrôlement: ${gigTitle}`,
-      htmlContent: emailContent,
-      textContent: createEnrollmentTextVersion(agentName, gigTitle, gigDescription, invitationToken, formattedExpiryDate)
+      html: createEnrollmentEmailContent(agentName, gigTitle, gigDescription, invitationToken, formattedExpiryDate),
+      text: createEnrollmentTextVersion(agentName, gigTitle, gigDescription, invitationToken, formattedExpiryDate)
     };
 
-    const result = await brevoApiInstance.sendTransacEmail(emailParams);
+    const info = await transporter.sendMail(mailOptions);
 
-    console.log('Email d\'invitation envoyé avec succès via Brevo:', {
-      messageId: result.messageId,
-      to: agentEmail,
-      subject: emailParams.subject
+    console.log('Enrollment invitation sent successfully via SMTP:', {
+      messageId: info.messageId,
+      to: agentEmail
     });
 
     return {
       success: true,
-      messageId: result.messageId,
+      messageId: info.messageId,
       to: agentEmail,
-      method: 'brevo'
+      method: 'smtp'
     };
 
   } catch (error) {
-    console.error('Erreur Brevo lors de l\'envoi de l\'invitation:', error.message);
-
-    // En cas d'erreur Brevo, simuler l'envoi d'email
-    console.log('Simulation d\'envoi d\'email d\'invitation pour:', {
-      to: agent.personalInfo?.email,
-      subject: `🎯 Invitation d'enrôlement: ${gig.title || 'Nouveau Gig'}`,
-      reason: 'Erreur Brevo'
-    });
-
+    console.error('SMTP error in sendEnrollmentInvitation:', error.message);
     return {
-      success: true,
-      messageId: 'simulated-' + Date.now(),
+      success: false,
+      error: error.message,
       to: agent.personalInfo?.email,
-      method: 'simulated',
-      note: 'Email simulé - Erreur Brevo'
+      method: 'failed'
     };
   }
 };
 
-/**
- * Envoie une notification d'enrôlement (acceptation/refus)
- * @param {Object} agent - Informations de l'agent
- * @param {Object} gig - Informations du gig
- * @param {string} status - Statut de l'enrôlement ('accepted' ou 'rejected')
- * @returns {Promise<Object>} Résultat de l'envoi
- */
 export const sendEnrollmentNotification = async (agent, gig, status) => {
   try {
     const agentName = agent.personalInfo?.firstName || agent.personalInfo?.name || 'Agent';
@@ -421,73 +326,37 @@ export const sendEnrollmentNotification = async (agent, gig, status) => {
     }
 
     const gigTitle = gig.title || 'Gig';
-    const statusText = status === 'accepted' ? 'accepté' : 'refusé';
+    const transporter = getTransporter();
 
-    // Check if Brevo is available
-    if (!brevoApiInstance) {
-      console.log('Brevo non configuré - simulation de notification pour:', {
-        to: agentEmail,
-        subject: `📧 Confirmation d'enrôlement: ${gigTitle}`,
-        reason: 'Brevo non configuré'
-      });
-
-      return {
-        success: true,
-        messageId: 'simulated-' + Date.now(),
-        to: agentEmail,
-        method: 'simulated',
-        note: 'Email simulé - Brevo non configuré'
-      };
-    }
-
-    // Créer le contenu de l'email
-    const emailContent = createEnrollmentNotificationContent(agentName, gigTitle, status);
-
-    const emailParams = {
-      sender: {
-        name: config.BREVO_FROM_NAME,
-        email: config.BREVO_FROM_EMAIL
-      },
-      to: [{
-        email: agentEmail,
-        name: agentName
-      }],
+    const mailOptions = {
+      from: `"${config.SMTP_FROM_NAME}" <${config.SMTP_FROM_EMAIL}>`,
+      to: agentEmail,
       subject: `📧 Confirmation d'enrôlement: ${gigTitle}`,
-      htmlContent: emailContent,
-      textContent: createEnrollmentNotificationTextVersion(agentName, gigTitle, status)
+      html: createEnrollmentNotificationContent(agentName, gigTitle, status),
+      text: createEnrollmentNotificationTextVersion(agentName, gigTitle, status)
     };
 
-    const result = await brevoApiInstance.sendTransacEmail(emailParams);
+    const info = await transporter.sendMail(mailOptions);
 
-    console.log('Notification d\'enrôlement envoyée avec succès via Brevo:', {
-      messageId: result.messageId,
-      to: agentEmail,
-      subject: emailParams.subject
+    console.log('Enrollment notification sent successfully via SMTP:', {
+      messageId: info.messageId,
+      to: agentEmail
     });
 
     return {
       success: true,
-      messageId: result.messageId,
+      messageId: info.messageId,
       to: agentEmail,
-      method: 'brevo'
+      method: 'smtp'
     };
 
   } catch (error) {
-    console.error('Erreur Brevo lors de l\'envoi de la notification:', error.message);
-
-    // En cas d'erreur Brevo, simuler l'envoi d'email
-    console.log('Simulation d\'envoi de notification pour:', {
-      to: agent.personalInfo?.email,
-      subject: `📧 Confirmation d'enrôlement: ${gig.title || 'Gig'}`,
-      reason: 'Erreur Brevo'
-    });
-
+    console.error('SMTP error in sendEnrollmentNotification:', error.message);
     return {
-      success: true,
-      messageId: 'simulated-' + Date.now(),
+      success: false,
+      error: error.message,
       to: agent.personalInfo?.email,
-      method: 'simulated',
-      note: 'Email simulé - Erreur Brevo'
+      method: 'failed'
     };
   }
 };

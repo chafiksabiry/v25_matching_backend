@@ -8,10 +8,13 @@ export default {
   ZOHO_API_URL: process.env.ZOHO_API_URL || 'https://www.zohoapis.com/crm/v2',
   ZOHO_ACCESS_TOKEN: process.env.ZOHO_ACCESS_TOKEN || '1000.277f60c77e946bcc55d3e3cf90ff9e3d.08af6a6bd08b40f97a6854720c164a86',
 
-  // Brevo Configuration (anciennement Sendinblue)
-  BREVO_API_KEY: process.env.BREVO_API_KEY,
-  BREVO_FROM_EMAIL: process.env.BREVO_FROM_EMAIL || 'chafik.sabiry@harx.ai',
-  BREVO_FROM_NAME: process.env.BREVO_FROM_NAME || 'Harx AI',
+  // SMTP Configuration (Nodemailer)
+  SMTP_HOST: process.env.SMTP_HOST || 'smtp-relay.brevo.com',
+  SMTP_PORT: parseInt(process.env.SMTP_PORT) || 587,
+  SMTP_USER: process.env.SMTP_USER || process.env.BREVO_FROM_EMAIL,
+  SMTP_PASS: process.env.SMTP_PASS || process.env.BREVO_API_KEY,
+  SMTP_FROM_EMAIL: process.env.SMTP_FROM_EMAIL || process.env.BREVO_FROM_EMAIL || 'chafik.sabiry@harx.ai',
+  SMTP_FROM_NAME: process.env.SMTP_FROM_NAME || 'Harx AI',
 
   // Application URL Configuration
   IS_PREPROD: IS_PREPROD,
