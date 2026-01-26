@@ -11,10 +11,10 @@ export default {
   // SMTP Configuration (Nodemailer)
   SMTP_HOST: process.env.SMTP_HOST || 'smtp-relay.brevo.com',
   SMTP_PORT: parseInt(process.env.SMTP_PORT) || 587,
-  SMTP_USER: process.env.SMTP_USER || process.env.BREVO_FROM_EMAIL,
-  SMTP_PASS: process.env.SMTP_PASS || process.env.BREVO_API_KEY,
-  SMTP_FROM_EMAIL: process.env.SMTP_FROM_EMAIL || process.env.BREVO_FROM_EMAIL || 'chafik.sabiry@harx.ai',
-  SMTP_FROM_NAME: process.env.SMTP_FROM_NAME || 'Harx AI',
+  SMTP_USER: process.env.SMTP_USER,
+  SMTP_PASS: process.env.SMTP_PASS,
+  SMTP_FROM_EMAIL: process.env.SMTP_FROM_EMAIL || 'chafik.sabiry@harx.ai',
+  SMTP_FROM_NAME: process.env.SMTP_FROM_NAME || 'HARX',
 
   // Application URL Configuration
   IS_PREPROD: IS_PREPROD,
@@ -31,4 +31,4 @@ console.log('Configuration Brevo:', {
 console.log('Configuration Application:', {
   isPreprod: IS_PREPROD,
   baseUrl: IS_PREPROD ? 'https://harx25pageslinks.netlify.app' : 'https://harx25pageslinks.netlify.app'
-}); 
+});

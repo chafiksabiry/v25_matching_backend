@@ -650,23 +650,8 @@ const compareSchedules = (gigSchedule, agentAvailability) => {
     agentAvailability.flexibility.includes('Split Shifts')
   );
 
-  // Vérifier si tous les jours du gig sont couverts par l'agent
-  const agentDays = normalizedAgentSchedule.map(day => day.day);
-  const missingDays = gigSchedule
-    .filter(gigDay => !agentDays.includes(gigDay.day))
-    .map(gigDay => gigDay.day);
-
-  if (missingDays.length > 0) {
-    return {
-      score: 0,
-      status: "no_match",
-      details: {
-        matchingDays: [],
-        missingDays: missingDays,
-        insufficientHours: []
-      }
-    };
-  }
+  // NOUVELLE LOGIQUE: On ne retourne plus 0 immédiatement. 
+  // On calcule le score proportionnel au nombre de jours qui matchent.
 
   gigSchedule.forEach(gigDay => {
     if (!gigDay || !gigDay.day || !gigDay.hours) {
@@ -708,7 +693,7 @@ const compareSchedules = (gigSchedule, agentAvailability) => {
     }
   });
 
-  const scheduleScore = matchingDays / totalDays;
+  const scheduleScore = totalDays > 0 ? matchingDays / totalDays : 0;
   const scheduleStatus = scheduleScore === 1 ? "perfect_match" :
     scheduleScore > 0 ? "partial_match" : "no_match";
 
@@ -1345,18 +1330,18 @@ export const findMatchesForGigById = async (req, res) => {
             languageScore,
             industryScore,
             activityScore,
-            experienceMatch.status === "perfect_match" ? 1 : 0, // ⭐ BINAIRE
-            timezoneMatch.status === "perfect_match" ? 1 : 0, // ⭐ BINAIRE
-            regionMatch.status === "perfect_match" ? 1 : 0, // ⭐ BINAIRE
+            experienceMatch.score || (experienceMatch.status === "perfect_match" ? 1 : 0),
+            timezoneMatch.score || (timezoneMatch.status === "perfect_match" ? 1 : 0),
+            regionMatch.score || (regionMatch.status === "perfect_match" ? 1 : 0),
             scheduleMatch.score,
-            // Ajouter un 8ème critère (skills) - utiliser 1 si perfect_match, 0 sinon
-            skillsMatchStatus === "perfect_match" ? 1 : 0
+            // 8ème critère (skills) - utiliser le ratio réel
+            requiredSkills.length > 0 ? matchingSkills.length / requiredSkills.length : 1
           ];
 
           const totalScore = allScores.reduce((a, b) => a + b, 0);
           normalizedTotalScore = totalScore / 8; // Diviser par 8 critères
 
-          console.log(`🧮 Score total pour agent ${agent._id}: (${allScores.join(' + ')}) ÷ 8 = ${normalizedTotalScore.toFixed(3)}`);
+          console.log(`🧮 Score total pour agent ${agent._id}: (${allScores.map(s => s.toFixed(2)).join(' + ')}) ÷ 8 = ${normalizedTotalScore.toFixed(3)}`);
         } else {
           // CAS NORMAL: Score pondéré - IGNORER les weights = 0
           let totalScore = 0;
