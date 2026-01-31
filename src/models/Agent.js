@@ -264,6 +264,14 @@ const agentSchema = new mongoose.Schema({
       type: String,
       required: false
     },
+    profilePicture: {
+      type: String,
+      required: false
+    },
+    photo: {
+      url: String,
+      publicId: String
+    },
     languages: [{
       language: {
         type: mongoose.Schema.Types.ObjectId,
