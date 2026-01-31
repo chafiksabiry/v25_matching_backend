@@ -20,10 +20,10 @@ app.set('trust proxy', true);
 const corsOptions = {
   origin: [
     'https://harx25pageslinks.netlify.app',
-    'https://harx25pageslinks.netlify.app',
-    'https://harxv25matchingfrontend.netlify.app/',
+    'https://harxv25matchingfrontend.netlify.app',
     'http://localhost:5181',
-    'https://harxv25matchingfrontend.netlify.app/',
+    'https://harxv25matchingfrontend.netlify.app',
+    'https://v25.harx.ai'
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
