@@ -36,6 +36,7 @@ app.use('/api/reps', agentRoutes);
 app.use('/api/gig-agents', gigAgentRoutes);
 app.use('/api/gig-matching-weights', gigMatchingWeightsRoutes);
 app.use('/api/enrollment', enrollmentRoutes);
+app.use('/api/agents', agentRoutes);
 
 // MongoDB Connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/matching';
