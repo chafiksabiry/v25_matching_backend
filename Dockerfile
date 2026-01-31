@@ -1,0 +1,29 @@
+FROM node:18
+
+WORKDIR /app
+
+COPY package*.json ./
+
+RUN npm install
+
+COPY . .
+
+ENV MONGODB_URI=mongodb://harx:gcZ62rl8hoME@38.242.208.242:27018/V25_CompanySearchWizard
+ENV QIANKUN_FRONT_URL=https://harx25pageslinks.netlify.app
+ENV IS_PREPROD=false
+
+ENV AWS_REGION=eu-west-3
+ENV AWS_ACCESS_KEY_ID=AKIAWODTAOGLI4ZJPWA7
+ENV AWS_SECRET_ACCESS_KEY=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
+ENV AWS_SES_FROM_EMAIL=chafik.sabiry@harx.ai
+
+ENV BREVO_API_KEY=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
+ENV BREVO_FROM_EMAIL=chafik.sabiry@harx.ai
+ENV SMTP_SENDER_NAME=harx
+
+ENV PORT=5011
+
+
+EXPOSE 5011
+
+CMD ["npm", "start"]
