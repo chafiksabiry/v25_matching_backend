@@ -8,10 +8,10 @@ const GigSchema = new Schema(
     category: { type: String, required: false },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', default: null },
-    destination_zone: { 
-      type: mongoose.Schema.Types.ObjectId, 
-      ref: 'Country', 
-      required: false 
+    destination_zone: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Country',
+      required: false
     },
     activities: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Activity', required: false }],
     industries: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Industry', required: false }],
@@ -58,21 +58,15 @@ const GigSchema = new Schema(
       }
     },
     commission: {
-      base: { type: String, required: false },
-      baseAmount: { type: String, required: false },
-      bonus: String,
-      bonusAmount: String,
-      structure: String,
+      commission_per_call: { type: Number, required: false },
+      bonusAmount: { type: String, required: false },
       currency: { type: mongoose.Schema.Types.ObjectId, ref: 'Currency', required: false },
       minimumVolume: {
         amount: { type: String, required: false },
         period: { type: String, required: false },
         unit: { type: String, required: false },
       },
-      transactionCommission: {
-        type: { type: String, required: false },
-        amount: { type: String, required: false },
-      },
+      transactionCommission: { type: Number, required: false },
       additionalDetails: { type: String, required: false },
     },
     leads: {
@@ -126,11 +120,11 @@ const GigSchema = new Schema(
         default: Date.now
       }
     }],
-    status: { 
-      type: String, 
-      enum: ['to_activate', 'active', 'inactive', 'archived'], 
+    status: {
+      type: String,
+      enum: ['to_activate', 'active', 'inactive', 'archived'],
       default: 'to_activate',
-      required: true 
+      required: true
     },
   },
   { timestamps: true }
