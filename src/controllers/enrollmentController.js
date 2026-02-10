@@ -26,7 +26,7 @@ export const sendEnrollmentInvitation = async (req, res) => {
 
     // Vérifier si une assignation existe déjà
     let gigAgent = await GigAgent.findOne({ agentId, gigId });
-    
+
     if (!gigAgent) {
       // Créer une nouvelle assignation avec statut d'enrôlement
       gigAgent = new GigAgent({
@@ -44,7 +44,7 @@ export const sendEnrollmentInvitation = async (req, res) => {
 
     // Générer un token d'invitation unique
     const invitationToken = gigAgent.generateInvitationToken();
-    
+
     // Définir la date d'expiration
     const expiryDate = new Date();
     expiryDate.setDate(expiryDate.getDate() + expiryDays);
@@ -58,7 +58,7 @@ export const sendEnrollmentInvitation = async (req, res) => {
         agentId,
         gigId,
         'invited',
-        { 
+        {
           invitationDate: new Date(),
           gigAgentId: gigAgent._id
         }
@@ -73,8 +73,8 @@ export const sendEnrollmentInvitation = async (req, res) => {
       await gigAgent.markEmailSent();
     } catch (emailError) {
       console.error('Erreur lors de l\'envoi de l\'email d\'invitation:', emailError);
-      return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ 
-        message: 'Invitation créée mais erreur lors de l\'envoi de l\'email' 
+      return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+        message: 'Invitation créée mais erreur lors de l\'envoi de l\'email'
       });
     }
 
@@ -130,8 +130,8 @@ export const acceptEnrollment = async (req, res) => {
         });
     }
     else {
-      return res.status(StatusCodes.BAD_REQUEST).json({ 
-        message: 'Token d\'invitation OU ID d\'enrôlement requis' 
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        message: 'Token d\'invitation OU ID d\'enrôlement requis'
       });
     }
 
@@ -221,8 +221,8 @@ export const rejectEnrollment = async (req, res) => {
         });
     }
     else {
-      return res.status(StatusCodes.BAD_REQUEST).json({ 
-        message: 'Token d\'invitation OU ID d\'enrôlement requis' 
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        message: 'Token d\'invitation OU ID d\'enrôlement requis'
       });
     }
 
@@ -278,7 +278,7 @@ export const getAgentEnrollments = async (req, res) => {
     const { status } = req.query;
 
     let query = { agentId };
-    
+
     if (status) {
       query.enrollmentStatus = status;
     }
@@ -317,7 +317,7 @@ export const getGigEnrollments = async (req, res) => {
     const { status } = req.query;
 
     let query = { gigId };
-    
+
     if (status) {
       query.enrollmentStatus = status;
     }
@@ -370,8 +370,8 @@ export const resendEnrollmentInvitation = async (req, res) => {
     }
 
     if (gigAgent.enrollmentStatus !== 'invited') {
-      return res.status(StatusCodes.BAD_REQUEST).json({ 
-        message: 'Seules les invitations en attente peuvent être renvoyées' 
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        message: 'Seules les invitations en attente peuvent être renvoyées'
       });
     }
 
@@ -389,8 +389,8 @@ export const resendEnrollmentInvitation = async (req, res) => {
       await gigAgent.markEmailSent();
     } catch (emailError) {
       console.error('Erreur lors de l\'envoi de l\'email d\'invitation:', emailError);
-      return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ 
-        message: 'Invitation mise à jour mais erreur lors de l\'envoi de l\'email' 
+      return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+        message: 'Invitation mise à jour mais erreur lors de l\'envoi de l\'email'
       });
     }
 
@@ -422,8 +422,8 @@ export const cancelEnrollmentInvitation = async (req, res) => {
     }
 
     if (gigAgent.enrollmentStatus !== 'invited') {
-      return res.status(StatusCodes.BAD_REQUEST).json({ 
-        message: 'Seules les invitations en attente peuvent être annulées' 
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        message: 'Seules les invitations en attente peuvent être annulées'
       });
     }
 
@@ -472,8 +472,8 @@ export const acceptEnrollmentById = async (req, res) => {
     }
 
     if (gigAgent.enrollmentStatus !== 'invited') {
-      return res.status(StatusCodes.BAD_REQUEST).json({ 
-        message: 'Seuls les enrôlements en attente peuvent être acceptés' 
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        message: 'Seuls les enrôlements en attente peuvent être acceptés'
       });
     }
 
@@ -522,7 +522,7 @@ export const getAgentEnrolledGigs = async (req, res) => {
     const { status } = req.query;
 
     let query = { agentId };
-    
+
     // Filtrer par statut si spécifié
     if (status) {
       query.enrollmentStatus = status;
@@ -595,8 +595,8 @@ export const rejectEnrollmentById = async (req, res) => {
     }
 
     if (gigAgent.enrollmentStatus !== 'invited') {
-      return res.status(StatusCodes.BAD_REQUEST).json({ 
-        message: 'Seuls les enrôlements en attente peuvent être refusés' 
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        message: 'Seuls les enrôlements en attente peuvent être refusés'
       });
     }
 
@@ -646,7 +646,7 @@ export const requestEnrollment = async (req, res) => {
 
     // Vérifier si une assignation existe déjà
     let gigAgent = await GigAgent.findOne({ agentId, gigId });
-    
+
     if (!gigAgent) {
       // Créer une nouvelle assignation avec statut de demande
       gigAgent = new GigAgent({
@@ -659,11 +659,11 @@ export const requestEnrollment = async (req, res) => {
     } else {
       // Vérifier si l'agent peut faire une nouvelle demande
       if (!gigAgent.canRequestEnrollment()) {
-        return res.status(StatusCodes.BAD_REQUEST).json({ 
-          message: 'Une demande d\'enrôlement existe déjà et ne peut pas être modifiée' 
+        return res.status(StatusCodes.BAD_REQUEST).json({
+          message: 'Une demande d\'enrôlement existe déjà et ne peut pas être modifiée'
         });
       }
-      
+
       // Mettre à jour l'assignation existante
       gigAgent.enrollmentStatus = 'requested';
       gigAgent.notes = notes || gigAgent.notes;
@@ -677,7 +677,7 @@ export const requestEnrollment = async (req, res) => {
         agentId,
         gigId,
         'requested',
-        { 
+        {
           invitationDate: new Date(),
           gigAgentId: gigAgent._id
         }
@@ -725,8 +725,8 @@ export const acceptEnrollmentRequest = async (req, res) => {
     }
 
     if (gigAgent.enrollmentStatus !== 'requested') {
-      return res.status(StatusCodes.BAD_REQUEST).json({ 
-        message: 'Seules les demandes d\'enrôlement peuvent être acceptées' 
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        message: 'Seules les demandes d\'enrôlement peuvent être acceptées'
       });
     }
 
@@ -790,8 +790,8 @@ export const rejectEnrollmentRequest = async (req, res) => {
     }
 
     if (gigAgent.enrollmentStatus !== 'requested') {
-      return res.status(StatusCodes.BAD_REQUEST).json({ 
-        message: 'Seules les demandes d\'enrôlement peuvent être refusées' 
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        message: 'Seules les demandes d\'enrôlement peuvent être refusées'
       });
     }
 
@@ -831,7 +831,7 @@ export const removeAgentFromGig = async (req, res) => {
     // Retirer de GigAgent
     await GigAgent.findOneAndUpdate(
       { gigId, agentId },
-      { 
+      {
         enrollmentStatus: 'removed',
         status: 'cancelled'
       }
@@ -856,14 +856,14 @@ export const removeAgentFromGig = async (req, res) => {
 export const getGigAgents = async (req, res) => {
   try {
     const { gigId } = req.params;
-    
+
     const gig = await Gig.findById(gigId)
       .populate('enrolledAgents', 'firstName lastName email skills');
-    
+
     if (!gig) {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Gig non trouvé' });
     }
-    
+
     res.status(StatusCodes.OK).json({
       gigId,
       totalAgents: gig.enrolledAgents.length,
@@ -876,65 +876,75 @@ export const getGigAgents = async (req, res) => {
 
 // Vérifier si l'étape 'Match HARX REPS' est complétée pour une company
 export const checkMatchRepsStepCompletion = async (req, res) => {
-    try {
-        const { companyId } = req.params;
+  try {
+    const { companyId } = req.params;
 
-        // Récupérer tous les gigs de la company
-        const companyGigs = await Gig.find({ companyId });
+    // Récupérer tous les gigs de la company
+    const companyGigs = await Gig.find({ companyId });
 
-        if (!companyGigs || companyGigs.length === 0) {
-            return res.status(StatusCodes.OK).json({
-                completed: false,
-                reason: 'no_gigs',
-                message: 'Aucun gig créé pour cette company',
-                enrolledRepsCount: 0,
-                invitationsSentCount: 0
-            });
-        }
-
-        const gigIds = companyGigs.map(gig => gig._id);
-
-        // Compter les REPS enrolled (statut 'enrolled')
-        const enrolledRepsCount = await GigAgent.countDocuments({
-            gigId: { $in: gigIds },
-            enrollmentStatus: 'enrolled'
-        });
-
-        // Compter les invitations envoyées (statut 'invited')
-        const invitationsSentCount = await GigAgent.countDocuments({
-            gigId: { $in: gigIds },
-            enrollmentStatus: 'invited'
-        });
-
-        // L'étape est complétée si :
-        // - Au moins un REPS est enrolled OU
-        // - Au moins une invitation a été envoyée
-        const completed = enrolledRepsCount > 0 || invitationsSentCount > 0;
-
-        let reason = '';
-        if (completed) {
-            if (enrolledRepsCount > 0) {
-                reason = 'has_enrolled_reps';
-            } else if (invitationsSentCount > 0) {
-                reason = 'has_sent_invitations';
-            }
-        } else {
-            reason = 'no_activity';
-        }
-
-        res.status(StatusCodes.OK).json({
-            completed,
-            reason,
-            enrolledRepsCount,
-            invitationsSentCount,
-            totalGigs: companyGigs.length,
-            message: completed
-                ? 'L\'étape Match HARX REPS est complétée'
-                : 'L\'étape Match HARX REPS n\'est pas encore complétée'
-        });
-
-    } catch (error) {
-        console.error('Error in checkMatchRepsStepCompletion:', error);
-        res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
+    if (!companyGigs || companyGigs.length === 0) {
+      return res.status(StatusCodes.OK).json({
+        completed: false,
+        reason: 'no_gigs',
+        message: 'Aucun gig créé pour cette company',
+        enrolledRepsCount: 0,
+        invitationsSentCount: 0
+      });
     }
+
+    const gigIds = companyGigs.map(gig => gig._id);
+
+    // Compter les REPS enrolled ou accepted (statuts actifs)
+    const enrolledRepsCount = await GigAgent.countDocuments({
+      gigId: { $in: gigIds },
+      enrollmentStatus: { $in: ['enrolled', 'accepted'] }
+    });
+
+    // Compter les invitations envoyées (statut 'invited')
+    const invitationsSentCount = await GigAgent.countDocuments({
+      gigId: { $in: gigIds },
+      enrollmentStatus: 'invited'
+    });
+
+    // Compter aussi les demandes d'enrollment (statut 'requested')
+    const requestedCount = await GigAgent.countDocuments({
+      gigId: { $in: gigIds },
+      enrollmentStatus: 'requested'
+    });
+
+    // L'étape est complétée si :
+    // - Au moins un REPS est enrolled/accepted OU
+    // - Au moins une invitation a été envoyée OU
+    // - Au moins une demande a été reçue
+    const completed = enrolledRepsCount > 0 || invitationsSentCount > 0 || requestedCount > 0;
+
+    let reason = '';
+    if (completed) {
+      if (enrolledRepsCount > 0) {
+        reason = 'has_enrolled_reps';
+      } else if (invitationsSentCount > 0) {
+        reason = 'has_sent_invitations';
+      } else if (requestedCount > 0) {
+        reason = 'has_enrollment_requests';
+      }
+    } else {
+      reason = 'no_activity';
+    }
+
+    res.status(StatusCodes.OK).json({
+      completed,
+      reason,
+      enrolledRepsCount,
+      invitationsSentCount,
+      requestedCount,
+      totalGigs: companyGigs.length,
+      message: completed
+        ? 'L\'étape Match HARX REPS est complétée'
+        : 'L\'étape Match HARX REPS n\'est pas encore complétée'
+    });
+
+  } catch (error) {
+    console.error('Error in checkMatchRepsStepCompletion:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
 };
