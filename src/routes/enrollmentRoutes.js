@@ -14,7 +14,8 @@ import {
   acceptEnrollmentRequest,
   rejectEnrollmentRequest,
   removeAgentFromGig,
-  getGigAgents
+  getGigAgents,
+  checkMatchRepsStepCompletion
 } from '../controllers/enrollmentController.js';
 
 const router = express.Router();
@@ -47,5 +48,8 @@ router.post('/gig/remove-agent', removeAgentFromGig);
 // Routes de gestion
 router.post('/:id/resend', resendEnrollmentInvitation);
 router.post('/:id/cancel', cancelEnrollmentInvitation);
+
+// Route pour vérifier si l'étape Match HARX REPS est complétée
+router.get('/company/:companyId/step-completion', checkMatchRepsStepCompletion);
 
 export default router;

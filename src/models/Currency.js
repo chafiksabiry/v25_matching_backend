@@ -18,7 +18,7 @@ const currencySchema = new Schema(
     },
     symbol: {
       type: String,
-      required: true,
+      required: false,
       trim: true
     },
     isActive: {

@@ -873,3 +873,68 @@ export const getGigAgents = async (req, res) => {
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };
+
+// Vérifier si l'étape 'Match HARX REPS' est complétée pour une company
+export const checkMatchRepsStepCompletion = async (req, res) => {
+    try {
+        const { companyId } = req.params;
+
+        // Récupérer tous les gigs de la company
+        const companyGigs = await Gig.find({ companyId });
+
+        if (!companyGigs || companyGigs.length === 0) {
+            return res.status(StatusCodes.OK).json({
+                completed: false,
+                reason: 'no_gigs',
+                message: 'Aucun gig créé pour cette company',
+                enrolledRepsCount: 0,
+                invitationsSentCount: 0
+            });
+        }
+
+        const gigIds = companyGigs.map(gig => gig._id);
+
+        // Compter les REPS enrolled (statut 'enrolled')
+        const enrolledRepsCount = await GigAgent.countDocuments({
+            gigId: { $in: gigIds },
+            enrollmentStatus: 'enrolled'
+        });
+
+        // Compter les invitations envoyées (statut 'invited')
+        const invitationsSentCount = await GigAgent.countDocuments({
+            gigId: { $in: gigIds },
+            enrollmentStatus: 'invited'
+        });
+
+        // L'étape est complétée si :
+        // - Au moins un REPS est enrolled OU
+        // - Au moins une invitation a été envoyée
+        const completed = enrolledRepsCount > 0 || invitationsSentCount > 0;
+
+        let reason = '';
+        if (completed) {
+            if (enrolledRepsCount > 0) {
+                reason = 'has_enrolled_reps';
+            } else if (invitationsSentCount > 0) {
+                reason = 'has_sent_invitations';
+            }
+        } else {
+            reason = 'no_activity';
+        }
+
+        res.status(StatusCodes.OK).json({
+            completed,
+            reason,
+            enrolledRepsCount,
+            invitationsSentCount,
+            totalGigs: companyGigs.length,
+            message: completed
+                ? 'L\'étape Match HARX REPS est complétée'
+                : 'L\'étape Match HARX REPS n\'est pas encore complétée'
+        });
+
+    } catch (error) {
+        console.error('Error in checkMatchRepsStepCompletion:', error);
+        res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
+    }
+};
