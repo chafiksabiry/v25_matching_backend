@@ -4,11 +4,11 @@ import TimeSlot from '../models/TimeSlot.js';
  * Get all time slots for an agent, optionally filtered by gig and date
  */
 export const getTimeSlots = async (req, res) => {
-    const { agentId, gigId, date } = req.query;
+    const { agentId, repId, gigId, date } = req.query;
 
     try {
         const filter = {};
-        if (agentId) filter.agentId = agentId;
+        if (agentId || repId) filter.agentId = agentId || repId;
         if (gigId) filter.gigId = gigId;
         if (date) filter.date = date;
 
@@ -23,10 +23,11 @@ export const getTimeSlots = async (req, res) => {
  * Create or update a time slot
  */
 export const upsertTimeSlot = async (req, res) => {
-    const { agentId, gigId, date, startTime, endTime, duration, status, notes } = req.body;
+    const { agentId, repId, gigId, date, startTime, endTime, duration, status, notes } = req.body;
+    const finalAgentId = agentId || repId;
 
     try {
-        const filter = { agentId, gigId, date, startTime };
+        const filter = { agentId: finalAgentId, gigId, date, startTime };
         const update = {
             endTime,
             duration,
