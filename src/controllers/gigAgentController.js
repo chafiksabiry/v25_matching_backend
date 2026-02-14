@@ -18,7 +18,8 @@ export const getAllGigAgents = async (req, res) => {
         populate: [
           { path: 'commission.currency' },
           { path: 'destination_zone' },
-          { path: 'availability.time_zone' }
+          { path: 'availability.time_zone' },
+          { path: 'companyId', select: 'name logo' }
         ]
       })
       .sort({ createdAt: -1 });
@@ -40,7 +41,8 @@ export const getGigAgentById = async (req, res) => {
         populate: [
           { path: 'commission.currency' },
           { path: 'destination_zone' },
-          { path: 'availability.time_zone' }
+          { path: 'availability.time_zone' },
+          { path: 'companyId', select: 'name logo' }
         ]
       });
 
@@ -64,7 +66,8 @@ export const getGigAgentsForAgent = async (req, res) => {
         populate: [
           { path: 'commission.currency' },
           { path: 'destination_zone' },
-          { path: 'availability.time_zone' }
+          { path: 'availability.time_zone' },
+          { path: 'companyId', select: 'name logo' }
         ]
       })
       .sort({ createdAt: -1 });
@@ -196,7 +199,8 @@ export const createGigAgent = async (req, res) => {
         populate: [
           { path: 'commission.currency' },
           { path: 'destination_zone' },
-          { path: 'availability.time_zone' }
+          { path: 'availability.time_zone' },
+          { path: 'companyId', select: 'name logo' }
         ]
       });
 
