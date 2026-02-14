@@ -1058,11 +1058,18 @@ export const getInvitedGigsForAgent = async (req, res) => {
 // Get invited agents for a company
 export const getInvitedAgentsForCompany = async (req, res) => {
   try {
-    // D'abord, on récupère tous les gigs de la company
-    const gigs = await Gig.find({ companyId: req.params.companyId });
+    const { companyId } = req.params;
+
+    // 1. D'abord, on récupère tous les gigs de la company
+    const gigs = await Gig.find({ companyId });
+
+    if (!gigs || gigs.length === 0) {
+      return res.status(StatusCodes.OK).json([]);
+    }
+
     const gigIds = gigs.map(gig => gig._id);
 
-    // Ensuite, on cherche les GigAgents qui correspondent à ces gigs
+    // 2. Ensuite, on cherche les GigAgents qui correspondent à ces gigs
     const gigAgents = await GigAgent.find({
       enrollmentStatus: 'invited',
       gigId: { $in: gigIds }
@@ -1074,13 +1081,18 @@ export const getInvitedAgentsForCompany = async (req, res) => {
       })
       .sort({ createdAt: -1 });
 
-    // Get unique agents
-    const uniqueAgents = Array.from(new Set(gigAgents.map(ga => ga.agentId._id)))
-      .map(agentId => {
-        const gigAgent = gigAgents.find(ga => ga.agentId._id.equals(agentId));
-        return gigAgent.agentId;
-      });
+    // 3. Extraire les agents uniques de manière sécurisée (évite les erreurs null et Set d'objets)
+    const agentMap = new Map();
+    gigAgents.forEach(ga => {
+      if (ga.agentId && ga.agentId._id) {
+        const idStr = ga.agentId._id.toString();
+        if (!agentMap.has(idStr)) {
+          agentMap.set(idStr, ga.agentId);
+        }
+      }
+    });
 
+    const uniqueAgents = Array.from(agentMap.values());
     res.status(StatusCodes.OK).json(uniqueAgents);
   } catch (error) {
     console.error('Error in getInvitedAgentsForCompany:', error);
@@ -1111,11 +1123,18 @@ export const getEnrolledGigsForAgent = async (req, res) => {
 // Get enrollment requests for a company
 export const getEnrollmentRequestsForCompany = async (req, res) => {
   try {
-    // D'abord, on récupère tous les gigs de la company
-    const gigs = await Gig.find({ companyId: req.params.companyId });
+    const { companyId } = req.params;
+
+    // 1. D'abord, on récupère tous les gigs de la company
+    const gigs = await Gig.find({ companyId });
+
+    if (!gigs || gigs.length === 0) {
+      return res.status(StatusCodes.OK).json([]);
+    }
+
     const gigIds = gigs.map(gig => gig._id);
 
-    // Ensuite, on cherche les GigAgents qui correspondent à ces gigs
+    // 2. Ensuite, on cherche les GigAgents qui correspondent à ces gigs
     const requests = await GigAgent.find({
       enrollmentStatus: 'requested',
       gigId: { $in: gigIds }
@@ -1127,7 +1146,10 @@ export const getEnrollmentRequestsForCompany = async (req, res) => {
       .populate('agentId')
       .sort({ createdAt: -1 });
 
-    res.status(StatusCodes.OK).json(requests);
+    // Filtrer les requêtes où l'agent a pu être supprimé
+    const validRequests = requests.filter(r => r.agentId !== null);
+
+    res.status(StatusCodes.OK).json(validRequests);
   } catch (error) {
     console.error('Error in getEnrollmentRequestsForCompany:', error);
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
@@ -1137,11 +1159,18 @@ export const getEnrollmentRequestsForCompany = async (req, res) => {
 // Get active agents for a company
 export const getActiveAgentsForCompany = async (req, res) => {
   try {
-    // D'abord, on récupère tous les gigs de la company
-    const gigs = await Gig.find({ companyId: req.params.companyId });
+    const { companyId } = req.params;
+
+    // 1. D'abord, on récupère tous les gigs de la company
+    const gigs = await Gig.find({ companyId });
+
+    if (!gigs || gigs.length === 0) {
+      return res.status(StatusCodes.OK).json([]);
+    }
+
     const gigIds = gigs.map(gig => gig._id);
 
-    // Ensuite, on cherche les GigAgents qui correspondent à ces gigs
+    // 2. Ensuite, on cherche les GigAgents qui correspondent à ces gigs
     const activeAgents = await GigAgent.find({
       enrollmentStatus: 'enrolled',
       gigId: { $in: gigIds }
@@ -1153,8 +1182,11 @@ export const getActiveAgentsForCompany = async (req, res) => {
       })
       .sort({ createdAt: -1 });
 
+    // Filtrer les agents où l'agent a pu être supprimé
+    const validActiveAgents = activeAgents.filter(a => a.agentId !== null);
+
     // Retourner tous les GigAgents actifs
-    res.status(StatusCodes.OK).json(activeAgents);
+    res.status(StatusCodes.OK).json(validActiveAgents);
   } catch (error) {
     console.error('Error in getActiveAgentsForCompany:', error);
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
