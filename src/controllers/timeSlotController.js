@@ -12,7 +12,10 @@ export const getTimeSlots = async (req, res) => {
         if (gigId) filter.gigId = gigId;
         if (date) filter.date = date;
 
-        const slots = await TimeSlot.find(filter).sort({ date: 1, startTime: 1 });
+        const slots = await TimeSlot.find(filter)
+            .populate('agentId')
+            .populate('gigId')
+            .sort({ date: 1, startTime: 1 });
         res.status(200).json(slots);
     } catch (error) {
         res.status(500).json({ message: 'Error fetching time slots', error: error.message });
