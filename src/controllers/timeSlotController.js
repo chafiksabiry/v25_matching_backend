@@ -29,13 +29,19 @@ export const upsertTimeSlot = async (req, res) => {
     const { agentId, repId, gigId, date, startTime, endTime, duration, status, notes } = req.body;
     const finalAgentId = agentId || repId;
 
+    if (!finalAgentId || !gigId || !date || !startTime || !endTime) {
+        return res.status(400).json({
+            message: 'Missing required fields: agentId/repId, gigId, date, startTime, endTime are required'
+        });
+    }
+
     try {
         const filter = { agentId: finalAgentId, gigId, date, startTime };
         const update = {
             endTime,
-            duration,
-            status,
-            notes
+            duration: duration != null ? duration : 1,
+            status: status || 'reserved',
+            notes: notes || ''
         };
 
         const slot = await TimeSlot.findOneAndUpdate(
