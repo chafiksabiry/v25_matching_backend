@@ -43,6 +43,21 @@ const slotSchema = new mongoose.Schema({
         enum: ['available', 'full', 'cancelled'],
         default: 'available'
     },
+    reservations: [{
+        agentId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Agent',
+            required: true
+        },
+        notes: {
+            type: String,
+            default: ''
+        },
+        reservedAt: {
+            type: Date,
+            default: Date.now
+        }
+    }],
     notes: {
         type: String,
         default: ''
@@ -55,33 +70,47 @@ const slotSchema = new mongoose.Schema({
 slotSchema.index({ gigId: 1, date: 1, startTime: 1 }, { unique: true });
 
 // Virtual to check if slot is available
-slotSchema.virtual('isAvailable').get(function() {
+slotSchema.virtual('isAvailable').get(function () {
     return this.status === 'available' && this.reservedCount < this.capacity;
 });
 
 // Method to check if slot can be reserved
-slotSchema.methods.canReserve = function() {
+slotSchema.methods.canReserve = function () {
     return this.status === 'available' && this.reservedCount < this.capacity;
 };
 
-// Method to increment reservation count
-slotSchema.methods.incrementReservation = async function() {
+// Method to increment reservation count and add agent
+slotSchema.methods.incrementReservation = async function (agentId, notes) {
     if (this.reservedCount >= this.capacity) {
         throw new Error('Slot is full');
     }
-    this.reservedCount += 1;
+
+    // Check if agent already reserved
+    const exists = this.reservations.find(r => r.agentId.toString() === agentId.toString());
+    if (exists) {
+        throw new Error('Agent already reserved this slot');
+    }
+
+    this.reservations.push({ agentId, notes: notes || '' });
+    this.reservedCount = this.reservations.length;
+
     if (this.reservedCount >= this.capacity) {
         this.status = 'full';
     }
     return this.save();
 };
 
-// Method to decrement reservation count
-slotSchema.methods.decrementReservation = async function() {
-    if (this.reservedCount <= 0) {
-        return this;
+// Method to decrement reservation count and remove agent
+slotSchema.methods.decrementReservation = async function (agentId) {
+    const initialCount = this.reservations.length;
+    this.reservations = this.reservations.filter(r => r.agentId.toString() !== agentId.toString());
+
+    if (this.reservations.length === initialCount) {
+        return this; // No change if agent wasn't found
     }
-    this.reservedCount -= 1;
+
+    this.reservedCount = this.reservations.length;
+
     if (this.status === 'full' && this.reservedCount < this.capacity) {
         this.status = 'available';
     }

@@ -106,7 +106,7 @@ export const getSlots = async (req, res) => {
 };
 
 /**
- * Reserve a slot (create TimeSlot and increment Slot.reservedCount)
+ * Reserve a slot (add to Slot.reservations array)
  * POST /api/slots/:slotId/reserve
  * Body: { agentId, notes }
  */
@@ -125,81 +125,44 @@ export const reserveSlot = async (req, res) => {
             return res.status(404).json({ message: 'Slot not found' });
         }
 
-        // Check if slot can be reserved
-        if (!slot.canReserve()) {
-            return res.status(400).json({
-                message: 'Slot is full or unavailable',
-                available: slot.capacity - slot.reservedCount
-            });
-        }
-
-        // Check if agent already has a reservation for this slot
-        const existingReservation = await TimeSlot.findOne({
-            agentId: finalAgentId,
-            slotId: slotId
-        });
-
-        if (existingReservation) {
-            return res.status(400).json({ message: 'You already have a reservation for this slot' });
-        }
-
-        // Check for overlapping reservations (same date and overlapping time)
-        // Two slots overlap if: slot1.start < slot2.end AND slot1.end > slot2.start
-        const allReservations = await TimeSlot.find({
-            agentId: finalAgentId,
-            gigId: slot.gigId,
+        // Check for overlapping reservations in other slots
+        const overlappingSlot = await Slot.findOne({
+            _id: { $ne: slotId },
             date: slot.date,
+            'reservations.agentId': finalAgentId,
             status: { $ne: 'cancelled' }
         });
 
-        const overlappingReservation = allReservations.find(res => {
-            // Convert HH:mm to minutes for comparison
-            const resStart = parseInt(res.startTime.split(':')[0]) * 60 + parseInt(res.startTime.split(':')[1]);
-            const resEnd = parseInt(res.endTime.split(':')[0]) * 60 + parseInt(res.endTime.split(':')[1]);
+        if (overlappingSlot) {
+            // Further time comparison if needed, but for simplicity we block same date same agent in multiple slots
+            // (Unless capacity logic allows specific time overlaps, but usually HH:mm is unique per gig)
+            const resStart = parseInt(overlappingSlot.startTime.split(':')[0]) * 60 + parseInt(overlappingSlot.startTime.split(':')[1]);
+            const resEnd = parseInt(overlappingSlot.endTime.split(':')[0]) * 60 + parseInt(overlappingSlot.endTime.split(':')[1]);
             const slotStart = parseInt(slot.startTime.split(':')[0]) * 60 + parseInt(slot.startTime.split(':')[1]);
             const slotEnd = parseInt(slot.endTime.split(':')[0]) * 60 + parseInt(slot.endTime.split(':')[1]);
 
-            // Overlap: resStart < slotEnd && resEnd > slotStart
-            return resStart < slotEnd && resEnd > slotStart;
-        });
-
-        if (overlappingReservation) {
-            return res.status(400).json({
-                message: 'You have an overlapping reservation',
-                conflictingSlot: {
-                    date: overlappingReservation.date,
-                    startTime: overlappingReservation.startTime,
-                    endTime: overlappingReservation.endTime
-                }
-            });
+            if (resStart < slotEnd && resEnd > slotStart) {
+                return res.status(400).json({
+                    message: 'You have an overlapping reservation',
+                    conflictingSlot: {
+                        date: overlappingSlot.date,
+                        startTime: overlappingSlot.startTime,
+                        endTime: overlappingSlot.endTime
+                    }
+                });
+            }
         }
 
-        // Create reservation
-        const reservation = new TimeSlot({
-            agentId: finalAgentId,
-            slotId: slotId,
-            gigId: slot.gigId,
-            date: slot.date,
-            startTime: slot.startTime,
-            endTime: slot.endTime,
-            duration: slot.duration,
-            status: 'reserved',
-            notes: notes || ''
-        });
+        // Use the model method to reserve
+        await slot.incrementReservation(finalAgentId, notes);
 
-        await reservation.save();
+        const populatedSlot = await Slot.findById(slotId)
+            .populate('gigId')
+            .populate('reservations.agentId');
 
-        // Increment slot reservation count
-        await slot.incrementReservation();
-
-        const populatedReservation = await TimeSlot.findById(reservation._id)
-            .populate('agentId')
-            .populate('slotId')
-            .populate('gigId');
-
-        res.status(201).json({
+        res.status(200).json({
             message: 'Slot reserved successfully',
-            reservation: populatedReservation
+            slot: populatedSlot
         });
     } catch (error) {
         res.status(500).json({ message: 'Error reserving slot', error: error.message });
@@ -207,33 +170,37 @@ export const reserveSlot = async (req, res) => {
 };
 
 /**
- * Cancel a reservation (delete TimeSlot and decrement Slot.reservedCount)
+ * Cancel a reservation (remove from Slot.reservations array)
  * DELETE /api/slots/reservations/:reservationId
+ * OR DELETE /api/slots/:slotId/reserve/:agentId
  */
 export const cancelReservation = async (req, res) => {
-    const { reservationId } = req.params;
+    const { reservationId, slotId, agentId } = req.params;
 
     try {
-        const reservation = await TimeSlot.findById(reservationId);
-        if (!reservation) {
-            return res.status(404).json({ message: 'Reservation not found' });
-        }
+        let slot;
+        let finalAgentId = agentId;
 
-        // Decrement slot reservation count if slotId exists
-        if (reservation.slotId) {
-            const slot = await Slot.findById(reservation.slotId);
+        if (slotId && agentId) {
+            slot = await Slot.findById(slotId);
+        } else if (reservationId) {
+            // Find slot containing this reservation ID
+            slot = await Slot.findOne({ 'reservations._id': reservationId });
             if (slot) {
-                await slot.decrementReservation();
+                const resv = slot.reservations.id(reservationId);
+                finalAgentId = resv.agentId;
             }
         }
 
-        // Delete or mark reservation as cancelled
-        reservation.status = 'cancelled';
-        await reservation.save();
+        if (!slot || !finalAgentId) {
+            return res.status(404).json({ message: 'Reservation or Slot not found' });
+        }
+
+        await slot.decrementReservation(finalAgentId);
 
         res.status(200).json({
             message: 'Reservation cancelled successfully',
-            reservation
+            slot
         });
     } catch (error) {
         res.status(500).json({ message: 'Error cancelling reservation', error: error.message });
@@ -241,7 +208,7 @@ export const cancelReservation = async (req, res) => {
 };
 
 /**
- * Get reservations for an agent
+ * Get reservations for an agent (Slots where agent is in reservations array)
  * GET /api/slots/reservations?agentId=...&gigId=...
  */
 export const getReservations = async (req, res) => {
@@ -249,18 +216,95 @@ export const getReservations = async (req, res) => {
     const finalAgentId = agentId || repId;
 
     try {
-        const filter = { status: { $ne: 'cancelled' } };
-        if (finalAgentId) filter.agentId = finalAgentId;
+        const filter = { 'reservations.agentId': finalAgentId };
         if (gigId) filter.gigId = gigId;
 
-        const reservations = await TimeSlot.find(filter)
-            .populate('agentId')
-            .populate('slotId')
+        const slots = await Slot.find(filter)
             .populate('gigId')
+            .populate('reservations.agentId')
             .sort({ date: 1, startTime: 1 });
 
-        res.status(200).json(reservations);
+        // Map back to a compatible "reservation" format if frontend expects it
+        const formatted = slots.map(s => {
+            const resv = s.reservations.find(r => r.agentId?._id?.toString() === finalAgentId || r.agentId?.toString() === finalAgentId);
+            return {
+                ...s.toObject(),
+                _id: resv ? resv._id : s._id, // compatible with previous reservationId
+                slotId: s._id,
+                isMember: true
+            };
+        });
+
+        res.status(200).json(formatted);
     } catch (error) {
         res.status(500).json({ message: 'Error fetching reservations', error: error.message });
     }
 };
+
+/**
+ * Create or update a manual slot assignment (equivalent to upsertTimeSlot but using Slot model)
+ * POST /api/slots/upsert
+ */
+export const upsertSlot = async (req, res) => {
+    const { agentId, repId, gigId, date, startTime, endTime, duration, status, notes } = req.body;
+    const finalAgentId = agentId || repId;
+
+    if (!finalAgentId || !gigId || !date || !startTime || !endTime) {
+        return res.status(400).json({
+            message: 'Missing required fields: agentId/repId, gigId, date, startTime, endTime are required'
+        });
+    }
+
+    try {
+        // Find existing slot for this gig/date/time
+        let slot = await Slot.findOne({ gigId, date, startTime });
+
+        if (!slot) {
+            // Create new slot if it doesn't exist
+            slot = new Slot({
+                gigId,
+                date,
+                startTime,
+                endTime,
+                duration: duration || 1,
+                capacity: 1,
+                status: 'available'
+            });
+        }
+
+        // Ensure agent is reserved in this slot
+        const exists = slot.reservations.find(r => r.agentId.toString() === finalAgentId.toString());
+        if (!exists) {
+            await slot.incrementReservation(finalAgentId, notes);
+        } else {
+            // Update notes if already exists
+            const resv = slot.reservations.find(r => r.agentId.toString() === finalAgentId.toString());
+            resv.notes = notes || resv.notes || '';
+            await slot.save();
+        }
+
+        const populated = await Slot.findById(slot._id).populate('gigId').populate('reservations.agentId');
+        res.status(200).json(populated);
+    } catch (error) {
+        res.status(500).json({ message: 'Error upserting slot', error: error.message });
+    }
+};
+
+/**
+ * Delete a slot
+ * DELETE /api/slots/:id
+ */
+export const deleteSlot = async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const result = await Slot.findByIdAndDelete(id);
+        if (!result) {
+            return res.status(404).json({ message: 'Slot not found' });
+        }
+        res.status(200).json({ message: 'Slot deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ message: 'Error deleting slot', error: error.message });
+    }
+};
+

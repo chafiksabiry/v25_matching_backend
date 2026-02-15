@@ -1,10 +1,10 @@
 import express from 'express';
 import {
-    getTimeSlots,
-    upsertTimeSlot,
-    deleteTimeSlot,
-    cancelTimeSlot
-} from '../controllers/timeSlotController.js';
+    getSlots as getTimeSlots,
+    upsertSlot as upsertTimeSlot,
+    deleteSlot as deleteTimeSlot,
+    cancelReservation as cancelTimeSlot
+} from '../controllers/slotController.js';
 
 const router = express.Router();
 
