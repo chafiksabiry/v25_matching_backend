@@ -9,6 +9,7 @@ import gigAgentRoutes from './routes/gigAgentRoutes.js';
 import gigMatchingWeightsRoutes from './routes/gigMatchingWeightsRoutes.js';
 import enrollmentRoutes from './routes/enrollmentRoutes.js';
 import timeSlotRoutes from './routes/timeSlotRoutes.js';
+import slotRoutes from './routes/slotRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -43,6 +44,7 @@ app.use('/api/gig-agents', gigAgentRoutes);
 app.use('/api/gig-matching-weights', gigMatchingWeightsRoutes);
 app.use('/api/enrollment', enrollmentRoutes);
 app.use('/api/time-slots', timeSlotRoutes);
+app.use('/api/slots', slotRoutes);
 
 // MongoDB connection
 mongoose.connect(process.env.MONGODB_URI)
