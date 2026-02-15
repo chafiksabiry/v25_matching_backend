@@ -88,12 +88,14 @@ export const generateSlots = async (req, res) => {
  * GET /api/slots?gigId=...&date=...
  */
 export const getSlots = async (req, res) => {
-    const { gigId, date } = req.query;
+    const { gigId, date, agentId, repId } = req.query;
+    const finalAgentId = agentId || repId;
 
     try {
         const filter = {};
         if (gigId) filter.gigId = gigId;
         if (date) filter.date = date;
+        if (finalAgentId) filter['reservations.agentId'] = finalAgentId;
 
         const slots = await Slot.find(filter)
             .populate('gigId')
