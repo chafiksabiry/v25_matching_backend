@@ -208,6 +208,35 @@ export const cancelReservation = async (req, res) => {
 };
 
 /**
+ * Update a reservation (e.g. notes)
+ * PATCH /api/slots/reservations/:reservationId
+ * Body: { notes }
+ */
+export const updateReservation = async (req, res) => {
+    const { reservationId } = req.params;
+    const { notes } = req.body;
+
+    try {
+        const slot = await Slot.findOne({ 'reservations._id': reservationId });
+        if (!slot) {
+            return res.status(404).json({ message: 'Reservation not found' });
+        }
+
+        const reservation = slot.reservations.id(reservationId);
+        if (notes !== undefined) reservation.notes = notes;
+
+        await slot.save();
+
+        res.status(200).json({
+            message: 'Reservation updated successfully',
+            reservation
+        });
+    } catch (error) {
+        res.status(500).json({ message: 'Error updating reservation', error: error.message });
+    }
+};
+
+/**
  * Get reservations for an agent (Slots where agent is in reservations array)
  * GET /api/slots/reservations?agentId=...&gigId=...
  */

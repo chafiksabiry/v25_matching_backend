@@ -4,6 +4,7 @@ import {
     getSlots,
     reserveSlot,
     cancelReservation,
+    updateReservation,
     getReservations,
     upsertSlot,
     deleteSlot
@@ -25,6 +26,9 @@ router.post('/:slotId/reserve', reserveSlot);
 
 // DELETE /api/slots/reservations/:reservationId - Cancel a reservation
 router.delete('/reservations/:reservationId', cancelReservation);
+
+// PATCH /api/slots/reservations/:reservationId - Update a reservation
+router.patch('/reservations/:reservationId', updateReservation);
 
 // DELETE /api/slots/:id - Delete a slot
 router.delete('/:id', deleteSlot);
