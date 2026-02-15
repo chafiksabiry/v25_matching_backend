@@ -7,7 +7,7 @@ import { format, parse, addMinutes, addDays } from 'date-fns';
  * Body: { gigId, startDate, endDate, slotDuration, capacity, startHour, endHour }
  */
 export const generateSlots = async (req, res) => {
-    const { gigId, startDate, endDate, slotDuration, capacity, startHour, endHour } = req.body;
+    const { gigId, startDate, endDate, slotDuration, capacity, startHour, endHour, notes } = req.body;
 
     if (!gigId || !startDate || !endDate || !slotDuration || !capacity) {
         return res.status(400).json({
@@ -54,7 +54,8 @@ export const generateSlots = async (req, res) => {
                         duration: slotDuration,
                         capacity: parseInt(capacity),
                         reservedCount: 0,
-                        status: 'available'
+                        status: 'available',
+                        notes: notes || ''
                     });
                 }
 
