@@ -1,5 +1,4 @@
 import Slot from '../models/Slot.js';
-import TimeSlot from '../models/TimeSlot.js';
 import { format, parse, addMinutes, addDays } from 'date-fns';
 
 /**
