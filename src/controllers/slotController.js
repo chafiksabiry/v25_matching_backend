@@ -99,6 +99,7 @@ export const getSlots = async (req, res) => {
 
         const slots = await Slot.find(filter)
             .populate('gigId')
+            .populate('reservations.agentId')
             .sort({ date: 1, startTime: 1 });
 
         res.status(200).json(slots);
