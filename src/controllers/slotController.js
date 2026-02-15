@@ -158,7 +158,7 @@ export const reserveSlot = async (req, res) => {
             const resEnd = parseInt(res.endTime.split(':')[0]) * 60 + parseInt(res.endTime.split(':')[1]);
             const slotStart = parseInt(slot.startTime.split(':')[0]) * 60 + parseInt(slot.startTime.split(':')[1]);
             const slotEnd = parseInt(slot.endTime.split(':')[0]) * 60 + parseInt(slot.endTime.split(':')[1]);
-            
+
             // Overlap: resStart < slotEnd && resEnd > slotStart
             return resStart < slotEnd && resEnd > slotStart;
         });
