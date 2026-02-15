@@ -93,6 +93,7 @@ export const getSlots = async (req, res) => {
             if (date) filter.date = date;
             slots = await Slot.find(filter)
                 .populate('gigId')
+                .populate('reservations')
                 .sort({ date: 1, startTime: 1 });
         }
 
@@ -159,9 +160,14 @@ export const reserveSlot = async (req, res) => {
         // Update Slot
         slot.reservedCount += 1;
         if (slot.reservedCount >= slot.capacity) slot.status = 'full';
+
+        // Add reference ID
+        if (!slot.reservations) slot.reservations = [];
+        slot.reservations.push(reservation._id);
+
         await slot.save();
 
-        const populatedSlot = await Slot.findById(slotId).populate('gigId');
+        const populatedSlot = await Slot.findById(slotId).populate('gigId').populate('reservations');
         res.status(200).json({ message: 'Slot reserved successfully', slot: populatedSlot, reservation });
     } catch (error) {
         res.status(500).json({ message: 'Error reserving slot', error: error.message });
@@ -192,6 +198,12 @@ export const cancelReservation = async (req, res) => {
         if (slot) {
             slot.reservedCount = Math.max(0, slot.reservedCount - 1);
             if (slot.reservedCount < slot.capacity) slot.status = 'available';
+
+            // Remove reference ID
+            if (slot.reservations) {
+                slot.reservations = slot.reservations.filter(id => id.toString() !== reservationId.toString());
+            }
+
             await slot.save();
         }
 
@@ -289,6 +301,13 @@ export const upsertSlot = async (req, res) => {
 
             slot.reservedCount += 1;
             if (slot.reservedCount >= slot.capacity) slot.status = 'full';
+
+            // Add reference ID
+            if (!slot.reservations) slot.reservations = [];
+            if (!slot.reservations.includes(reservation._id)) {
+                slot.reservations.push(reservation._id);
+            }
+
             await slot.save();
         } else {
             // Update notes

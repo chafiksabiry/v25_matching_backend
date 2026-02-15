@@ -46,7 +46,11 @@ const slotSchema = new mongoose.Schema({
     notes: {
         type: String,
         default: ''
-    }
+    },
+    reservations: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'ReservationSlot'
+    }]
 }, {
     timestamps: true
 });
