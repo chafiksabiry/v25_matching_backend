@@ -341,3 +341,58 @@ export const deleteSlot = async (req, res) => {
 };
 
 
+/**
+ * Bulk create or update slots for a gig
+ * POST /api/slots/bulk-upsert
+ */
+export const bulkUpsertSlots = async (req, res) => {
+    const { gigId, slots } = req.body;
+
+    if (!gigId || !Array.isArray(slots)) {
+        return res.status(400).json({ message: 'gigId and slots array are required' });
+    }
+
+    try {
+        const results = [];
+        for (const slotData of slots) {
+            const { date, startTime, endTime, capacity, duration, notes } = slotData;
+
+            if (capacity > 0) {
+                const updatedSlot = await Slot.findOneAndUpdate(
+                    { gigId, date, startTime },
+                    {
+                        endTime,
+                        capacity: parseInt(capacity),
+                        duration: duration || 1,
+                        notes: notes || '',
+                        status: 'available'
+                    },
+                    { upsert: true, new: true, setDefaultsOnInsert: true }
+                );
+
+                // If capacity increased and it was full, it might be available now
+                if (updatedSlot.reservedCount < updatedSlot.capacity) {
+                    updatedSlot.status = 'available';
+                    await updatedSlot.save();
+                } else if (updatedSlot.reservedCount >= updatedSlot.capacity) {
+                    updatedSlot.status = 'full';
+                    await updatedSlot.save();
+                }
+
+                results.push(updatedSlot);
+            } else {
+                // If capacity is 0, we delete the slot
+                const existing = await Slot.findOne({ gigId, date, startTime });
+                if (existing) {
+                    await ReservationSlot.deleteMany({ slotId: existing._id });
+                    await Slot.findByIdAndDelete(existing._id);
+                    results.push({ date, startTime, action: 'deleted' });
+                }
+            }
+        }
+
+        res.status(200).json({ message: `Processed ${slots.length} slots`, results });
+    } catch (error) {
+        res.status(500).json({ message: 'Error in bulk upsert', error: error.message });
+    }
+};

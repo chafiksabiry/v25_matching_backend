@@ -7,7 +7,8 @@ import {
     updateReservation,
     getReservations,
     upsertSlot,
-    deleteSlot
+    deleteSlot,
+    bulkUpsertSlots
 } from '../controllers/slotController.js';
 
 const router = express.Router();
@@ -20,6 +21,9 @@ router.get('/', getSlots);
 
 // POST /api/slots/upsert - Create or update a manual slot
 router.post('/upsert', upsertSlot);
+
+// POST /api/slots/bulk-upsert - Bulk create or update slots for a gig
+router.post('/bulk-upsert', bulkUpsertSlots);
 
 // POST /api/slots/:slotId/reserve - Reserve a slot
 router.post('/:slotId/reserve', reserveSlot);
