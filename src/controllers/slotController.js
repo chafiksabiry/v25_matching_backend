@@ -1,6 +1,7 @@
 import Slot from '../models/Slot.js';
 import ReservationSlot from '../models/ReservationSlot.js';
 import { format, parse, addMinutes, addDays } from 'date-fns';
+import mongoose from 'mongoose';
 
 /**
  * Generate slots automatically for a Gig based on parameters
@@ -353,13 +354,14 @@ export const bulkUpsertSlots = async (req, res) => {
     }
 
     try {
+        const gigObjectId = new mongoose.Types.ObjectId(gigId);
         const results = [];
         for (const slotData of slots) {
             const { date, startTime, endTime, capacity, duration, notes } = slotData;
 
             if (capacity > 0) {
                 const updatedSlot = await Slot.findOneAndUpdate(
-                    { gigId, date, startTime },
+                    { gigId: gigObjectId, date, startTime },
                     {
                         endTime,
                         capacity: parseInt(capacity),
@@ -382,7 +384,7 @@ export const bulkUpsertSlots = async (req, res) => {
                 results.push(updatedSlot);
             } else {
                 // If capacity is 0, we delete the slot
-                const existing = await Slot.findOne({ gigId, date, startTime });
+                const existing = await Slot.findOne({ gigId: gigObjectId, date, startTime });
                 if (existing) {
                     await ReservationSlot.deleteMany({ slotId: existing._id });
                     await Slot.findByIdAndDelete(existing._id);
