@@ -145,18 +145,22 @@ export const reserveSlot = async (req, res) => {
             });
         }
 
-        // Create Reservation
-        const reservation = new ReservationSlot({
-            slotId,
-            agentId: finalAgentId,
-            gigId: slot.gigId,
-            date: slot.date,
-            startTime: slot.startTime,
-            endTime: slot.endTime,
-            duration: slot.duration,
-            notes: notes || ''
-        });
-        await reservation.save();
+        // Create or reactivate Reservation (handles the unique index on {slotId, agentId})
+        const reservation = await ReservationSlot.findOneAndUpdate(
+            { slotId, agentId: finalAgentId },
+            {
+                slotId,
+                agentId: finalAgentId,
+                gigId: slot.gigId,
+                date: slot.date,
+                startTime: slot.startTime,
+                endTime: slot.endTime,
+                duration: slot.duration,
+                notes: notes || '',
+                status: 'reserved'
+            },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
 
         // Update Slot
         slot.reservedCount += 1;
@@ -164,13 +168,16 @@ export const reserveSlot = async (req, res) => {
 
         // Add reference ID
         if (!slot.reservations) slot.reservations = [];
-        slot.reservations.push(reservation._id);
+        if (!slot.reservations.some(id => id.toString() === reservation._id.toString())) {
+            slot.reservations.push(reservation._id);
+        }
 
         await slot.save();
 
         const populatedSlot = await Slot.findById(slotId).populate('gigId').populate('reservations');
         res.status(200).json({ message: 'Slot reserved successfully', slot: populatedSlot, reservation });
     } catch (error) {
+        console.error('[reserveSlot] Error:', error.message, error.stack);
         res.status(500).json({ message: 'Error reserving slot', error: error.message });
     }
 };
