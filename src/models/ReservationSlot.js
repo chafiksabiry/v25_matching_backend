@@ -20,7 +20,7 @@ const reservationSlotSchema = new mongoose.Schema({
         required: true
     },
     date: {
-        type: String, // format yyyy-MM-dd
+        type: String, // format yyyy-MM-dd or Day Name (e.g., 'Monday') for recurring weekly schedules
         required: true
     },
     startTime: {
