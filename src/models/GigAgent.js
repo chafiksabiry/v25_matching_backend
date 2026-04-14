@@ -297,7 +297,8 @@ const gigAgentSchema = new mongoose.Schema({
       isoDay: { type: Number, min: 1, max: 7 },
       startTime: { type: String, required: true },
       endTime: { type: String, required: true },
-      duration: { type: Number, default: 1, min: 1 }
+      duration: { type: Number, default: 1, min: 1 },
+      capacity: { type: Number, default: 1, min: 1 }
     }],
     weekOverrides: [{
       weekStart: { type: String, required: true },
@@ -305,7 +306,8 @@ const gigAgentSchema = new mongoose.Schema({
         isoDay: { type: Number, min: 1, max: 7 },
         startTime: { type: String, required: true },
         endTime: { type: String, required: true },
-        duration: { type: Number, default: 1, min: 1 }
+        duration: { type: Number, default: 1, min: 1 },
+        capacity: { type: Number, default: 1, min: 1 }
       }]
     }]
   }

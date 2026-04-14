@@ -1623,7 +1623,8 @@ function sanitizeWeekBlocks(blocks) {
       const st = String(b.startTime || '09:00').trim().slice(0, 5);
       const en = String(b.endTime || '10:00').trim().slice(0, 5);
       const duration = Math.max(1, parseInt(b.duration, 10) || 1);
-      return { isoDay, startTime: st, endTime: en, duration };
+      const capacity = Math.max(1, parseInt(b.capacity, 10) || 1);
+      return { isoDay, startTime: st, endTime: en, duration, capacity };
     })
     .filter((b) => b.startTime && b.endTime);
 }
