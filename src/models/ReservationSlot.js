@@ -23,6 +23,14 @@ const reservationSlotSchema = new mongoose.Schema({
         type: String, // format yyyy-MM-dd or Day Name (e.g., 'Monday') for recurring weekly schedules
         required: true
     },
+    /**
+     * Date du jour réservé (jour du slot), distincte de createdAt (date de création de la réservation).
+     * Format attendu: yyyy-MM-dd (ou day name pour les slots hebdo legacy).
+     */
+    reservationDate: {
+        type: String,
+        required: true
+    },
     startTime: {
         type: String, // format HH:mm
         required: true
