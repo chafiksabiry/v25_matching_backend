@@ -1,7 +1,62 @@
 import Slot from '../models/Slot.js';
 import ReservationSlot from '../models/ReservationSlot.js';
-import { format, parse, addMinutes, addDays } from 'date-fns';
+import { format, parse, addMinutes, addDays, getISODay, isValid } from 'date-fns';
 import mongoose from 'mongoose';
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** ISO week day: Monday = 1 … Sunday = 7 (date-fns getISODay) */
+const DAY_NAME_TO_ISODAY = {
+    monday: 1,
+    tuesday: 2,
+    wednesday: 3,
+    thursday: 4,
+    friday: 5,
+    saturday: 6,
+    sunday: 7
+};
+
+function isConcreteSlotDate(slotDate) {
+    return ISO_DATE_RE.test(String(slotDate || '').trim());
+}
+
+/**
+ * Calendar day the rep selected (yyyy-MM-dd). For recurring slots (date = "Monday"), body reservationDate is required.
+ */
+function resolveReservationOccurrenceDate(slot, bodyReservationDate) {
+    const slotDateStr = String(slot.date || '').trim();
+    const bodyRaw = bodyReservationDate != null ? String(bodyReservationDate).trim() : '';
+
+    if (isConcreteSlotDate(slotDateStr)) {
+        if (bodyRaw && bodyRaw !== slotDateStr) {
+            return { error: 'reservationDate does not match this slot date', status: 400 };
+        }
+        return { occurrenceDate: slotDateStr };
+    }
+
+    if (!ISO_DATE_RE.test(bodyRaw)) {
+        return {
+            error: 'reservationDate (yyyy-MM-dd) is required for recurring weekly slots',
+            status: 400
+        };
+    }
+
+    const parsed = parse(bodyRaw, 'yyyy-MM-dd', new Date());
+    if (!isValid(parsed)) {
+        return { error: 'Invalid reservationDate', status: 400 };
+    }
+
+    const key = slotDateStr.toLowerCase();
+    const expected = DAY_NAME_TO_ISODAY[key];
+    if (!expected) {
+        return { error: 'Slot uses an unsupported date pattern', status: 400 };
+    }
+    if (getISODay(parsed) !== expected) {
+        return { error: 'Selected reservationDate does not match this slot weekday', status: 400 };
+    }
+
+    return { occurrenceDate: bodyRaw };
+}
 
 /**
  * Generate slots automatically for a Gig based on parameters
@@ -110,7 +165,7 @@ export const getSlots = async (req, res) => {
  */
 export const reserveSlot = async (req, res) => {
     const { slotId } = req.params;
-    const { agentId, repId, notes } = req.body;
+    const { agentId, repId, notes, reservationDate: bodyReservationDate } = req.body;
     const finalAgentId = agentId || repId;
 
     if (!finalAgentId) return res.status(400).json({ message: 'agentId or repId is required' });
@@ -118,6 +173,12 @@ export const reserveSlot = async (req, res) => {
     try {
         const slot = await Slot.findById(slotId);
         if (!slot) return res.status(404).json({ message: 'Slot not found' });
+
+        const resolved = resolveReservationOccurrenceDate(slot, bodyReservationDate);
+        if (resolved.error) {
+            return res.status(resolved.status || 400).json({ message: resolved.error });
+        }
+        const { occurrenceDate } = resolved;
 
         if (slot.reservedCount >= slot.capacity) {
             return res.status(400).json({ message: 'Slot is full' });
@@ -127,21 +188,29 @@ export const reserveSlot = async (req, res) => {
         const existingRes = await ReservationSlot.findOne({ slotId, agentId: finalAgentId, status: 'reserved' });
         if (existingRes) return res.status(400).json({ message: 'Agent already reserved this slot' });
 
-        // Check for overlapping reservations
+        // Check for overlapping reservations on the same calendar day
         const overlapping = await ReservationSlot.findOne({
-            agentId: finalAgentId,
-            date: slot.date,
-            status: 'reserved',
-            $or: [
-                { startTime: { $lt: slot.endTime, $gte: slot.startTime } },
-                { endTime: { $gt: slot.startTime, $lte: slot.endTime } }
+            $and: [
+                { agentId: finalAgentId },
+                { status: 'reserved' },
+                { $or: [{ reservationDate: occurrenceDate }, { date: occurrenceDate }] },
+                {
+                    $or: [
+                        { startTime: { $lt: slot.endTime, $gte: slot.startTime } },
+                        { endTime: { $gt: slot.startTime, $lte: slot.endTime } }
+                    ]
+                }
             ]
         });
 
         if (overlapping) {
             return res.status(400).json({
                 message: 'You have an overlapping reservation',
-                conflictingSlot: { date: overlapping.date, startTime: overlapping.startTime, endTime: overlapping.endTime }
+                conflictingSlot: {
+                    date: overlapping.reservationDate || overlapping.date,
+                    startTime: overlapping.startTime,
+                    endTime: overlapping.endTime
+                }
             });
         }
 
@@ -152,8 +221,8 @@ export const reserveSlot = async (req, res) => {
                 slotId,
                 agentId: finalAgentId,
                 gigId: slot.gigId,
-                date: slot.date,
-                reservationDate: slot.date,
+                date: occurrenceDate,
+                reservationDate: occurrenceDate,
                 startTime: slot.startTime,
                 endTime: slot.endTime,
                 duration: slot.duration,
