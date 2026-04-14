@@ -1,4 +1,5 @@
 import { startOfWeek, format, parseISO, isValid } from 'date-fns';
+import mongoose from 'mongoose';
 import GigAgent from '../models/GigAgent.js';
 import Agent from '../models/Agent.js';
 import Gig from '../models/Gig.js';
@@ -1629,15 +1630,21 @@ function sanitizeWeekBlocks(blocks) {
     .filter((b) => b.startTime && b.endTime);
 }
 
+function asObjectIdOrEmpty(raw) {
+  const s = String(raw || '').trim();
+  return mongoose.Types.ObjectId.isValid(s) ? s : '';
+}
+
 /** GET /api/gig-agents/session-planning?gigId=&agentId=|repId= */
 export const getSessionPlanning = async (req, res) => {
   try {
     const { gigId, agentId, repId } = req.query;
-    const aid = agentId || repId;
-    if (!gigId || !aid) {
+    const gid = asObjectIdOrEmpty(gigId);
+    const aid = asObjectIdOrEmpty(agentId || repId);
+    if (!gid || !aid) {
       return res.status(StatusCodes.BAD_REQUEST).json({ message: 'gigId and agentId (or repId) are required' });
     }
-    const ga = await GigAgent.findOne({ gigId, agentId: aid }).select('sessionPlanning');
+    const ga = await GigAgent.findOne({ gigId: gid, agentId: aid }).select('sessionPlanning');
     if (!ga) {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'GigAgent not found for this gig and agent' });
     }
@@ -1661,11 +1668,12 @@ export const getSessionPlanning = async (req, res) => {
 export const updateSessionPlanning = async (req, res) => {
   try {
     const { gigId, agentId, repId, mode, templateWeek, weekStart, weekBlocks } = req.body || {};
-    const aid = agentId || repId;
-    if (!gigId || !aid || !mode) {
+    const gid = asObjectIdOrEmpty(gigId);
+    const aid = asObjectIdOrEmpty(agentId || repId);
+    if (!gid || !aid || !mode) {
       return res.status(StatusCodes.BAD_REQUEST).json({ message: 'gigId, agentId (or repId), and mode are required' });
     }
-    const ga = await GigAgent.findOne({ gigId, agentId: aid });
+    const ga = await GigAgent.findOne({ gigId: gid, agentId: aid });
     if (!ga) {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'GigAgent not found for this gig and agent' });
     }
