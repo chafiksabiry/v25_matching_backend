@@ -1,3 +1,4 @@
+import { startOfWeek, format, parseISO, isValid } from 'date-fns';
 import GigAgent from '../models/GigAgent.js';
 import Agent from '../models/Agent.js';
 import Gig from '../models/Gig.js';
@@ -1603,5 +1604,108 @@ export const getGigAgentsWithStatus = async (req, res) => {
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       message: error.message
     });
+  }
+};
+
+function normalizeWeekStartMonday(raw) {
+  if (raw == null || raw === '') return null;
+  const s = String(raw).trim();
+  const d = parseISO(s);
+  if (!isValid(d)) return null;
+  return format(startOfWeek(d, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+}
+
+function sanitizeWeekBlocks(blocks) {
+  if (!Array.isArray(blocks)) return [];
+  return blocks
+    .map((b) => {
+      const isoDay = Math.min(7, Math.max(1, parseInt(b.isoDay, 10) || 1));
+      const st = String(b.startTime || '09:00').trim().slice(0, 5);
+      const en = String(b.endTime || '10:00').trim().slice(0, 5);
+      const duration = Math.max(1, parseInt(b.duration, 10) || 1);
+      return { isoDay, startTime: st, endTime: en, duration };
+    })
+    .filter((b) => b.startTime && b.endTime);
+}
+
+/** GET /api/gig-agents/session-planning?gigId=&agentId=|repId= */
+export const getSessionPlanning = async (req, res) => {
+  try {
+    const { gigId, agentId, repId } = req.query;
+    const aid = agentId || repId;
+    if (!gigId || !aid) {
+      return res.status(StatusCodes.BAD_REQUEST).json({ message: 'gigId and agentId (or repId) are required' });
+    }
+    const ga = await GigAgent.findOne({ gigId, agentId: aid }).select('sessionPlanning');
+    if (!ga) {
+      return res.status(StatusCodes.NOT_FOUND).json({ message: 'GigAgent not found for this gig and agent' });
+    }
+    const sp = ga.sessionPlanning || { templateWeek: [], weekOverrides: [] };
+    res.status(StatusCodes.OK).json({
+      data: {
+        templateWeek: sp.templateWeek || [],
+        weekOverrides: sp.weekOverrides || []
+      }
+    });
+  } catch (error) {
+    console.error('Error in getSessionPlanning:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
+/**
+ * PUT /api/gig-agents/session-planning
+ * body: { gigId, agentId|repId, mode: 'template'|'week', templateWeek?, weekStart?, weekBlocks? }
+ */
+export const updateSessionPlanning = async (req, res) => {
+  try {
+    const { gigId, agentId, repId, mode, templateWeek, weekStart, weekBlocks } = req.body || {};
+    const aid = agentId || repId;
+    if (!gigId || !aid || !mode) {
+      return res.status(StatusCodes.BAD_REQUEST).json({ message: 'gigId, agentId (or repId), and mode are required' });
+    }
+    const ga = await GigAgent.findOne({ gigId, agentId: aid });
+    if (!ga) {
+      return res.status(StatusCodes.NOT_FOUND).json({ message: 'GigAgent not found for this gig and agent' });
+    }
+    if (!ga.sessionPlanning) {
+      ga.sessionPlanning = { templateWeek: [], weekOverrides: [] };
+    }
+
+    if (mode === 'template') {
+      ga.sessionPlanning.templateWeek = sanitizeWeekBlocks(templateWeek);
+      ga.markModified('sessionPlanning');
+    } else if (mode === 'week') {
+      const ws = normalizeWeekStartMonday(weekStart);
+      if (!ws) {
+        return res.status(StatusCodes.BAD_REQUEST).json({ message: 'weekStart must be a valid date (Monday of week will be used)' });
+      }
+      const blocks = sanitizeWeekBlocks(weekBlocks);
+      const arr = Array.isArray(ga.sessionPlanning.weekOverrides) ? [...ga.sessionPlanning.weekOverrides] : [];
+      const idx = arr.findIndex((w) => w.weekStart === ws);
+      if (blocks.length === 0) {
+        if (idx >= 0) arr.splice(idx, 1);
+      } else if (idx >= 0) {
+        arr[idx] = { weekStart: ws, blocks };
+      } else {
+        arr.push({ weekStart: ws, blocks });
+      }
+      ga.sessionPlanning.weekOverrides = arr;
+      ga.markModified('sessionPlanning');
+    } else {
+      return res.status(StatusCodes.BAD_REQUEST).json({ message: 'mode must be "template" or "week"' });
+    }
+
+    await ga.save();
+    const sp = ga.sessionPlanning || { templateWeek: [], weekOverrides: [] };
+    res.status(StatusCodes.OK).json({
+      data: {
+        templateWeek: sp.templateWeek || [],
+        weekOverrides: sp.weekOverrides || []
+      }
+    });
+  } catch (error) {
+    console.error('Error in updateSessionPlanning:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
   }
 };

@@ -287,6 +287,27 @@ const gigAgentSchema = new mongoose.Schema({
     timezone: { type: Number, default: 0.15 },
     activities: { type: Number, default: 0.0 },
     region: { type: Number, default: 0.0 }
+  },
+  /**
+   * Planning sessions rep × gig : semaine type (récurrente) + exceptions par semaine calendaire (lundi = weekStart).
+   * isoDay : 1 = lundi … 7 = dimanche (ISO, aligné date-fns getISODay).
+   */
+  sessionPlanning: {
+    templateWeek: [{
+      isoDay: { type: Number, min: 1, max: 7 },
+      startTime: { type: String, required: true },
+      endTime: { type: String, required: true },
+      duration: { type: Number, default: 1, min: 1 }
+    }],
+    weekOverrides: [{
+      weekStart: { type: String, required: true },
+      blocks: [{
+        isoDay: { type: Number, min: 1, max: 7 },
+        startTime: { type: String, required: true },
+        endTime: { type: String, required: true },
+        duration: { type: Number, default: 1, min: 1 }
+      }]
+    }]
   }
 }, {
   timestamps: true

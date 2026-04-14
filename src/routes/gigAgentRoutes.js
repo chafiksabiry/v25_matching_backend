@@ -20,7 +20,9 @@ import {
   agentRejectInvitation,
   sendEnrollmentRequest,
   getAgentGigsWithStatus,
-  getGigAgentsWithStatus
+  getGigAgentsWithStatus,
+  getSessionPlanning,
+  updateSessionPlanning
 } from '../controllers/gigAgentController.js';
 
 const router = express.Router();
@@ -28,6 +30,8 @@ const router = express.Router();
 // Routes principales
 router.get('/', getAllGigAgents);
 router.get('/stats', getGigAgentStats);
+router.get('/session-planning', getSessionPlanning);
+router.put('/session-planning', updateSessionPlanning);
 router.get('/:id', getGigAgentById);
 router.post('/', createGigAgent);
 router.put('/:id', updateGigAgent);
