@@ -20,7 +20,9 @@ const corsOptions = {
     'https://harx25pageslinks.netlify.app',
     'https://harxv25matchingfrontend.netlify.app/',
     'http://localhost:5181',
-    'https://harxv25matchingfrontend.netlify.app/'
+    'https://harxv25matchingfrontend.netlify.app/',
+    'http://localhost:5173',
+    'http://localhost:5174'
   ],
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
