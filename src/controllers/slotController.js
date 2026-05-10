@@ -180,6 +180,20 @@ export const reserveSlot = async (req, res) => {
         }
         const { occurrenceDate } = resolved;
 
+        // Check if the slot time has already passed
+        try {
+            const now = new Date();
+            const [startHours, startMinutes] = slot.startTime.split(':').map(Number);
+            const slotStartDateTime = parse(occurrenceDate, 'yyyy-MM-dd', new Date());
+            slotStartDateTime.setHours(startHours, startMinutes, 0, 0);
+
+            if (slotStartDateTime < now) {
+                return res.status(400).json({ message: 'Cannot reserve a slot that has already passed' });
+            }
+        } catch (err) {
+            console.error('Error validating past slot reservation:', err);
+        }
+
         if (slot.reservedCount >= slot.capacity) {
             return res.status(400).json({ message: 'Slot is full' });
         }
