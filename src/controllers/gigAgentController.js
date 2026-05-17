@@ -14,7 +14,19 @@ import { syncAgentGigRelationship, getAgentGigsWithDetails, getGigAgentsWithDeta
 export const getAllGigAgents = async (req, res) => {
   try {
     const gigAgents = await GigAgent.find()
-      .populate('agentId')
+      .populate({
+        path: 'agentId',
+        populate: [
+          { path: 'personalInfo.country' },
+          { path: 'personalInfo.languages.language' },
+          { path: 'professionalSummary.industries' },
+          { path: 'professionalSummary.activities' },
+          { path: 'skills.technical.skill' },
+          { path: 'skills.professional.skill' },
+          { path: 'skills.soft.skill' },
+          { path: 'availability.timeZone' }
+        ]
+      })
       .populate({
         path: 'gigId',
         populate: [
@@ -37,7 +49,19 @@ export const getAllGigAgents = async (req, res) => {
 export const getGigAgentById = async (req, res) => {
   try {
     const gigAgent = await GigAgent.findById(req.params.id)
-      .populate('agentId')
+      .populate({
+        path: 'agentId',
+        populate: [
+          { path: 'personalInfo.country' },
+          { path: 'personalInfo.languages.language' },
+          { path: 'professionalSummary.industries' },
+          { path: 'professionalSummary.activities' },
+          { path: 'skills.technical.skill' },
+          { path: 'skills.professional.skill' },
+          { path: 'skills.soft.skill' },
+          { path: 'availability.timeZone' }
+        ]
+      })
       .populate({
         path: 'gigId',
         populate: [
@@ -85,7 +109,19 @@ export const getGigAgentsForAgent = async (req, res) => {
 export const getGigAgentsForGig = async (req, res) => {
   try {
     const gigAgents = await GigAgent.find({ gigId: req.params.gigId })
-      .populate('agentId')
+      .populate({
+        path: 'agentId',
+        populate: [
+          { path: 'personalInfo.country' },
+          { path: 'personalInfo.languages.language' },
+          { path: 'professionalSummary.industries' },
+          { path: 'professionalSummary.activities' },
+          { path: 'skills.technical.skill' },
+          { path: 'skills.professional.skill' },
+          { path: 'skills.soft.skill' },
+          { path: 'availability.timeZone' }
+        ]
+      })
       .sort({ createdAt: -1 });
 
     res.status(StatusCodes.OK).json(gigAgents);
