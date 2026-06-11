@@ -16,6 +16,7 @@ import {
   getEnrollmentRequestsForCompany,
   getActiveAgentsForCompany,
   acceptEnrollmentRequest,
+  rejectEnrollmentRequest,
   agentAcceptInvitation,
   agentRejectInvitation,
   sendEnrollmentRequest,
@@ -60,6 +61,9 @@ router.get('/active-agents/company/:companyId', getActiveAgentsForCompany);
 
 // Route pour accepter une demande d'enrollment
 router.post('/enrollment-requests/:id/accept', acceptEnrollmentRequest);
+
+// Route pour refuser une demande d'enrollment
+router.post('/enrollment-requests/:id/reject', rejectEnrollmentRequest);
 
 // Routes pour qu'un agent accepte ou refuse une invitation
 router.post('/invitations/:id/accept', agentAcceptInvitation);

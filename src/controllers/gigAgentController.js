@@ -1399,6 +1399,73 @@ export const acceptEnrollmentRequest = async (req, res) => {
   }
 };
 
+// Company rejects an enrollment request.
+// The relationship is fully removed so the rep can re-apply later, and the
+// rep is notified in real time (marketplace: PENDING → back to Available).
+export const rejectEnrollmentRequest = async (req, res) => {
+  try {
+    const gigAgent = await GigAgent.findById(req.params.id);
+
+    if (!gigAgent) {
+      return res.status(StatusCodes.NOT_FOUND).json({
+        message: 'Enrollment request not found'
+      });
+    }
+
+    if (gigAgent.enrollmentStatus !== 'requested') {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        message: 'Only requested enrollments can be rejected'
+      });
+    }
+
+    const agentId = gigAgent.agentId;
+    const gigId = gigAgent.gigId;
+
+    // Capture the company id before deletion so we can target the broadcast.
+    let companyId;
+    try {
+      const gig = await Gig.findById(gigId).select('companyId');
+      companyId = gig?.companyId ? String(gig.companyId) : undefined;
+    } catch {
+      companyId = undefined;
+    }
+
+    // Remove the relation entirely (rep can re-apply afterwards).
+    try {
+      await Agent.findByIdAndUpdate(agentId, { $pull: { gigs: { gigId } } });
+      await Gig.findByIdAndUpdate(gigId, { $pull: { agents: { agentId } } });
+      await GigAgent.findByIdAndDelete(req.params.id);
+      console.log(`✅ Enrollment request rejected and deleted: Agent ${agentId} <-> Gig ${gigId}`);
+    } catch (deleteError) {
+      console.error('Erreur lors de la suppression:', deleteError);
+      throw deleteError;
+    }
+
+    // 🔔 Notifier le rep en temps réel (marketplace: PENDING → Available)
+    try {
+      broadcastEnrollmentUpdate({
+        type: 'enrollment_update',
+        repId: String(agentId),
+        gigId: String(gigId),
+        companyId,
+        status: 'rejected'
+      });
+    } catch (wsError) {
+      console.error('[Enrollment WS] broadcast (rejected) failed:', wsError);
+    }
+
+    res.status(StatusCodes.OK).json({
+      message: 'Enrollment request rejected successfully'
+    });
+
+  } catch (error) {
+    console.error('Error in rejectEnrollmentRequest:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      message: error.message
+    });
+  }
+};
+
 
 
 // Agent rejects invitation
