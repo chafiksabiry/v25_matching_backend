@@ -11,7 +11,7 @@ import gigMatchingWeightsRoutes from './routes/gigMatchingWeightsRoutes.js';
 import enrollmentRoutes from './routes/enrollmentRoutes.js';
 import timeSlotRoutes from './routes/timeSlotRoutes.js';
 import slotRoutes from './routes/slotRoutes.js';
-import { setupRealtime } from './realtime/hub.js';
+import { setupEnrollmentWebSocket } from './websocket/enrollmentUpdates.js';
 dotenv.config();
 
 const app = express();
@@ -55,12 +55,11 @@ mongoose.connect(MONGODB_URI)
 // Create HTTP server so we can attach the WebSocket server on the same port.
 const server = http.createServer(app);
 
-// Unified real-time hub (Socket.IO): enrollment updates, rep invitations,
-// company applications, etc. Targeted rooms instead of broadcast-to-all.
-setupRealtime(server);
+// Live enrollment status updates (rep marketplace: PENDING → Enrolled).
+setupEnrollmentWebSocket(server);
 
 // Start server
 const PORT = process.env.PORT || 5011;
 server.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT} (HTTP + Socket.IO realtime)`);
+  console.log(`Server is running on port ${PORT} (HTTP + WS /enrollment-updates)`);
 }); 
