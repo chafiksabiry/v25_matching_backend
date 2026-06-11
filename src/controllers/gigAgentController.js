@@ -10,6 +10,7 @@ import { StatusCodes } from 'http-status-codes';
 import { sendMatchingNotification } from '../services/emailService.js';
 import { syncAgentGigRelationship, getAgentGigsWithDetails, getGigAgentsWithDetails } from '../utils/relationshipSync.js';
 import { broadcastEnrollmentUpdate } from '../websocket/enrollmentUpdates.js';
+import { emitToRep, emitToCompany } from '../realtime/hub.js';
 
 // Get all gig agents
 export const getAllGigAgents = async (req, res) => {
@@ -242,6 +243,16 @@ export const createGigAgent = async (req, res) => {
           { path: 'companyId', select: 'name logo' }
         ]
       });
+
+    // 🔔 Notifier le rep en temps réel d'une nouvelle invitation (room rep:<id>).
+    try {
+      emitToRep(agentId, 'invitation_new', {
+        gigId: String(gigId),
+        gigTitle: gig?.title || null
+      });
+    } catch (wsError) {
+      console.error('[Realtime] invitation_new emit failed:', wsError);
+    }
 
     res.status(StatusCodes.CREATED).json({
       message: 'Assignation créée avec succès',
@@ -1531,6 +1542,20 @@ export const sendEnrollmentRequest = async (req, res) => {
           { path: 'availability.time_zone' }
         ]
       });
+
+    // 🔔 Notifier l'entreprise en temps réel d'une nouvelle candidature
+    // (room company:<id>). Consommé par le front matching de l'entreprise.
+    try {
+      if (gig?.companyId) {
+        emitToCompany(gig.companyId, 'application_new', {
+          gigId: String(req.params.gigId),
+          gigTitle: gig?.title || null,
+          agentId: String(req.params.agentId)
+        });
+      }
+    } catch (wsError) {
+      console.error('[Realtime] application_new emit failed:', wsError);
+    }
 
     res.status(StatusCodes.OK).json({
       message: 'Enrollment request sent successfully',
