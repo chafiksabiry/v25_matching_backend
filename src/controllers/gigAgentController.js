@@ -9,6 +9,7 @@ import Country from '../models/Country.js';
 import { StatusCodes } from 'http-status-codes';
 import { sendMatchingNotification } from '../services/emailService.js';
 import { syncAgentGigRelationship, getAgentGigsWithDetails, getGigAgentsWithDetails } from '../utils/relationshipSync.js';
+import { broadcastEnrollmentUpdate } from '../websocket/enrollmentUpdates.js';
 
 // Get all gig agents
 export const getAllGigAgents = async (req, res) => {
@@ -1369,6 +1370,18 @@ export const acceptEnrollmentRequest = async (req, res) => {
           { path: 'availability.time_zone' }
         ]
       });
+
+    // 🔔 Notifier le rep en temps réel (marketplace: PENDING → Enrolled)
+    try {
+      broadcastEnrollmentUpdate({
+        type: 'enrollment_update',
+        repId: String(gigAgent.agentId),
+        gigId: String(gigAgent.gigId),
+        status: 'enrolled'
+      });
+    } catch (wsError) {
+      console.error('[Enrollment WS] broadcast failed:', wsError);
+    }
 
     res.status(StatusCodes.OK).json({
       message: 'Enrollment request accepted successfully',

@@ -1,4 +1,5 @@
 import express from 'express';
+import http from 'http';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -10,6 +11,7 @@ import gigMatchingWeightsRoutes from './routes/gigMatchingWeightsRoutes.js';
 import enrollmentRoutes from './routes/enrollmentRoutes.js';
 import timeSlotRoutes from './routes/timeSlotRoutes.js';
 import slotRoutes from './routes/slotRoutes.js';
+import { setupEnrollmentWebSocket } from './websocket/enrollmentUpdates.js';
 dotenv.config();
 
 const app = express();
@@ -50,8 +52,14 @@ mongoose.connect(MONGODB_URI)
   .then(() => console.log('Connected to MongoDB'))
   .catch((error) => console.error('MongoDB connection error:', error));
 
+// Create HTTP server so we can attach the WebSocket server on the same port.
+const server = http.createServer(app);
+
+// Live enrollment status updates (rep marketplace: PENDING → Enrolled).
+setupEnrollmentWebSocket(server);
+
 // Start server
 const PORT = process.env.PORT || 5011;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+server.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT} (HTTP + WS /enrollment-updates)`);
 }); 
