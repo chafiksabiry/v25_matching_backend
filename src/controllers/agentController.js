@@ -20,7 +20,12 @@ export const getAgentById = async (req, res) => {
     const { id } = req.params;
     console.log(`Getting agent by ID: ${id}`);
 
-    // Helper to populate agent fields
+    // Helper to populate agent fields.
+    // NOTE: `.lean()` returns the raw MongoDB document instead of a hydrated
+    // Mongoose doc. This is required so fields not declared in the (strict)
+    // schema — e.g. personalInfo.presentationVideo.url and the experience
+    // video-analysis fields (videoUrl, videoAnalysis, ...) — are NOT stripped
+    // out and are returned to the client.
     const populateAgent = (query) => {
       return query
         .populate('personalInfo.languages.language', 'name nativeName code')
@@ -31,7 +36,8 @@ export const getAgentById = async (req, res) => {
         .populate('skills.technical.skill', 'name description category')
         .populate('skills.professional.skill', 'name description category')
         .populate('skills.soft.skill', 'name description category')
-        .populate('favoriteGigs', 'title description');
+        .populate('favoriteGigs', 'title description')
+        .lean();
     };
 
     let agent;

@@ -17,6 +17,7 @@ import {
   getActiveAgentsForCompany,
   acceptEnrollmentRequest,
   rejectEnrollmentRequest,
+  cancelEnrollmentRequest,
   agentAcceptInvitation,
   agentRejectInvitation,
   sendEnrollmentRequest,
@@ -64,6 +65,9 @@ router.post('/enrollment-requests/:id/accept', acceptEnrollmentRequest);
 
 // Route pour refuser une demande d'enrollment
 router.post('/enrollment-requests/:id/reject', rejectEnrollmentRequest);
+
+// Rep annule sa propre candidature en attente
+router.post('/enrollment-requests/:id/cancel', cancelEnrollmentRequest);
 
 // Routes pour qu'un agent accepte ou refuse une invitation
 router.post('/invitations/:id/accept', agentAcceptInvitation);

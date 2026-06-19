@@ -1399,6 +1399,72 @@ export const acceptEnrollmentRequest = async (req, res) => {
   }
 };
 
+/**
+ * Rep withdraws their own pending application before company decision.
+ * Mirrors company reject: relation is removed so the gig returns to Available.
+ */
+export const cancelEnrollmentRequest = async (req, res) => {
+  try {
+    const gigAgent = await GigAgent.findById(req.params.id);
+
+    if (!gigAgent) {
+      return res.status(StatusCodes.NOT_FOUND).json({
+        message: 'Enrollment request not found'
+      });
+    }
+
+    if (gigAgent.enrollmentStatus !== 'requested') {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        message: 'Only pending enrollment requests can be cancelled'
+      });
+    }
+
+    const agentId = gigAgent.agentId;
+    const gigId = gigAgent.gigId;
+
+    let companyId;
+    try {
+      const gig = await Gig.findById(gigId).select('companyId');
+      companyId = gig?.companyId ? String(gig.companyId) : undefined;
+    } catch {
+      companyId = undefined;
+    }
+
+    try {
+      await Agent.findByIdAndUpdate(agentId, { $pull: { gigs: { gigId } } });
+      await Gig.findByIdAndUpdate(gigId, { $pull: { agents: { agentId } } });
+      await GigAgent.findByIdAndDelete(req.params.id);
+      console.log(`✅ Enrollment request cancelled by rep: Agent ${agentId} <-> Gig ${gigId}`);
+    } catch (deleteError) {
+      console.error('Erreur lors de l\'annulation:', deleteError);
+      throw deleteError;
+    }
+
+    const payload = {
+      repId: String(agentId),
+      gigId: String(gigId),
+      companyId,
+      status: 'cancelled'
+    };
+
+    try {
+      broadcastEnrollmentUpdate({ type: 'enrollment_update', ...payload });
+      broadcastEnrollmentUpdate({ type: 'request_cancelled', ...payload });
+    } catch (wsError) {
+      console.error('[Enrollment WS] broadcast (cancelled) failed:', wsError);
+    }
+
+    res.status(StatusCodes.OK).json({
+      message: 'Enrollment request cancelled successfully'
+    });
+  } catch (error) {
+    console.error('Error in cancelEnrollmentRequest:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      message: error.message
+    });
+  }
+};
+
 // Company rejects an enrollment request.
 // The relationship is fully removed so the rep can re-apply later, and the
 // rep is notified in real time (marketplace: PENDING → back to Available).
