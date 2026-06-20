@@ -18,8 +18,8 @@ const app = express();
 
 const corsOptions = {
   origin: [
-    'https://harx25pageslinks.netlify.app',
-    'https://harx25pageslinks.netlify.app',
+    'https://harx.ai',
+    'https://harx.ai',
     'https://harxv25matchingfrontend.netlify.app/',
     'http://localhost:5181',
     'https://harxv25matchingfrontend.netlify.app/',

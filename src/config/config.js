@@ -18,7 +18,7 @@ export default {
 
   // Application URL Configuration
   IS_PREPROD: IS_PREPROD,
-  BASE_URL: IS_PREPROD ? 'https://harx25pageslinks.netlify.app' : 'https://harx25pageslinks.netlify.app'
+  BASE_URL: IS_PREPROD ? 'https://harx.ai' : 'https://harx.ai'
 };
 
 // Log de vérification des variables d'environnement
@@ -30,5 +30,5 @@ console.log('Configuration Brevo:', {
 
 console.log('Configuration Application:', {
   isPreprod: IS_PREPROD,
-  baseUrl: IS_PREPROD ? 'https://harx25pageslinks.netlify.app' : 'https://harx25pageslinks.netlify.app'
+  baseUrl: IS_PREPROD ? 'https://harx.ai' : 'https://harx.ai'
 });
