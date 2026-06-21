@@ -450,6 +450,73 @@ const calculateMatchScore = (matchDetails) => {
   );
 };
 
+const populateAgentForMatching = (agentId) =>
+  Agent.findById(agentId)
+    .populate('professionalSummary.industries')
+    .populate('personalInfo.languages.language')
+    .populate('skills.technical.skill')
+    .populate('skills.professional.skill')
+    .populate('skills.soft.skill');
+
+const populateGigForMatching = (gigId) =>
+  Gig.findById(gigId)
+    .populate('skills.languages.language')
+    .populate('skills.technical.skill')
+    .populate('skills.professional.skill')
+    .populate('skills.soft.skill')
+    .populate('activities')
+    .populate('industries');
+
+/** Recompute matchScore/matchDetails for a gig-agent when missing (per linked gig). */
+const ensureGigAgentMatching = async (gigAgentDoc) => {
+  const ga = gigAgentDoc.toObject ? gigAgentDoc.toObject({ virtuals: true }) : { ...gigAgentDoc };
+
+  const hasStoredScore = typeof ga.matchScore === 'number' && !Number.isNaN(ga.matchScore);
+  const hasStoredDetails = typeof ga.matchDetails?.skillsMatch?.score === 'number';
+
+  if (hasStoredScore && hasStoredDetails) {
+    return ga;
+  }
+
+  const agentRef = ga.agentId?._id || ga.agentId;
+  const gigRef = ga.gigId?._id || ga.gigId;
+  if (!agentRef || !gigRef) {
+    return ga;
+  }
+
+  try {
+    const [agent, gig] = await Promise.all([
+      populateAgentForMatching(agentRef),
+      populateGigForMatching(gigRef),
+    ]);
+
+    if (!agent || !gig) {
+      return ga;
+    }
+
+    const matchDetails = await calculateMatchDetails(agent, gig);
+    const matchScore = calculateMatchScore(matchDetails);
+
+    if (gigAgentDoc.save) {
+      gigAgentDoc.matchScore = matchScore;
+      gigAgentDoc.matchDetails = matchDetails;
+      gigAgentDoc.calculateMatchStatus();
+      await gigAgentDoc.save();
+    }
+
+    ga.matchScore = matchScore;
+    ga.matchDetails = matchDetails;
+    ga.matchStatus = gigAgentDoc.matchStatus || ga.matchStatus;
+  } catch (err) {
+    console.error('ensureGigAgentMatching failed:', err);
+  }
+
+  return ga;
+};
+
+const enrichGigAgentsWithMatching = async (gigAgents) =>
+  Promise.all(gigAgents.filter((ga) => ga.agentId !== null).map((ga) => ensureGigAgentMatching(ga)));
+
 // Fonction pour calculer le matching d'industrie
 const calculateIndustryMatch = (agent, gig) => {
   if (!gig.category || !agent.professionalSummary?.industries) {
@@ -1124,19 +1191,8 @@ export const getInvitedAgentsForCompany = async (req, res) => {
       })
       .sort({ createdAt: -1 });
 
-    // 3. Extraire les agents uniques de manière sécurisée (évite les erreurs null et Set d'objets)
-    const agentMap = new Map();
-    gigAgents.forEach(ga => {
-      if (ga.agentId && ga.agentId._id) {
-        const idStr = ga.agentId._id.toString();
-        if (!agentMap.has(idStr)) {
-          agentMap.set(idStr, ga.agentId);
-        }
-      }
-    });
-
-    const uniqueAgents = Array.from(agentMap.values());
-    res.status(StatusCodes.OK).json(uniqueAgents);
+    const enrichedInvited = await enrichGigAgentsWithMatching(gigAgents);
+    res.status(StatusCodes.OK).json(enrichedInvited);
   } catch (error) {
     console.error('Error in getInvitedAgentsForCompany:', error);
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
@@ -1189,10 +1245,8 @@ export const getEnrollmentRequestsForCompany = async (req, res) => {
       .populate('agentId')
       .sort({ createdAt: -1 });
 
-    // Filtrer les requêtes où l'agent a pu être supprimé
-    const validRequests = requests.filter(r => r.agentId !== null);
-
-    res.status(StatusCodes.OK).json(validRequests);
+    const enrichedRequests = await enrichGigAgentsWithMatching(requests);
+    res.status(StatusCodes.OK).json(enrichedRequests);
   } catch (error) {
     console.error('Error in getEnrollmentRequestsForCompany:', error);
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
@@ -1225,11 +1279,8 @@ export const getActiveAgentsForCompany = async (req, res) => {
       })
       .sort({ createdAt: -1 });
 
-    // Filtrer les agents où l'agent a pu être supprimé
-    const validActiveAgents = activeAgents.filter(a => a.agentId !== null);
-
-    // Retourner tous les GigAgents actifs
-    res.status(StatusCodes.OK).json(validActiveAgents);
+    const enrichedActiveAgents = await enrichGigAgentsWithMatching(activeAgents);
+    res.status(StatusCodes.OK).json(enrichedActiveAgents);
   } catch (error) {
     console.error('Error in getActiveAgentsForCompany:', error);
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
