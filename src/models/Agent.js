@@ -340,7 +340,7 @@ const agentSchema = new mongoose.Schema({
     },
     status: {
       type: String,
-      enum: ['invited', 'requested', 'enrolled', 'rejected', 'expired', 'cancelled'],
+      enum: ['invited', 'requested', 'enrolled', 'rejected', 'expired', 'cancelled', 'archived'],
       required: true
     },
     enrollmentDate: Date,

@@ -20,6 +20,7 @@ import {
   cancelEnrollmentRequest,
   agentAcceptInvitation,
   agentRejectInvitation,
+  archiveInvitation,
   sendEnrollmentRequest,
   getAgentGigsWithStatus,
   getGigAgentsWithStatus,
@@ -72,6 +73,7 @@ router.post('/enrollment-requests/:id/cancel', cancelEnrollmentRequest);
 // Routes pour qu'un agent accepte ou refuse une invitation
 router.post('/invitations/:id/accept', agentAcceptInvitation);
 router.post('/invitations/:id/reject', agentRejectInvitation);
+router.post('/invitations/:id/archive', archiveInvitation);
 
 // Route pour qu'un agent envoie une demande d'enrollment
 router.post('/enrollment-request/:agentId/:gigId', sendEnrollmentRequest);

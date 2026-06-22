@@ -162,8 +162,68 @@ export const createGigAgent = async (req, res) => {
     // Vérifier si une assignation existe déjà
     const existingAssignment = await GigAgent.findOne({ agentId, gigId });
     if (existingAssignment) {
-      return res.status(StatusCodes.CONFLICT).json({
-        message: 'Une assignation existe déjà pour cet agent et ce gig'
+      const reusableStatuses = ['archived', 'cancelled', 'rejected', 'expired'];
+      if (!reusableStatuses.includes(existingAssignment.enrollmentStatus)) {
+        return res.status(StatusCodes.CONFLICT).json({
+          message: 'Une assignation existe déjà pour cet agent et ce gig'
+        });
+      }
+
+      const matchDetails = await calculateMatchDetails(agent, gig);
+      const matchScore = calculateMatchScore(matchDetails);
+
+      existingAssignment.matchScore = matchScore;
+      existingAssignment.matchDetails = matchDetails;
+      existingAssignment.matchStatus = 'partial_match';
+      existingAssignment.notes = notes || existingAssignment.notes;
+      existingAssignment.status = 'pending';
+      existingAssignment.enrollmentStatus = 'invited';
+      existingAssignment.agentResponse = 'pending';
+      existingAssignment.agentResponseAt = undefined;
+      existingAssignment.invitationSentAt = new Date();
+      existingAssignment.invitationExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      existingAssignment.generateInvitationToken();
+      existingAssignment.calculateMatchStatus();
+
+      const savedGigAgent = await existingAssignment.save();
+
+      let emailSent = false;
+      try {
+        const emailResult = await sendMatchingNotification(agent, gig, matchDetails);
+        if (emailResult.success) {
+          await savedGigAgent.markEmailSent();
+          emailSent = true;
+        }
+      } catch (emailError) {
+        console.error('Erreur lors de l\'envoi de l\'email:', emailError);
+      }
+
+      try {
+        await syncAgentGigRelationship(agentId, gigId, 'invited', {
+          invitationDate: new Date(),
+          gigAgentId: savedGigAgent._id
+        });
+      } catch (syncError) {
+        console.error('Erreur lors de la synchronisation:', syncError);
+      }
+
+      const populatedGigAgent = await GigAgent.findById(savedGigAgent._id)
+        .populate('agentId')
+        .populate({
+          path: 'gigId',
+          populate: [
+            { path: 'commission.currency' },
+            { path: 'destination_zone' },
+            { path: 'availability.time_zone' },
+            { path: 'companyId', select: 'name logo' }
+          ]
+        });
+
+      return res.status(StatusCodes.OK).json({
+        message: 'Invitation renvoyée avec succès',
+        gigAgent: populatedGigAgent,
+        emailSent,
+        matchScore
       });
     }
 
@@ -1584,6 +1644,52 @@ export const rejectEnrollmentRequest = async (req, res) => {
 };
 
 
+
+// Agent rejects invitation
+export const archiveInvitation = async (req, res) => {
+  try {
+    const gigAgent = await GigAgent.findById(req.params.id);
+
+    if (!gigAgent) {
+      return res.status(StatusCodes.NOT_FOUND).json({
+        message: 'Invitation not found'
+      });
+    }
+
+    if (gigAgent.enrollmentStatus !== 'invited') {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        message: 'Only pending invitations can be archived'
+      });
+    }
+
+    await gigAgent.archiveInvitation(req.body?.notes);
+
+    try {
+      await syncAgentGigRelationship(
+        gigAgent.agentId,
+        gigAgent.gigId,
+        'archived',
+        { gigAgentId: gigAgent._id }
+      );
+    } catch (syncError) {
+      console.error('Erreur lors de la synchronisation archive invitation:', syncError);
+    }
+
+    res.status(StatusCodes.OK).json({
+      message: 'Invitation archived successfully',
+      gigAgent: {
+        id: gigAgent._id,
+        enrollmentStatus: gigAgent.enrollmentStatus,
+        status: gigAgent.status
+      }
+    });
+  } catch (error) {
+    console.error('Error in archiveInvitation:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      message: error.message
+    });
+  }
+};
 
 // Agent rejects invitation
 export const agentRejectInvitation = async (req, res) => {

@@ -234,7 +234,7 @@ const gigAgentSchema = new mongoose.Schema({
   // Enrollment system fields
   enrollmentStatus: {
     type: String,
-    enum: ['invited', 'requested', 'accepted', 'rejected', 'expired', 'removed', 'enrolled'],
+    enum: ['invited', 'requested', 'accepted', 'rejected', 'expired', 'removed', 'enrolled', 'archived', 'cancelled'],
     default: 'invited'
   },
   invitationSentAt: {
@@ -451,6 +451,14 @@ gigAgentSchema.methods.expireInvitation = function() {
   return this.save();
 };
 
+gigAgentSchema.methods.archiveInvitation = function(notes = '') {
+  this.enrollmentStatus = 'archived';
+  this.status = 'cancelled';
+  if (notes) this.notes = notes;
+  this.invitationToken = undefined;
+  return this.save();
+};
+
 gigAgentSchema.methods.isInvitationExpired = function() {
   return new Date() > this.invitationExpiresAt;
 };
@@ -474,7 +482,8 @@ gigAgentSchema.methods.canRequestEnrollment = function() {
   return !this.enrollmentStatus || 
          this.enrollmentStatus === 'rejected' || 
          this.enrollmentStatus === 'expired' ||
-         this.enrollmentStatus === 'cancelled';
+         this.enrollmentStatus === 'cancelled' ||
+         this.enrollmentStatus === 'archived';
 };
 
 const GigAgent = mongoose.model('GigAgent', gigAgentSchema);
