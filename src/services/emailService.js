@@ -1,6 +1,130 @@
 import nodemailer from 'nodemailer';
 import config from '../config/config.js';
 
+/** Shared HARX brand styles for transactional emails */
+const HARX_EMAIL_STYLES = `
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #fff5f5 0%, #fdf2f8 100%);
+    margin: 0;
+    padding: 0;
+  }
+  .email-container {
+    max-width: 520px;
+    margin: 40px auto;
+    background: #ffffff;
+    border-radius: 18px;
+    box-shadow: 0 8px 32px rgba(255, 77, 77, 0.14);
+    overflow: hidden;
+    border: 1px solid #ffe0e0;
+  }
+  .header {
+    background: linear-gradient(90deg, #ff4d4d 0%, #ec4899 100%);
+    color: #ffffff;
+    padding: 36px 30px 24px 30px;
+    text-align: center;
+  }
+  .header h1 {
+    font-size: 1.75rem;
+    margin: 0 0 10px 0;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+  }
+  .header p {
+    font-size: 1.1rem;
+    margin: 0;
+    opacity: 0.98;
+  }
+  .intro, .content {
+    padding: 0 30px;
+    margin-top: 24px;
+    font-size: 1.05rem;
+    color: #4a1d34;
+    line-height: 1.6;
+    text-align: center;
+  }
+  .content {
+    text-align: left;
+    padding: 30px;
+    margin-top: 0;
+  }
+  .gig-section {
+    padding: 32px 30px 18px 30px;
+    text-align: center;
+  }
+  .gig-title {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #500724;
+    margin-bottom: 8px;
+  }
+  .gig-subtitle, .gig-description {
+    color: #9d174d;
+    font-size: 1.05rem;
+    font-style: italic;
+    margin-bottom: 18px;
+    line-height: 1.6;
+  }
+  .gig-description {
+    font-style: normal;
+    text-align: left;
+  }
+  .cta-section {
+    text-align: center;
+    margin: 32px 0 24px 0;
+  }
+  .cta-button {
+    display: inline-block;
+    background: linear-gradient(90deg, #ff4d4d 0%, #ec4899 100%);
+    color: #ffffff !important;
+    padding: 15px 38px;
+    text-decoration: none;
+    border-radius: 9999px;
+    font-weight: 700;
+    font-size: 1.08rem;
+    margin: 0 8px 12px 8px;
+    box-shadow: 0 4px 16px rgba(255, 77, 77, 0.28);
+  }
+  .expiry-notice {
+    background: #fff5f5;
+    border: 1px solid #ffc2c2;
+    border-radius: 12px;
+    padding: 15px;
+    margin: 20px 0;
+    color: #be185d;
+    font-size: 0.95rem;
+  }
+  .status-section {
+    text-align: center;
+    margin: 30px 0;
+    padding: 20px;
+    border-radius: 12px;
+  }
+  .status-text {
+    font-size: 1.2rem;
+    font-weight: 700;
+  }
+  .footer {
+    background: #fff5f5;
+    padding: 22px 30px;
+    text-align: center;
+    color: #831843;
+    font-size: 0.98rem;
+    border-top: 1px solid #ffe0e0;
+  }
+  .footer p {
+    margin: 6px 0;
+  }
+  .highlight {
+    color: #ff4d4d;
+    font-weight: 700;
+  }
+  @media (max-width: 600px) {
+    .email-container { margin: 10px; border-radius: 12px; }
+    .header, .gig-section, .footer, .intro, .content { padding-left: 12px; padding-right: 12px; }
+  }
+`;
+
 // Transporter configuration helper
 const getTransporter = () => {
   return nodemailer.createTransport({
@@ -92,110 +216,7 @@ const createEmailContent = (agentName, gigTitle, gigDescription, matchDetails, g
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>Exclusive Gig Invitation</title>
-      <style>
-        body {
-          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-          background: linear-gradient(135deg, #f8fafc 0%, #e0e7ef 100%);
-          margin: 0;
-          padding: 0;
-        }
-        .email-container {
-          max-width: 520px;
-          margin: 40px auto;
-          background: #fff;
-          border-radius: 18px;
-          box-shadow: 0 8px 32px rgba(60,60,120,0.10);
-          overflow: hidden;
-        }
-        .header {
-          background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-          color: #fff;
-          padding: 36px 30px 18px 30px;
-          text-align: center;
-        }
-        .header h1 {
-          font-size: 2rem;
-          margin: 0 0 10px 0;
-          letter-spacing: 1px;
-        }
-        .header p {
-          font-size: 1.1rem;
-          margin: 0 0 8px 0;
-          opacity: 0.95;
-        }
-        .intro {
-          padding: 0 30px;
-          margin-top: 24px;
-          font-size: 1.08rem;
-          color: #444;
-          text-align: center;
-        }
-        .gig-section {
-          padding: 32px 30px 18px 30px;
-          text-align: center;
-        }
-        .gig-title {
-          font-size: 1.6rem;
-          font-weight: 700;
-          color: #222;
-          margin-bottom: 8px;
-        }
-        .gig-subtitle {
-          color: #6c757d;
-          font-size: 1.05rem;
-          font-style: italic;
-          margin-bottom: 18px;
-        }
-        .cta-section {
-          text-align: center;
-          margin: 32px 0 24px 0;
-        }
-        .cta-button {
-          display: inline-block;
-          background: linear-gradient(90deg, #28a745 0%, #20c997 100%);
-          color: #fff;
-          padding: 15px 38px;
-          text-decoration: none;
-          border-radius: 30px;
-          font-weight: 600;
-          font-size: 1.08rem;
-          margin: 0 8px 12px 8px;
-          box-shadow: 0 4px 16px rgba(40,167,69,0.10);
-          transition: background 0.2s, box-shadow 0.2s, transform 0.2s;
-        }
-        .cta-button:hover {
-          background: linear-gradient(90deg, #20c997 0%, #28a745 100%);
-          box-shadow: 0 8px 24px rgba(40,167,69,0.18);
-          transform: translateY(-2px) scale(1.03);
-        }
-        .secondary-button {
-          background: linear-gradient(90deg, #6c757d 0%, #495057 100%);
-          box-shadow: 0 4px 16px rgba(108,117,125,0.10);
-        }
-        .secondary-button:hover {
-          background: linear-gradient(90deg, #495057 0%, #6c757d 100%);
-          box-shadow: 0 8px 24px rgba(108,117,125,0.18);
-        }
-        .footer {
-          background: #f8f9fa;
-          padding: 22px 30px;
-          text-align: center;
-          color: #6c757d;
-          font-size: 0.98rem;
-          border-top: 1px solid #e9ecef;
-        }
-        .footer p {
-          margin: 6px 0;
-        }
-        .highlight {
-          color: #667eea;
-          font-weight: 600;
-        }
-        @media (max-width: 600px) {
-          .email-container { margin: 10px; border-radius: 12px; }
-          .header, .gig-section, .footer, .intro { padding-left: 12px; padding-right: 12px; }
-        }
-      </style>
+      <style>${HARX_EMAIL_STYLES}</style>
     </head>
     <body>
       <div class="email-container">
@@ -374,77 +395,7 @@ const createEnrollmentEmailContent = (agentName, gigTitle, gigDescription, invit
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>Invitation d'enrôlement</title>
-      <style>
-        .email-container {
-          max-width: 600px;
-          margin: 0 auto;
-          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-          background: #ffffff;
-          border-radius: 16px;
-          box-shadow: 0 8px 32px rgba(0,0,0,0.08);
-          overflow: hidden;
-        }
-        .header {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          padding: 30px;
-          text-align: center;
-        }
-        .header h1 {
-          margin: 0;
-          font-size: 1.8rem;
-          font-weight: 600;
-        }
-        .content {
-          padding: 30px;
-        }
-        .gig-title {
-          font-size: 1.5rem;
-          font-weight: 600;
-          color: #2d3748;
-          margin-bottom: 15px;
-        }
-        .gig-description {
-          color: #4a5568;
-          line-height: 1.6;
-          margin-bottom: 25px;
-        }
-        .cta-section {
-          text-align: center;
-          margin: 30px 0;
-        }
-        .cta-button {
-          display: inline-block;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          padding: 15px 30px;
-          text-decoration: none;
-          border-radius: 8px;
-          font-weight: 600;
-          font-size: 1.1rem;
-          transition: all 0.3s ease;
-        }
-        .cta-button:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 24px rgba(102,126,234,0.3);
-        }
-        .expiry-notice {
-          background: #fff5f5;
-          border: 1px solid #fed7d7;
-          border-radius: 8px;
-          padding: 15px;
-          margin: 20px 0;
-          color: #c53030;
-          font-size: 0.9rem;
-        }
-        .footer {
-          background: #f7fafc;
-          padding: 20px;
-          text-align: center;
-          color: #4a5568;
-          font-size: 0.9rem;
-        }
-      </style>
+      <style>${HARX_EMAIL_STYLES}</style>
     </head>
     <body>
       <div class="email-container">
@@ -470,7 +421,7 @@ const createEnrollmentEmailContent = (agentName, gigTitle, gigDescription, invit
           <p>Si vous avez des questions, n'hésitez pas à nous contacter.</p>
         </div>
         <div class="footer">
-          <p><strong>HARX Technologies Inc</strong> - Plateforme de matching intelligent</p>
+          <p><span class="highlight">HARX Technologies Inc</span> - Plateforme de matching intelligent</p>
           <p>Pour toute question : contact@harx.ai</p>
         </div>
       </div>
@@ -514,8 +465,12 @@ Pour toute question: contact@harx.ai
  */
 const createEnrollmentNotificationContent = (agentName, gigTitle, status) => {
   const statusText = status === 'accepted' ? 'accepté' : 'refusé';
-  const statusColor = status === 'accepted' ? '#38a169' : '#e53e3e';
   const statusIcon = status === 'accepted' ? '✅' : '❌';
+  const statusSectionStyle =
+    status === 'accepted'
+      ? 'background: #fff5f5; border: 1px solid #ffc2c2;'
+      : 'background: #fdf2f8; border: 1px solid #fbcfe8;';
+  const statusTextColor = status === 'accepted' ? '#ff3333' : '#db2777';
 
   return `
     <!DOCTYPE html>
@@ -524,57 +479,7 @@ const createEnrollmentNotificationContent = (agentName, gigTitle, status) => {
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>Confirmation d'enrôlement</title>
-      <style>
-        .email-container {
-          max-width: 600px;
-          margin: 0 auto;
-          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-          background: #ffffff;
-          border-radius: 16px;
-          box-shadow: 0 8px 32px rgba(0,0,0,0.08);
-          overflow: hidden;
-        }
-        .header {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          padding: 30px;
-          text-align: center;
-        }
-        .header h1 {
-          margin: 0;
-          font-size: 1.8rem;
-          font-weight: 600;
-        }
-        .content {
-          padding: 30px;
-        }
-        .status-section {
-          text-align: center;
-          margin: 30px 0;
-          padding: 20px;
-          border-radius: 8px;
-          background: ${status === 'accepted' ? '#f0fff4' : '#fff5f5'};
-          border: 1px solid ${status === 'accepted' ? '#9ae6b4' : '#fed7d7'};
-        }
-        .status-text {
-          font-size: 1.2rem;
-          font-weight: 600;
-          color: ${statusColor};
-        }
-        .gig-title {
-          font-size: 1.3rem;
-          font-weight: 600;
-          color: #2d3748;
-          margin: 20px 0;
-        }
-        .footer {
-          background: #f7fafc;
-          padding: 20px;
-          text-align: center;
-          color: #4a5568;
-          font-size: 0.9rem;
-        }
-      </style>
+      <style>${HARX_EMAIL_STYLES}</style>
     </head>
     <body>
       <div class="email-container">
@@ -584,8 +489,8 @@ const createEnrollmentNotificationContent = (agentName, gigTitle, status) => {
         <div class="content">
           <p>Bonjour ${agentName},</p>
           
-          <div class="status-section">
-            <div class="status-text">${statusIcon} Votre enrôlement a été ${statusText}</div>
+          <div class="status-section" style="${statusSectionStyle}">
+            <div class="status-text" style="color: ${statusTextColor};">${statusIcon} Votre enrôlement a été ${statusText}</div>
           </div>
           
           <div class="gig-title">${gigTitle}</div>
@@ -593,7 +498,7 @@ const createEnrollmentNotificationContent = (agentName, gigTitle, status) => {
           <p>Merci pour votre réponse. Notre équipe vous contactera bientôt pour la suite.</p>
         </div>
         <div class="footer">
-          <p><strong>HARX Technologies Inc</strong> - Plateforme de matching intelligent</p>
+          <p><span class="highlight">HARX Technologies Inc</span> - Plateforme de matching intelligent</p>
           <p>Pour toute question : contact@harx.ai</p>
         </div>
       </div>
