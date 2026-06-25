@@ -1678,8 +1678,11 @@ export const findMatchesForGigById = async (req, res) => {
 
 
 
-    // Récupérer les agents déjà invités pour ce gig
-    const invitedAgents = await GigAgent.find({ gigId: gig._id }).select('agentId');
+    // Récupérer les agents déjà invités pour ce gig (invitations en attente uniquement)
+    const invitedAgents = await GigAgent.find({
+      gigId: gig._id,
+      enrollmentStatus: 'invited',
+    }).select('agentId');
     const invitedAgentIds = invitedAgents.map(ga => ga.agentId.toString());
     console.log('📧 Backend: Invited agents for gig', gig._id, ':', invitedAgentIds);
 
