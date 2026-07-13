@@ -19,19 +19,37 @@ const app = express();
 // Set up trust proxy for secure handling of headers
 app.set('trust proxy', true);
 
+const allowedOrigins = [
+  'https://harx.ai',
+  'https://harxv25matchingfrontend.netlify.app',
+  'http://localhost:5181',
+  'https://v25.harx.ai',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:5174',
+  'http://localhost:8100',
+  'capacitor://localhost',
+  'ionic://localhost',
+];
+
 const corsOptions = {
-  origin: [
-    'https://harx.ai',
-    'https://harxv25matchingfrontend.netlify.app',
-    'http://localhost:5181',
-    'https://v25.harx.ai',
-    'http://localhost:5173',
-    'http://localhost:5174'
-  ],
+  origin(origin, callback) {
+    if (!origin) return callback(null, true);
+    if (
+      allowedOrigins.includes(origin) ||
+      /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
+      origin.endsWith('.netlify.app') ||
+      origin.endsWith('.harx.ai')
+    ) {
+      return callback(null, true);
+    }
+    console.log('CORS blocked origin:', origin);
+    return callback(new Error('Not allowed by CORS'));
+  },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
-  optionsSuccessStatus: 200
+  optionsSuccessStatus: 200,
 };
 app.use(cors(corsOptions));
 
