@@ -119,7 +119,7 @@ const server = http.createServer(app);
 setupEnrollmentWebSocket(server);
 
 // Start server
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5011;
 server.listen(PORT, () => {
-  console.log(`Matching server running on port ${PORT}`);
+  console.log(`Server is running on port ${PORT} (HTTP + WS /enrollment-updates)`);
 });
