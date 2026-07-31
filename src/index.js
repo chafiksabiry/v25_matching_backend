@@ -31,22 +31,63 @@ const allowedOrigins = [
   'ionic://localhost',
 ];
 
+function isOriginAllowed(origin) {
+  if (!origin) return true;
+  return (
+    allowedOrigins.includes(origin) ||
+    /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
+    origin.endsWith('.netlify.app') ||
+    origin.endsWith('.harx.ai')
+  );
+}
+
+const corsAllowedHeaders = [
+  'Content-Type',
+  'Authorization',
+  'X-Requested-With',
+  'Accept',
+  'Origin',
+  'Cache-Control',
+  'X-File-Name',
+];
+
+// Explicit CORS headers first (same pattern as gigs backend).
+// The `cors` package alone was returning Allow-Credentials / Allow-Methods
+// without Access-Control-Allow-Origin on Railway preflights, which blocks
+// harx26harxconnection-dev.netlify.app (Training + Marketplace enrolled gigs).
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && isOriginAllowed(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  }
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader(
+    'Access-Control-Allow-Methods',
+    'GET, POST, PUT, PATCH, DELETE, OPTIONS'
+  );
+  res.setHeader('Access-Control-Allow-Headers', corsAllowedHeaders.join(', '));
+  res.setHeader('Access-Control-Max-Age', '86400');
+
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+  next();
+});
+
 const corsOptions = {
   origin(origin, callback) {
     if (!origin) return callback(null, true);
-    if (
-      allowedOrigins.includes(origin) ||
-      /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
-      origin.endsWith('.netlify.app') ||
-      origin.endsWith('.harx.ai')
-    ) {
-      return callback(null, true);
+    if (isOriginAllowed(origin)) {
+      // Reflect the exact origin string when credentials are enabled.
+      return callback(null, origin);
     }
     console.log('CORS blocked origin:', origin);
     return callback(new Error('Not allowed by CORS'));
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: corsAllowedHeaders,
   credentials: true,
   optionsSuccessStatus: 200,
 };
@@ -78,7 +119,7 @@ const server = http.createServer(app);
 setupEnrollmentWebSocket(server);
 
 // Start server
-const PORT = process.env.PORT || 5011;
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT} (HTTP + WS /enrollment-updates)`);
-}); 
+  console.log(`Matching server running on port ${PORT}`);
+});
