@@ -22,6 +22,8 @@ app.set('trust proxy', true);
 const allowedOrigins = [
   'https://harx.ai',
   'https://harxv25matchingfrontend.netlify.app',
+  'https://harx26harxconnection-dev.netlify.app',
+  'https://harx26harxconnection.netlify.app',
   'http://localhost:5181',
   'https://v25.harx.ai',
   'http://localhost:5173',
