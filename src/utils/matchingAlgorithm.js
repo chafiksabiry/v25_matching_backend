@@ -1,359 +1,1487 @@
+import Match from "../models/Match.js";
+
 /**
- * Calculate the matching score between a rep and a gig
+ * Calcule le score de matching global entre un agent et un gig
+ * @param {Object} agent - Le représentant avec ses caractéristiques
+ * @param {Object} gig - Le gig avec ses exigences
+ * @param {Object} weights - Les poids personnalisés pour chaque critère
+ * @returns {Object} Le score final et les détails de chaque critère
  */
-export const calculateMatchScore = (rep, gig, weights = {}) => {
-  // Scores individuels (utiliser les fonctions existantes)
-  // Si ces fonctions existent déjà, conservez-les
-  const experienceScore = calculateExperienceScore(rep, gig) || 0.5;
-  const skillsScore = calculateSkillsScore(rep, gig) || 0.5;
-  const industryScore = calculateIndustryScore(rep, gig) || 0.5;
-  const languageScore = calculateLanguageScore(rep, gig) || 0.5;
-  const availabilityScore = calculateAvailabilityScore(rep, gig) || 0.2;
-  const timezoneScore = calculateTimezoneScore(rep, gig) || 0.5;
-  const performanceScore = calculatePerformanceScore(rep, gig) || 0.5;
-  const regionScore = calculateRegionScore(rep, gig) || 0.5;
-  
-  // Poids par défaut
-  const finalWeights = {
-    experienceWeight: 1,
-    skillsWeight: 1,
-    industryWeight: 1,
-    languageWeight: 1,
-    availabilityWeight: 1,
-    timezoneWeight: 1,
-    performanceWeight: 1,
-    regionWeight: 1,
-    ...weights
+export const calculateMatchScore = (agent, gig, weights = {}) => {
+  const defaultWeights = {
+    industry: 0.20, // 20% weight for industry matching
+    experience: 0.20, // 20% for experience matching
+    skills: 0.20, // 20% for skills
+    language: 0.15, // 15% for language
+    region: 0.15, // 15% for region matching
+    availability: 0.10, // 10% for availability
   };
-  
-  // Calculer la moyenne pondérée
-  const totalWeight = Object.values(finalWeights).reduce((sum, w) => sum + w, 0);
-  const finalScore = (
-    (finalWeights.experienceWeight * (experienceScore || 0)) +
-    (finalWeights.skillsWeight * (skillsScore || 0)) +
-    (finalWeights.industryWeight * (industryScore || 0)) +
-    (finalWeights.languageWeight * (languageScore || 0)) +
-    (finalWeights.availabilityWeight * (availabilityScore || 0)) +
-    (finalWeights.timezoneWeight * (timezoneScore || 0)) +
-    (finalWeights.performanceWeight * (performanceScore || 0)) +
-    (finalWeights.regionWeight * (regionScore || 0))
-  ) / (totalWeight || 1);
-  
+
+  // Utiliser les poids fournis ou les poids par défaut
+  const finalWeights = { ...defaultWeights, ...weights };
+
+  // Calculer les scores individuels
+  const industryScore = calculateIndustryScore(agent, gig);
+  const experienceScore = calculateExperienceScore(agent, gig);
+  const skillsScore = calculateSkillsScore(agent, gig);
+  const languageScore = calculateLanguageScore(agent, gig);
+  const regionScore = calculateRegionScore(agent, gig);
+  const availabilityScore = calculateAvailabilityScore(agent, gig);
+
+  // Calculer le score total en utilisant les poids
+  const totalScore =
+    industryScore * finalWeights.industry +
+    experienceScore * finalWeights.experience +
+    skillsScore * finalWeights.skills +
+    languageScore * finalWeights.language +
+    regionScore * finalWeights.region +
+    availabilityScore * finalWeights.availability;
+
   return {
-    score: finalScore,
-    matchDetails: {
+    score: totalScore,
+    details: {
+      industryScore,
       experienceScore,
       skillsScore,
-      industryScore,
       languageScore,
+      regionScore,
       availabilityScore,
-      timezoneScore,
-      performanceScore,
-      regionScore
-    }
+    },
   };
 };
 
 /**
- * Calculate experience score based on rep's experience vs. gig's required experience
+ * Calcule le score d'expérience en comparant l'expérience du agent avec les exigences du gig
+ * @param {Object} agent - Le représentant avec ses expériences
+ * @param {Object} gig - Le gig avec ses exigences
+ * @returns {number} Score entre 0 et 1
  */
-function calculateExperienceScore(repExperience, requiredExperience) {
-  if (repExperience >= requiredExperience) {
-    // Bonus for exceeding required experience, but with diminishing returns
-    return Math.min(1, 0.8 + (repExperience - requiredExperience) * 0.04);
+function calculateExperienceScore(agent, gig) {
+  if (
+    !gig.seniority?.yearsExperience ||
+    !agent.professionalSummary?.yearsOfExperience
+  ) {
+    console.log("Missing experience data:", {
+      agent: agent._id,
+      gig: gig._id,
+      gigExperience: gig.seniority?.yearsExperience,
+      agentExperience: agent.professionalSummary?.yearsOfExperience,
+    });
+    return 0.5;
+  }
+
+  // Extraire les années d'expérience
+  const agentExperience = parseInt(agent.professionalSummary.yearsOfExperience) || 0;
+  const gigExperience = parseInt(gig.seniority.yearsExperience) || 0;
+
+  console.log("Experience comparison:", {
+    agentId: agent._id,
+    gigId: gig._id,
+    agentExperience,
+    gigExperience,
+    isExactMatch: agentExperience === gigExperience,
+    isSufficient: agentExperience >= gigExperience,
+  });
+
+  // Logique de scoring basée sur la correspondance des années d'expérience
+  if (agentExperience >= gigExperience) {
+    // L'agent a suffisamment d'expérience
+    if (agentExperience === gigExperience) {
+      return 1.0; // Match parfait
+    } else if (agentExperience <= gigExperience * 1.5) {
+      return 0.9; // Légèrement plus d'expérience (bon)
+    } else if (agentExperience <= gigExperience * 2) {
+      return 0.8; // Plus d'expérience mais acceptable
+    } else {
+      return 0.7; // Beaucoup plus d'expérience (peut être overqualified)
+    }
   } else {
-    // Penalty for not meeting required experience
-    return Math.max(0, repExperience / requiredExperience * 0.8);
+    // L'agent n'a pas assez d'expérience
+    if (agentExperience >= gigExperience * 0.8) {
+      return 0.6; // Presque suffisant
+    } else if (agentExperience >= gigExperience * 0.6) {
+      return 0.4; // Partiellement suffisant
+    } else if (agentExperience >= gigExperience * 0.4) {
+      return 0.2; // Insuffisant mais pas complètement
+    } else {
+      return 0.0; // Complètement insuffisant
+    }
   }
 }
 
 /**
- * Calculate skills score based on overlap between rep's skills and gig's required skills
+ * Calcule le score de compétences en comparant les compétences du agent avec celles requises
+ * @param {Object} agent - Le représentant avec ses compétences
+ * @param {Object} gig - Le gig avec ses compétences requises
+ * @returns {number} Score entre 0 et 1
  */
-export const calculateSkillsScore = (rep, gig) => {
-  // Vérifier si rep.skills et gig.requiredSkills existent et sont des tableaux
-  const repSkills = Array.isArray(rep?.skills) ? rep.skills : [];
-  const requiredSkills = Array.isArray(gig?.requiredSkills) ? gig.requiredSkills : [];
-  
-  // Si aucune compétence n'est requise, retourner un score neutre
-  if (requiredSkills.length === 0) {
-    return 0.5; // Score neutre
+function calculateSkillsScore(agent, gig) {
+  if (!gig.skills || !agent.skills) {
+    console.log("Missing skills data:", { agent: agent._id, gig: gig._id });
+    return 0.5;
   }
-  
-  // Compter combien de compétences requises le rep possède
+
+  // Extraire tous les skills du gig (professional, technical, soft)
+  const gigSkills = [
+    ...(gig.skills.professional || []),
+    ...(gig.skills.technical || []),
+    ...(gig.skills.soft || [])
+  ];
+
+  // Extraire tous les skills de l'agent (professional, technical, soft)
+  const agentSkills = [
+    ...(agent.skills.professional || []),
+    ...(agent.skills.technical || []),
+    ...(agent.skills.soft || [])
+  ];
+
+  if (gigSkills.length === 0) {
+    console.log("No skills required for gig:", gig._id);
+    return 1.0; // Si aucun skill requis, score parfait
+  }
+
+  if (agentSkills.length === 0) {
+    console.log("No skills found for agent:", agent._id);
+    return 0.0; // Si l'agent n'a pas de skills, score nul
+  }
+
+  // Compter les skills qui matchent par ID
   let matchingSkills = 0;
-  for (const skill of requiredSkills) {
-    if (repSkills.includes(skill)) {
-      matchingSkills++;
-    }
-  }
-  
-  // Calculer le score basé sur le pourcentage de compétences correspondantes
-  return requiredSkills.length > 0 ? matchingSkills / requiredSkills.length : 0;
-};
+  const skillMatches = [];
 
-/**
- * Calculate industry score based on rep's industry experience vs. gig's industry
- */
-export const calculateIndustryScore = (rep, gig) => {
-  const repIndustries = Array.isArray(rep?.industries) ? rep.industries : [];
-  const gigIndustries = Array.isArray(gig?.industries) ? gig.industries : [];
-  
-  if (gigIndustries.length === 0) {
-    return 0.5; // Score neutre si aucune industrie n'est spécifiée
-  }
-  
-  // Vérifier les correspondances
-  for (const industry of repIndustries) {
-    if (gigIndustries.includes(industry)) {
-      return 1; // Match parfait si au moins une industrie correspond
+  gigSkills.forEach(gigSkill => {
+    // Normaliser l'ID du skill du gig
+    const gigSkillId = gigSkill.skill?.toString();
+    
+    if (!gigSkillId) {
+      console.log("Invalid gig skill ID:", gigSkill);
+      return;
     }
-  }
-  
-  return 0; // Pas de correspondance
-};
 
-/**
- * Calculate language score based on overlap between rep's languages and gig's preferred languages
- */
-export const calculateLanguageScore = (rep, gig) => {
-  const repLanguages = Array.isArray(rep?.languages) ? rep.languages : [];
-  const requiredLanguages = Array.isArray(gig?.requiredLanguages) ? gig.requiredLanguages : [];
-  
-  if (requiredLanguages.length === 0) {
-    return 0.5; // Score neutre si aucune langue n'est requise
-  }
-  
-  // Vérifier les correspondances
-  let matchingLanguages = 0;
-  for (const language of requiredLanguages) {
-    if (repLanguages.includes(language)) {
-      matchingLanguages++;
-    }
-  }
-  
-  return requiredLanguages.length > 0 ? matchingLanguages / requiredLanguages.length : 0;
-};
+    // Chercher le skill correspondant chez l'agent par ID
+    const agentSkill = agentSkills.find(agentSkill => {
+      const agentSkillId = agentSkill.skill?.toString();
+      return agentSkillId === gigSkillId;
+    });
 
-/**
- * Calculate availability score based on rep's availability vs. gig's duration
- */
-export const calculateAvailabilityScore = (rep, gig) => {
-  // Vérifier si les disponibilités existent et sont des tableaux
-  const repAvailability = Array.isArray(rep?.availability) ? rep.availability : [];
-  const gigSchedule = Array.isArray(gig?.schedule) ? gig.schedule : [];
-  
-  // Si aucune disponibilité n'est spécifiée, retourner un score neutre
-  if (repAvailability.length === 0 || gigSchedule.length === 0) {
-    return 0.2; // Score par défaut faible mais non nul
-  }
-  
-  // Créer une carte des disponibilités du représentant par jour
-  const repAvailabilityByDay = {};
-  repAvailability.forEach(slot => {
-    if (slot && slot.day) {
-      if (!repAvailabilityByDay[slot.day]) {
-        repAvailabilityByDay[slot.day] = [];
-      }
-      if (slot.startTime && slot.endTime) {
-        repAvailabilityByDay[slot.day].push({
-          start: slot.startTime,
-          end: slot.endTime
+    if (agentSkill) {
+      console.log("Skill match found by ID:", {
+        agentId: agent._id,
+        gigId: gig._id,
+        skillId: gigSkillId,
+        gigLevel: gigSkill.level,
+        agentLevel: agentSkill.level
+      });
+
+      // Vérifier le niveau de compétence
+      const agentLevel = parseInt(agentSkill.level) || 0;
+      const gigLevel = parseInt(gigSkill.level) || 0;
+
+      if (agentLevel >= gigLevel) {
+        matchingSkills++;
+        skillMatches.push({
+          skillId: gigSkillId,
+          gigLevel: gigLevel,
+          agentLevel: agentLevel,
+          matchType: 'perfect'
+        });
+      } else {
+        skillMatches.push({
+          skillId: gigSkillId,
+          gigLevel: gigLevel,
+          agentLevel: agentLevel,
+          matchType: 'insufficient_level'
         });
       }
-    }
-  });
-  
-  // Vérifier les chevauchements avec l'horaire du gig
-  let totalOverlap = 0;
-  let totalGigHours = 0;
-  
-  gigSchedule.forEach(slot => {
-    if (slot && slot.day && slot.startTime && slot.endTime) {
-      // Convertir les heures en minutes pour faciliter les calculs
-      const gigStart = timeToMinutes(slot.startTime);
-      const gigEnd = timeToMinutes(slot.endTime);
-      const gigDuration = gigEnd - gigStart;
-      totalGigHours += gigDuration;
-      
-      // Vérifier les disponibilités du rep pour ce jour
-      const dayAvailability = repAvailabilityByDay[slot.day] || [];
-      
-      dayAvailability.forEach(repSlot => {
-        const repStart = timeToMinutes(repSlot.start);
-        const repEnd = timeToMinutes(repSlot.end);
-        
-        // Calculer le chevauchement
-        const overlapStart = Math.max(gigStart, repStart);
-        const overlapEnd = Math.min(gigEnd, repEnd);
-        const overlap = Math.max(0, overlapEnd - overlapStart);
-        
-        totalOverlap += overlap;
+    } else {
+      console.log("Skill not found for agent:", {
+        agentId: agent._id,
+        gigId: gig._id,
+        requiredSkillId: gigSkillId
+      });
+      skillMatches.push({
+        skillId: gigSkillId,
+        gigLevel: gigSkill.level,
+        agentLevel: null,
+        matchType: 'missing'
       });
     }
   });
-  
-  // Calculer le score basé sur le pourcentage de chevauchement
-  return totalGigHours > 0 ? Math.min(1, totalOverlap / totalGigHours) : 0.2;
-};
 
-// Fonction utilitaire pour convertir les heures en minutes
-const timeToMinutes = (timeStr) => {
-  if (!timeStr || typeof timeStr !== 'string') return 0;
-  
-  const [hours, minutes] = timeStr.split(':').map(Number);
-  return (hours || 0) * 60 + (minutes || 0);
-};
+  const score = matchingSkills / gigSkills.length;
 
-/**
- * Calculate timezone score based on rep's timezone vs. gig's timezone
- */
-function calculateTimezoneScore(repTimezone, gigTimezone) {
-  // For simplicity, exact match = 1, otherwise 0.5
-  // In a real implementation, this would calculate actual time differences
-  return repTimezone === gigTimezone ? 1 : 0.5;
-}
-
-/**
- * Calculate performance score based on rep's historical performance metrics
- */
-function calculatePerformanceScore(
-  repConversionRate, 
-  repReliability, 
-  repRating, 
-  expectedConversionRate
-) {
-  // Conversion rate comparison (0-0.4)
-  const conversionScore = repConversionRate >= expectedConversionRate 
-    ? 0.4 
-    : 0.4 * (repConversionRate / expectedConversionRate);
-  
-  // Reliability score (0-0.3)
-  const reliabilityScore = repReliability / 10 * 0.3;
-  
-  // Rating score (0-0.3)
-  const ratingScore = repRating / 5 * 0.3;
-  
-  return conversionScore + reliabilityScore + ratingScore;
-}
-
-/**
- * Calculate region score based on rep's region vs. gig's target region
- */
-function calculateRegionScore(repRegion, targetRegion) {
-  return repRegion === targetRegion ? 1 : 0;
-}
-
-/**
- * Find the best matches for a specific gig
- */
-export function findMatchesForGig(gig, reps, weights, limit = 10) {
-  const matches = [];
-  
-  for (const rep of reps) {
-    const match = calculateMatchScore(rep, gig, weights);
-    matches.push(match);
-  }
-  
-  // Sort matches by score in descending order and limit results
-  return matches.sort((a, b) => b.score - a.score).slice(0, limit);
-}
-
-/**
- * Find the best gigs for a specific rep
- */
-export const findGigsForRep = (rep, gigs, weights = {}, limit = 10, minimumScore = 0.4) => {
-  // Calculer les scores pour tous les gigs
-  const allMatches = gigs.map(gig => {
-    const matchResult = calculateMatchScore(rep, gig, weights);
-    
-    // Calculer manuellement le score global si matchResult.score est null
-    let score = matchResult.score;
-    if (score === null) {
-      const details = matchResult.matchDetails;
-      let sum = 0;
-      let count = 0;
-      
-      // Utiliser les scores individuels non-nuls pour calculer une moyenne
-      if (details.experienceScore !== null) { sum += details.experienceScore; count++; }
-      if (details.skillsScore !== null) { sum += details.skillsScore; count++; }
-      if (details.industryScore !== null) { sum += details.industryScore; count++; }
-      if (details.languageScore !== null) { sum += details.languageScore; count++; }
-      if (details.availabilityScore !== null) { sum += details.availabilityScore; count++; }
-      if (details.timezoneScore !== null) { sum += details.timezoneScore; count++; }
-      if (details.performanceScore !== null) { sum += details.performanceScore; count++; }
-      if (details.regionScore !== null) { sum += details.regionScore; count++; }
-      
-      score = count > 0 ? sum / count : 0;
-    }
-    
-    return {
-      repId: rep._id,
-      gigId: gig._id,
-      score: score,
-      matchDetails: matchResult.matchDetails
-    };
+  console.log("Skills matching result:", {
+    agentId: agent._id,
+    gigId: gig._id,
+    totalRequiredSkills: gigSkills.length,
+    matchingSkills: matchingSkills,
+    score: score,
+    skillMatches: skillMatches
   });
-  
-  // Filtrer les matches avec un score minimum
-  const qualifyingMatches = allMatches.filter(match => match.score >= minimumScore);
-  
-  // Trier par score décroissant
-  const sortedMatches = qualifyingMatches.sort((a, b) => b.score - a.score);
-  
-  // Limiter le nombre de résultats
-  return sortedMatches.slice(0, limit);
-};
 
-/**
- * Generate all possible matches between reps and gigs
- */
-export function generateAllMatches(reps, gigs, weights) {
-  const allMatches = [];
-  
-  for (const rep of reps) {
-    for (const gig of gigs) {
-      const match = calculateMatchScore(rep, gig, weights);
-      allMatches.push(match);
-    }
-  }
-  
-  return allMatches.sort((a, b) => b.score - a.score);
+  return score;
 }
 
 /**
- * Optimize matches to ensure best overall allocation
- * This is a simplified version of the Hungarian algorithm for optimal assignment
+ * Calcule le score de langue en comparant les langues du agent avec celles requises
+ * @param {Object} agent - Le représentant avec ses langues
+ * @param {Object} gig - Le gig avec ses langues requises
+ * @returns {number} Score entre 0 et 1
  */
-export function optimizeMatches(reps, gigs, weights) {
-  // Generate all possible matches
-  const allMatches = generateAllMatches(reps, gigs, weights);
-  
-  // Track assigned reps and gigs
-  const assignedReps = new Set();
-  const assignedGigs = new Set();
-  const optimalMatches = [];
-  
-  // Greedy assignment (not truly optimal, but simpler for demonstration)
-  for (const match of allMatches) {
-    if (!assignedReps.has(match.repId.toString()) && !assignedGigs.has(match.gigId.toString())) {
-      optimalMatches.push(match);
-      assignedReps.add(match.repId.toString());
-      assignedGigs.add(match.gigId.toString());
+function calculateLanguageScore(agent, gig) {
+  if (!agent.personalInfo?.languages || !gig.skills?.languages) {
+    console.log("Missing language data:", {
+      agentId: agent._id,
+      hasAgentLanguages: !!agent.personalInfo?.languages,
+      hasGigLanguages: !!gig.skills?.languages,
+    });
+    return 0.5;
+  }
+
+  console.log("Language matching details:", {
+    agentId: agent._id,
+    agentLanguages: agent.personalInfo.languages,
+    gigLanguages: gig.skills.languages,
+  });
+
+  // Vérifier si l'agent a au moins une des langues requises avec le bon niveau
+  const languageMatches = gig.skills.languages.map(gigLang => {
+    const gigLangId = gigLang.language?.toString();
+    const gigLevel = gigLang.proficiency?.toLowerCase();
+
+    console.log("Checking gig language:", {
+      gigId: gig._id,
+      gigLanguageId: gigLangId,
+      gigLevel: gigLevel,
+    });
+
+    // Chercher la langue correspondante chez l'agent par ID
+    const agentLang = agent.personalInfo.languages.find(agentLang => {
+      const agentLangId = agentLang.language?.toString();
+      return agentLangId === gigLangId;
+    });
+
+    if (!agentLang) {
+      console.log("Language not found for agent:", {
+        agentId: agent._id,
+        gigId: gig._id,
+        requiredLanguageId: gigLangId
+      });
+      return {
+        languageId: gigLangId,
+        gigLevel: gigLevel,
+        agentLevel: null,
+        matchType: 'missing'
+      };
+    }
+
+    const agentLevel = agentLang.proficiency?.toLowerCase();
+
+    // Vérifier le niveau de compétence
+    const isLevelMatch =
+      (gigLevel === "conversational" &&
+        [
+          "professional working",
+          "native or bilingual",
+          "c1",
+          "c2",
+          "b2",
+        ].includes(agentLevel)) ||
+      (gigLevel === "professional" &&
+        ["professional working", "native or bilingual", "c1", "c2"].includes(
+          agentLevel
+        )) ||
+      (gigLevel === "native" &&
+        ["native or bilingual", "c2"].includes(agentLevel));
+
+    console.log("Language comparison details:", {
+      agentId: agent._id,
+      gigId: gig._id,
+      gigLanguageId: gigLangId,
+      agentLanguageId: agentLang.language?.toString(),
+      gigLevel: gigLevel,
+      agentLevel: agentLevel,
+      isLevelMatch: isLevelMatch,
+    });
+
+    if (isLevelMatch) {
+      return {
+        languageId: gigLangId,
+        gigLevel: gigLevel,
+        agentLevel: agentLevel,
+        matchType: 'perfect'
+      };
+    } else {
+      return {
+        languageId: gigLangId,
+        gigLevel: gigLevel,
+        agentLevel: agentLevel,
+        matchType: 'insufficient_level'
+      };
+    }
+  });
+
+  // Calculer le score basé sur les matches parfaits
+  const perfectMatches = languageMatches.filter(match => match.matchType === 'perfect');
+  const score = perfectMatches.length / gig.skills.languages.length;
+
+  console.log("Language matching result:", {
+    agentId: agent._id,
+    gigId: gig._id,
+    totalRequiredLanguages: gig.skills.languages.length,
+    perfectMatches: perfectMatches.length,
+    score: score,
+    languageMatches: languageMatches
+  });
+
+  return score;
+}
+
+/**
+ * Calcule le score de disponibilité en comparant les créneaux du agent avec ceux du gig
+ * @param {Object} agent - Le représentant avec ses disponibilités
+ * @param {Object} gig - Le gig avec son planning
+ * @returns {number} Score entre 0 et 1
+ */
+function calculateAvailabilityScore(agent, gig) {
+  if (
+    !agent.availability ||
+    !gig.availability ||
+    !Array.isArray(agent.availability)
+  ) {
+    console.log("Missing availability data:", {
+      agent: agent._id,
+      gig: gig._id,
+    });
+    return 0.2;
+  }
+
+  const normalizeString = (str) => {
+    if (!str) return "";
+    return str
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]/g, "")
+      .replace(/\s+/g, "");
+  };
+
+  const gigAvailability = gig.availability.schedule || [];
+  const gigDays = gigAvailability.map((day) => normalizeString(day.day));
+  const gigHours = gigAvailability.map((day) => ({
+    start: timeToMinutes(day.hours.start),
+    end: timeToMinutes(day.hours.end),
+  }));
+
+  const availableDays = agent.availability.filter((day) => {
+    const normalizedDay = normalizeString(day);
+    return gigDays.some((gigDay) => {
+      const isExactMatch = normalizedDay === gigDay;
+      const isPartialMatch =
+        normalizedDay.includes(gigDay) || gigDay.includes(normalizedDay);
+
+      console.log("Comparing availability:", {
+        agentId: agent._id,
+        gigId: gig._id,
+        agentDay: day,
+        gigDay,
+        isExactMatch,
+        isPartialMatch,
+      });
+
+      return isExactMatch || isPartialMatch;
+    });
+  });
+
+  return 0.2 + 0.8 * (availableDays.length / gigDays.length);
+}
+
+/**
+ * Calcule le score de correspondance régionale entre un agent et un gig
+ * @param {Object} agent - Le représentant avec ses informations de localisation
+ * @param {Object} gig - Le gig avec sa destination_zone
+ * @returns {number} Score entre 0 et 1
+ */
+function calculateRegionScore(agent, gig) {
+  if (!gig.destination_zone) {
+    console.log("Missing destination zone for gig:", gig._id);
+    return 0.5; // Score neutre si pas de destination définie
+  }
+
+  console.log("Region matching:", {
+    agentId: agent._id,
+    gigId: gig._id,
+    gigDestinationZone: gig.destination_zone,
+    agentTimezone: agent.availability?.timeZone
+  });
+
+  // Comparaison principale : alpha2 code du pays de destination vs countryCode de la timezone de l'agent
+  if (agent.availability?.timeZone && gig.destination_zone) {
+    // Si les données sont populées, on peut comparer les codes pays
+    if (gig.destination_zone.cca2 && agent.availability.timeZone.countryCode) {
+      const gigCountryCode = gig.destination_zone.cca2; // alpha-2 code du pays de destination
+      const agentCountryCode = agent.availability.timeZone.countryCode; // alpha-2 code du pays de la timezone
       
-      // Stop when all reps or all gigs are assigned
-      if (assignedReps.size === reps.length || assignedGigs.size === gigs.length) {
-        break;
+      if (gigCountryCode === agentCountryCode) {
+        console.log("Perfect country code match:", { 
+          gigCountryCode, 
+          agentCountryCode,
+          gigCountry: gig.destination_zone.name?.common,
+          agentTimezone: agent.availability.timeZone.zoneName 
+        });
+        return 1.0; // Match parfait : même pays
+      } else {
+        console.log("Country code mismatch:", { 
+          gigCountryCode, 
+          agentCountryCode,
+          gigCountry: gig.destination_zone.name?.common,
+          agentTimezone: agent.availability.timeZone.zoneName 
+        });
+        return 0.2; // Score faible : pays différents
       }
     }
   }
-  
-  return optimalMatches;
+
+  // Score de fallback basé sur la présence de données
+  if (agent.availability?.timeZone) {
+    console.log("Agent has timezone but no populated data for comparison");
+    return 0.6; // Score moyen si l'agent a une timezone
+  } else {
+    console.log("Agent has no timezone information");
+    return 0.1; // Score très faible si pas de timezone
+  }
+}
+
+function calculateIndustryScore(agent, gig) {
+  // Nouveau schéma: gig.industries est un array d'ObjectIds
+  if (
+    (!gig.category && (!gig.industries || gig.industries.length === 0)) ||
+    !agent.professionalSummary ||
+    !agent.professionalSummary.industries
+  ) {
+    console.log("Missing industry data:", {
+      gigCategory: gig.category,
+      gigIndustries: gig.industries,
+      agentIndustries: agent.professionalSummary?.industries,
+    });
+    return 0.0;
+  }
+
+  // Normaliser les catégories et industries pour la comparaison
+  const normalizeString = (str) => {
+    if (!str) return "";
+    return str
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]/g, "")
+      .replace(/\s+/g, "");
+  };
+
+  let hasMatchingIndustry = false;
+
+  // Si le gig a une catégorie (backward compatibility)
+  if (gig.category) {
+    const gigCategory = normalizeString(gig.category);
+    hasMatchingIndustry = agent.professionalSummary.industries.some(
+      (industry) => {
+        const normalizedIndustry = normalizeString(industry);
+        const isExactMatch = normalizedIndustry === gigCategory;
+        const isPartialMatch =
+          normalizedIndustry.includes(gigCategory) ||
+          gigCategory.includes(normalizedIndustry);
+        return isExactMatch || isPartialMatch;
+      }
+    );
+  }
+
+  // Si le gig a des industries (nouveau schéma)
+  if (gig.industries && gig.industries.length > 0 && !hasMatchingIndustry) {
+    // Pour l'instant, on compare les ObjectIds directement
+    // Dans une implémentation complète, on populaterait les industries
+    hasMatchingIndustry = agent.professionalSummary.industries.some(
+      (agentIndustryId) => {
+        return gig.industries.some(gigIndustryId => 
+          gigIndustryId.toString() === agentIndustryId.toString()
+        );
+      }
+    );
+  }
+
+  console.log("Industry comparison:", {
+    gigId: gig._id,
+    gigCategory: gig.category,
+    gigIndustries: gig.industries,
+    agentIndustries: agent.professionalSummary.industries,
+    hasMatchingIndustry,
+  });
+
+  return hasMatchingIndustry ? 1.0 : 0.0;
 }
 
 /**
- * Format match score as percentage
+ * Trouve les meilleurs matches pour un gig spécifique
+ * @param {Object} gig - Le gig à matcher
+ * @param {Array} agents - Liste des agents disponibles
+ * @param {Object} weights - Poids personnalisés
+ * @param {Object} options - Options de recherche
+ * @returns {Object} Résultats de la recherche
+ */
+export const findMatchesForGig = async (
+  gig,
+  agents,
+  weights = {},
+  options = {}
+) => {
+  const { limit = 10, minimumScore = 0.4, showAllScores = false } = options;
+
+  console.log("Finding matches for gig:", {
+    gigId: gig._id,
+    industry: gig.industry,
+    totalAgents: agents.length,
+    weights,
+  });
+
+  // Trier les critères par poids décroissant
+  const sortedCriteria = Object.entries(weights)
+    .sort(([, a], [, b]) => b - a)
+    .map(([criterion]) => criterion);
+
+  console.log("Sorted criteria by weight:", sortedCriteria);
+
+  // Filtrer les agents selon les critères triés
+  let filteredAgents = agents;
+  const filterResults = {};
+
+  for (const criterion of sortedCriteria) {
+    const weight = weights[criterion];
+    const beforeCount = filteredAgents.length;
+
+    // Si le poids est faible (< 0.5), on ne filtre pas sur ce critère
+    // if (weight < 0.5) {
+    console.log(`Skipping ${criterion} filter due to low weight (${weight})`);
+    
+    console.log(filterResults);
+
+    filterResults[criterion] = {
+      before: beforeCount,
+      after: beforeCount,
+      removed: 0,
+      skipped: true,
+    };
+    continue;
+    // }
+
+    console.log(`Filtering by ${criterion} (weight: ${weight})...`);
+
+    switch (criterion) {
+      case "experience":
+        filteredAgents = filteredAgents.filter((agent) => {
+          if (!agent.professionalSummary?.yearsOfExperience || !gig.seniority?.yearsExperience) {
+            return false;
+          }
+
+          const agentExperience = parseInt(agent.professionalSummary.yearsOfExperience) || 0;
+          const gigExperience = parseInt(gig.seniority.yearsExperience) || 0;
+
+          console.log("Experience filtering:", {
+            agentId: agent._id,
+            gigId: gig._id,
+            agentExperience,
+            gigExperience,
+            isSufficient: agentExperience >= gigExperience,
+          });
+
+          // Accepter les agents qui ont au moins l'expérience requise
+          return agentExperience >= gigExperience;
+        });
+        break;
+
+      case "skills":
+        filteredAgents = filteredAgents.filter((agent) => {
+          if (!agent.skills?.professional || !gig.skills?.professional)
+            return false;
+
+          const normalizeString = (str) => {
+            if (!str) return "";
+            return str
+              .toLowerCase()
+              .trim()
+              .replace(/[^a-z0-9]/g, "")
+              .replace(/\s+/g, "");
+          };
+
+          return gig.skills.professional.some((gigSkill) => {
+            const normalizedGigSkill = normalizeString(gigSkill);
+
+            return agent.skills.professional.some((agentSkill) => {
+              const normalizedAgentSkill = normalizeString(agentSkill.skill);
+              const isExactMatch = normalizedAgentSkill === normalizedGigSkill;
+              const isPartialMatch =
+                normalizedAgentSkill.includes(normalizedGigSkill) ||
+                normalizedGigSkill.includes(normalizedAgentSkill);
+
+              console.log("Skill comparison:", {
+                agentId: agent._id,
+                gigId: gig._id,
+                gigSkill,
+                agentSkill: agentSkill.skill,
+                isExactMatch,
+                isPartialMatch,
+              });
+
+              return isExactMatch || isPartialMatch;
+            });
+          });
+        });
+        break;
+
+      case "language":
+        filteredAgents = filteredAgents.filter((agent) => {
+          if (!agent.personalInfo?.languages || !gig.skills?.languages)
+            return false;
+
+          const normalizeString = (str) => {
+            if (!str) return "";
+            return str
+              .toLowerCase()
+              .trim()
+              .replace(/[^a-z0-9]/g, "")
+              .replace(/\s+/g, "");
+          };
+
+          return gig.skills.languages.some((gigLang) => {
+            const normalizedGigLang = normalizeString(gigLang.name);
+            const gigLevel = gigLang.level.toLowerCase();
+
+            return agent.personalInfo.languages.some((agentLang) => {
+              const normalizedAgentLang = normalizeString(agentLang.language);
+              const agentLevel = agentLang.proficiency.toLowerCase();
+
+              const isLanguageMatch = normalizedAgentLang === normalizedGigLang;
+              const isLevelMatch =
+                (gigLevel === "professional" &&
+                  ["professional working", "native or bilingual"].includes(
+                    agentLevel
+                  )) ||
+                (gigLevel === "native" && agentLevel === "native or bilingual");
+
+              console.log("Language comparison:", {
+                agentId: agent._id,
+                gigId: gig._id,
+                gigLanguage: gigLang.name,
+                agentLanguage: agentLang.language,
+                gigLevel,
+                agentLevel,
+                isLanguageMatch,
+                isLevelMatch,
+              });
+
+              return isLanguageMatch && isLevelMatch;
+            });
+          });
+        });
+        break;
+
+      case "availability":
+        filteredAgents = filteredAgents.filter((agent) => {
+          if (!agent.availability || !gig.availability?.schedule) return false;
+
+          const normalizeString = (str) => {
+            if (!str) return "";
+            return str
+              .toLowerCase()
+              .trim()
+              .replace(/[^a-z0-9]/g, "")
+              .replace(/\s+/g, "");
+          };
+
+          try {
+            const gigAvailability = gig.availability.schedule || [];
+            const gigDays = gigAvailability.map((day) => normalizeString(day.day));
+
+            return agent.availability.some((agentDay) => {
+              const normalizedAgentDay = normalizeString(agentDay);
+              return gigDays.some((gigDay) => {
+                const isExactMatch = normalizedAgentDay === gigDay;
+                const isPartialMatch =
+                  normalizedAgentDay.includes(gigDay) ||
+                  gigDay.includes(normalizedAgentDay);
+
+                console.log("Availability comparison:", {
+                  agentId: agent._id,
+                  gigId: gig._id,
+                  gigDay,
+                  agentDay,
+                  isExactMatch,
+                  isPartialMatch,
+                });
+
+                return isExactMatch || isPartialMatch;
+              });
+            });
+          } catch (error) {
+            console.error("Error parsing gig availability:", error);
+            return false;
+          }
+        });
+        break;
+
+      case "industry":
+        filteredAgents = filteredAgents.filter((agent) => {
+          if (!agent.professionalSummary?.industries) return false;
+          
+          // Nouveau schéma: vérifier gig.industries ou gig.category (backward compatibility)
+          if (!gig.category && (!gig.industries || gig.industries.length === 0)) {
+            return false;
+          }
+
+          const normalizeString = (str) => {
+            if (!str) return "";
+            return str
+              .toLowerCase()
+              .trim()
+              .replace(/[^a-z0-9]/g, "")
+              .replace(/\s+/g, "");
+          };
+
+          let hasMatch = false;
+
+          // Vérifier avec la catégorie (backward compatibility)
+          if (gig.category) {
+            const normalizedGigCategory = normalizeString(gig.category);
+            hasMatch = agent.professionalSummary.industries.some((industry) => {
+              const normalizedIndustry = normalizeString(industry);
+              const isExactMatch = normalizedIndustry === normalizedGigCategory;
+              const isPartialMatch =
+                normalizedIndustry.includes(normalizedGigCategory) ||
+                normalizedGigCategory.includes(normalizedIndustry);
+              return isExactMatch || isPartialMatch;
+            });
+          }
+
+          // Vérifier avec les industries (nouveau schéma)
+          if (!hasMatch && gig.industries && gig.industries.length > 0) {
+            hasMatch = agent.professionalSummary.industries.some((agentIndustryId) => {
+              return gig.industries.some(gigIndustryId => 
+                gigIndustryId.toString() === agentIndustryId.toString()
+              );
+            });
+          }
+
+          console.log("Industry filtering:", {
+            agentId: agent._id,
+            gigId: gig._id,
+            gigCategory: gig.category,
+            gigIndustries: gig.industries,
+            agentIndustries: agent.professionalSummary.industries,
+            hasMatch,
+          });
+
+          return hasMatch;
+        });
+        break;
+
+      case "region":
+        filteredAgents = filteredAgents.filter((agent) => {
+          if (!gig.destination_zone) {
+            return false;
+          }
+
+          // Comparaison des codes pays : destination_zone.cca2 vs timeZone.countryCode
+          if (agent.availability?.timeZone && gig.destination_zone) {
+            // Si les données sont populées, on peut comparer les codes pays
+            if (gig.destination_zone.cca2 && agent.availability.timeZone.countryCode) {
+              const gigCountryCode = gig.destination_zone.cca2;
+              const agentCountryCode = agent.availability.timeZone.countryCode;
+              
+              if (gigCountryCode === agentCountryCode) {
+                console.log("Region filtering - Country code match:", {
+                  agentId: agent._id,
+                  gigId: gig._id,
+                  countryCode: gigCountryCode,
+                  gigCountry: gig.destination_zone.name?.common,
+                  agentTimezone: agent.availability.timeZone.zoneName
+                });
+                return true; // Match parfait
+              }
+            }
+          }
+
+          // Accepter les agents qui ont une timezone (même si pas de match parfait)
+          if (agent.availability?.timeZone) {
+            console.log("Region filtering - Agent has timezone:", {
+              agentId: agent._id,
+              gigId: gig._id,
+              agentTimezone: agent.availability.timeZone.zoneName || agent.availability.timeZone.toString(),
+              gigDestination: gig.destination_zone.name?.common || gig.destination_zone.toString()
+            });
+            return true;
+          }
+
+          console.log("Region filtering - No timezone info:", {
+            agentId: agent._id,
+            gigId: gig._id
+          });
+
+          return false; // Rejeter les agents sans timezone
+        });
+        break;
+    }
+
+    const afterCount = filteredAgents.length;
+    filterResults[criterion] = {
+      before: beforeCount,
+      after: afterCount,
+      removed: beforeCount - afterCount,
+      skipped: false,
+    };
+
+    console.log(`After ${criterion} filter (weight: ${weight}):`, {
+      before: beforeCount,
+      after: afterCount,
+      removed: beforeCount - afterCount,
+    });
+  }
+
+  // Calculer les scores finaux pour les agents restants
+  const matches = filteredAgents.map((agent) => {
+    const { score, details } = calculateMatchScore(agent, gig, weights);
+    return {
+      agentId: agent._id,
+      gigId: gig._id,
+      score,
+      matchDetails: details,
+    };
+  });
+
+  const sortedMatches = matches.sort((a, b) => b.score - a.score);
+  const qualifyingMatches = sortedMatches.filter(
+    (match) => match.score >= minimumScore
+  );
+  const bestMatches = qualifyingMatches.slice(0, limit);
+
+  return {
+    matches: showAllScores ? sortedMatches : bestMatches,
+    totalAgents: agents.length,
+    qualifyingAgents: qualifyingMatches.length,
+    matchCount: bestMatches.length,
+    totalMatches: sortedMatches.length,
+    filterResults,
+    weights,
+  };
+};
+
+/**
+ * Trouve les meilleurs gigs pour un agent spécifique
+ * @param {Object} agent - Le agent à matcher
+ * @param {Array} gigs - Liste des gigs disponibles
+ * @param {Object} weights - Poids personnalisés
+ * @param {Object} options - Options de recherche
+ * @returns {Object} Résultats de la recherche
+ */
+export const findGigsForAgent = async (
+  agent,
+  gigs = [],
+  weights = {},
+  options = {}
+) => {
+  const {
+    limit = 10,
+    minimumScore = 0.4,
+    showAllScores = false,
+    topScoreCount = 5,
+  } = options;
+
+  if (!agent) {
+    throw new Error("Agent is required");
+  }
+
+  console.log("Finding gigs for agent:", {
+    agentId: agent._id,
+    agentIndustries: agent.professionalSummary?.industries,
+    agentExperience: agent.professionalSummary?.yearsOfExperience,
+    totalGigs: gigs.length,
+  });
+
+  if (!gigs || gigs.length === 0) {
+    return {
+      matches: [],
+      totalGigs: 0,
+      qualifyingGigs: 0,
+      matchCount: 0,
+      totalMatches: 0,
+      minimumScoreApplied: minimumScore,
+      scoreStats: {
+        highest: 0,
+        average: 0,
+        qualifying: 0,
+      },
+    };
+  }
+
+  // Poids par défaut incluant l'expérience
+  const defaultWeights = {
+    industry: 0.20,
+    experience: 0.20,
+    skills: 0.20,
+    language: 0.15,
+    region: 0.15,
+    availability: 0.10
+  };
+
+  const finalWeights = { ...defaultWeights, ...weights };
+
+  // Filtrer d'abord les gigs qui ont une industrie correspondante à l'agent
+  const industryMatches = gigs.filter((gig) => {
+    if (
+      !agent.professionalSummary ||
+      !agent.professionalSummary.industries
+    ) {
+      console.log("Skipping gig due to missing agent data:", {
+        gigId: gig._id,
+        hasProfessionalSummary: !!agent.professionalSummary,
+        hasIndustries: !!agent.professionalSummary?.industries,
+      });
+      return false;
+    }
+
+    // Nouveau schéma: vérifier gig.industries ou gig.category (backward compatibility)
+    if (!gig.category && (!gig.industries || gig.industries.length === 0)) {
+      console.log("Skipping gig due to missing industry data:", {
+        gigId: gig._id,
+        gigCategory: gig.category,
+        gigIndustries: gig.industries,
+      });
+      return false;
+    }
+
+    const normalizeString = (str) => {
+      if (!str) return "";
+      return str
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]/g, "")
+        .replace(/\s+/g, "");
+    };
+
+    let isMatch = false;
+
+    // Vérifier avec la catégorie (backward compatibility)
+    if (gig.category) {
+      const gigCategory = normalizeString(gig.category);
+      isMatch = agent.professionalSummary.industries.some((industry) => {
+        const normalizedIndustry = normalizeString(industry);
+        const isExactMatch = normalizedIndustry === gigCategory;
+        const isPartialMatch =
+          normalizedIndustry.includes(gigCategory) ||
+          gigCategory.includes(normalizedIndustry);
+        return isExactMatch || isPartialMatch;
+      });
+    }
+
+    // Vérifier avec les industries (nouveau schéma)
+    if (!isMatch && gig.industries && gig.industries.length > 0) {
+      isMatch = agent.professionalSummary.industries.some((agentIndustryId) => {
+        return gig.industries.some(gigIndustryId => 
+          gigIndustryId.toString() === agentIndustryId.toString()
+        );
+      });
+    }
+
+    console.log("Industry matching for gig:", {
+      gigId: gig._id,
+      gigCategory: gig.category,
+      gigIndustries: gig.industries,
+      agentIndustries: agent.professionalSummary.industries,
+      isMatch,
+    });
+
+    return isMatch;
+  });
+
+  console.log("Industry matches found:", {
+    total: industryMatches.length,
+    matches: industryMatches.map((m) => ({
+      gigId: m._id,
+      category: m.category,
+    })),
+  });
+
+  // Calculer les scores uniquement pour les gigs qui ont la même industrie
+  const allMatches = industryMatches.map((gig) => {
+    const matchResult = calculateMatchScore(agent, gig, finalWeights);
+    return {
+      agentId: agent._id,
+      gigId: gig._id,
+      score: matchResult.score,
+      matchDetails: matchResult.details,
+    };
+  });
+
+  // Filtrer les matches avec un score minimum
+  const qualifyingMatches = allMatches.filter(
+    (match) => match.score >= minimumScore
+  );
+
+  // Trier par score décroissant
+  const sortedMatches = qualifyingMatches.sort((a, b) => b.score - a.score);
+
+  // Limiter le nombre de résultats
+  const limitedMatches = sortedMatches.slice(0, limit);
+
+  // Calculer les top scores si demandé
+  const topScores = showAllScores
+    ? sortedMatches.slice(0, topScoreCount)
+    : null;
+
+  return {
+    matches: limitedMatches,
+    totalGigs: gigs.length,
+    qualifyingGigs: qualifyingMatches.length,
+    matchCount: limitedMatches.length,
+    totalMatches: allMatches.length,
+    minimumScoreApplied: minimumScore,
+    industryMatches: industryMatches.length,
+    topScores: topScores,
+    topScoresCount: topScores ? topScores.length : 0,
+    totalTopScoresAvailable: qualifyingMatches.length,
+    scoreStats: {
+      highest: Math.max(...allMatches.map((m) => m.score)),
+      average:
+        allMatches.reduce((sum, m) => sum + m.score, 0) / allMatches.length,
+      qualifying: qualifyingMatches.length,
+    },
+  };
+};
+
+/**
+ * Optimise les matches pour assurer la meilleure allocation globale
+ * Version simplifiée de l'algorithme hongrois
+ * @param {Array} agents - Liste des agents
+ * @param {Array} gigs - Liste des gigs
+ * @param {Object} weights - Poids personnalisés
+ * @returns {Array} Liste des matches optimaux
+ */
+export const optimizeMatches = (agents, gigs, weights = {}) => {
+  const matches = [];
+  const matchedAgents = new Set();
+  const matchedGigs = new Set();
+
+  // Sort agents by their overall score potential
+  const agentScores = agents.map((agent) => {
+    const scores = gigs.map(
+      (gig) => calculateMatchScore(agent, gig, weights).score
+    );
+    return {
+      agent,
+      averageScore: scores.reduce((a, b) => a + b, 0) / scores.length,
+    };
+  });
+
+  const sortedAgents = agentScores.sort(
+    (a, b) => b.averageScore - a.averageScore
+  );
+
+  // Match agents to gigs
+  for (const { agent } of sortedAgents) {
+    if (matchedAgents.has(agent._id)) continue;
+
+    const gigMatches = gigs
+      .filter((gig) => !matchedGigs.has(gig._id))
+      .map((gig) => calculateMatchScore(agent, gig, weights))
+      .sort((a, b) => b.score - a.score);
+
+    if (gigMatches.length > 0) {
+      const bestMatch = gigMatches[0];
+      matches.push({
+        agentId: agent._id,
+        gigId: bestMatch.gig._id,
+        score: bestMatch.score,
+        matchDetails: bestMatch.details,
+      });
+      matchedAgents.add(agent._id);
+      matchedGigs.add(bestMatch.gig._id);
+    }
+  }
+
+  return matches;
+};
+
+/**
+ * Formate le score en pourcentage
+ * @param {number} score - Score à formater
+ * @returns {string} Score formaté en pourcentage
  */
 export function formatScore(score) {
   return `${Math.round(score * 100)}%`;
 }
+
+// Fonction utilitaire pour convertir les heures en minutes
+const timeToMinutes = (timeStr) => {
+  if (!timeStr || typeof timeStr !== "string") return 0;
+
+  const [hours, minutes] = timeStr.split(":").map(Number);
+  return (hours || 0) * 60 + (minutes || 0);
+};
+
+export const findMatches = async (
+  entity,
+  candidates,
+  weights,
+  options = {}
+) => {
+  try {
+    console.log("Starting matching process with weights:", weights);
+
+    // Déterminer si on cherche des gigs pour un rep ou des reps pour un gig
+    const isFindingGigs = "experience" in entity;
+    console.log(
+      "Matching type:",
+      isFindingGigs ? "Finding gigs for rep" : "Finding reps for gig"
+    );
+
+    // Poids par défaut incluant l'expérience
+    const defaultWeights = {
+      industry: 0.20,
+      experience: 0.20,
+      skills: 0.20,
+      language: 0.15,
+      region: 0.15,
+      availability: 0.10
+    };
+
+    const finalWeights = { ...defaultWeights, ...weights };
+
+    // Trier les critères par poids décroissant
+    const sortedCriteria = Object.entries(finalWeights)
+      .sort(([, a], [, b]) => b - a)
+      .filter(([, weight]) => weight >= 0.5);
+
+    console.log("Sorted criteria by weight:", sortedCriteria);
+
+    let matchingCandidates = [...candidates];
+    const filterResults = {};
+
+    // Filtrer les candidats selon les critères triés
+    for (const [criterion, weight] of sortedCriteria) {
+      const beforeCount = matchingCandidates.length;
+
+      switch (criterion) {
+        case "experience":
+          matchingCandidates = matchingCandidates.filter((candidate) => {
+            if (isFindingGigs) {
+              // Chercher des gigs pour un rep
+              const repExp = parseInt(entity.professionalSummary?.yearsOfExperience) || 0;
+              const gigExp = parseInt(candidate.seniority?.yearsExperience) || 0;
+              return repExp >= gigExp;
+            } else {
+              // Chercher des reps pour un gig
+              const repExp = parseInt(candidate.professionalSummary?.yearsOfExperience) || 0;
+              const gigExp = parseInt(entity.seniority?.yearsExperience) || 0;
+              return repExp >= gigExp;
+            }
+          });
+          break;
+
+        case "skills":
+          matchingCandidates = matchingCandidates.filter((candidate) => {
+            if (isFindingGigs) {
+              // Chercher des gigs pour un rep
+              const requiredSkills = [
+                ...candidate.skills.professional,
+                ...candidate.skills.technical,
+                ...candidate.skills.soft,
+              ];
+              return requiredSkills.some((skill) =>
+                entity.skills.includes(skill)
+              );
+            } else {
+              // Chercher des reps pour un gig
+              const requiredSkills = [
+                ...entity.skills.professional,
+                ...entity.skills.technical,
+                ...entity.skills.soft,
+              ];
+              return requiredSkills.some((skill) =>
+                candidate.skills.includes(skill)
+              );
+            }
+          });
+          break;
+
+        case "language":
+          matchingCandidates = matchingCandidates.filter((candidate) => {
+            if (isFindingGigs) {
+              // Chercher des gigs pour un rep
+              const repLanguages = entity.personalInfo.languages.map(
+                (lang) => lang.name
+              );
+              const requiredLanguages = candidate.skills.languages.map(
+                (lang) => lang.name
+              );
+              return requiredLanguages.some((lang) =>
+                repLanguages.includes(lang)
+              );
+            } else {
+              // Chercher des reps pour un gig
+              const repLanguages = candidate.personalInfo.languages.map(
+                (lang) => lang.name
+              );
+              const requiredLanguages = entity.skills.languages.map(
+                (lang) => lang.name
+              );
+              return requiredLanguages.some((lang) =>
+                repLanguages.includes(lang)
+              );
+            }
+          });
+          break;
+
+        case "availability":
+          matchingCandidates = matchingCandidates.filter((candidate) => {
+            if (isFindingGigs) {
+              // Chercher des gigs pour un rep
+              const gigSchedule = JSON.parse(candidate.schedule.hours);
+              const repAvailability = entity.availability;
+              return Object.entries(gigSchedule).every(([day, hours]) => {
+                if (!hours) return true;
+                return repAvailability.some(
+                  (avail) =>
+                    avail.day === day &&
+                    avail.startTime <= hours.start &&
+                    avail.endTime >= hours.end
+                );
+              });
+            } else {
+              // Chercher des reps pour un gig
+              const gigSchedule = JSON.parse(entity.schedule.hours);
+              const repAvailability = candidate.availability;
+              return Object.entries(gigSchedule).every(([day, hours]) => {
+                if (!hours) return true;
+                return repAvailability.some(
+                  (avail) =>
+                    avail.day === day &&
+                    avail.startTime <= hours.start &&
+                    avail.endTime >= hours.end
+                );
+              });
+            }
+          });
+          break;
+
+        case "industry":
+          // Ignorer l'industrie car son poids est trop faible
+          break;
+      }
+
+      const afterCount = matchingCandidates.length;
+      filterResults[criterion] = {
+        before: beforeCount,
+        after: afterCount,
+        removed: beforeCount - afterCount,
+      };
+      console.log(
+        `After ${criterion} filtering: ${beforeCount} -> ${afterCount} candidates`
+      );
+    }
+
+    // Calculer les scores de correspondance pour les candidats restants
+    const scoredCandidates = matchingCandidates.map((candidate) => {
+      const { score, details } = calculateMatchScore(
+        isFindingGigs ? entity : candidate,
+        isFindingGigs ? candidate : entity,
+        weights
+      );
+      return {
+        [isFindingGigs ? "gigId" : "repId"]: candidate._id,
+        score,
+        matchDetails: details,
+      };
+    });
+
+    // Trier par score décroissant
+    const sortedMatches = scoredCandidates.sort((a, b) => b.score - a.score);
+
+    // Appliquer le score minimum si spécifié
+    const minimumScore = options.minimumScore || 0.4;
+    const qualifyingMatches = sortedMatches.filter(
+      (match) => match.score >= minimumScore
+    );
+
+    // Limiter le nombre de résultats si spécifié
+    const limit = options.limit || 10;
+    const limitedMatches = qualifyingMatches.slice(0, limit);
+
+    return {
+      matches: limitedMatches,
+      totalCandidates: candidates.length,
+      qualifyingCandidates: qualifyingMatches.length,
+      matchCount: limitedMatches.length,
+      totalMatches: sortedMatches.length,
+      filterResults,
+      weights,
+    };
+  } catch (error) {
+    console.error("Error in findMatches:", error);
+    throw error;
+  }
+};
+
+/**
+ * Convertit les niveaux de langue en scores numériques
+ * @param {string} level - Niveau de langue (A1, A2, B1, B2, C1, C2, Native)
+ * @returns {number} Score entre 0 et 1
+ */
+export const getLanguageLevelScore = (level) => {
+  const levelMap = {
+    'A1': 0.1,  // Débutant
+    'a1': 0.1,  // Débutant
+    'A2': 0.2,  // Élémentaire
+    'a2': 0.2,  // Élémentaire
+    'B1': 0.4,  // Intermédiaire
+    'b1': 0.4,  // Intermédiaire
+    'B2': 0.6,  // Intermédiaire avancé
+    'b2': 0.6,  // Intermédiaire avancé
+    'C1': 0.8,  // Avancé
+    'c1': 0.8,  // Avancé
+    'C2': 1.0,  // Maîtrise
+    'c2': 1.0,  // Maîtrise
+    'Native': 1.0,  // Langue maternelle
+    'native': 1.0,  // Langue maternelle
+    'natif': 1.0,  // Langue maternelle
+    'fluent': 0.9,  // Courant
+    'avancé': 0.8,  // Avancé
+    'advanced': 0.8,  // Avancé
+    'intermediate': 0.5,  // Intermédiaire
+    'intermédiaire': 0.5,  // Intermédiaire
+    'beginner': 0.2,  // Débutant
+    'débutant': 0.2,  // Débutant
+    'conversational': 0.5,  // Conversationnel
+    'professional': 0.8,  // Professionnel
+    'langue maternelle': 1.0,  // Langue maternelle
+    'bonne maîtrise': 0.8,  // Bonne maîtrise
+    'maîtrise professionnelle': 0.6,  // Maîtrise professionnelle
+    'maîtrise limitée': 0.4,  // Maîtrise limitée
+    'maîtrise élémentaire': 0.2,  // Maîtrise élémentaire
+  };
+  return levelMap[level] || 0;
+};
+
+/**
+ * Trouve les agents qui matchent les langues requises pour un gig
+ * Cette fonction compare les langues requises par le gig avec les langues maîtrisées par chaque agent
+ * et retourne uniquement les agents qui satisfont tous les critères linguistiques.
+ * 
+ * @param {Object} gig - Le gig avec ses langues requises dans gig.skills.languages
+ * @param {Array} agents - Liste des agents à évaluer, chacun avec ses langues dans personalInfo.languages
+ * @returns {Array} Liste des agents qui matchent avec leurs scores et détails de matching
+ */
+export const findLanguageMatches = (gig, agents) => {
+  // Vérification des paramètres d'entrée
+  if (!gig?.skills?.languages || !Array.isArray(agents)) return [];
+
+  // Évaluation de chaque agent
+  return agents.map(agent => {
+    // Cas où l'agent n'a pas de langues définies
+    if (!agent?.personalInfo?.languages) {
+      return {
+        agent,
+        score: 0,
+        details: {
+          matchingLanguages: [],
+          missingLanguages: gig.skills.languages,
+          insufficientLanguages: [],
+          matchStatus: "missing_data"
+        }
+      };
+    }
+
+    // Initialisation des tableaux pour stocker les résultats du matching
+    const matchingLanguages = [];    // Langues qui correspondent parfaitement
+    const missingLanguages = [];     // Langues manquantes chez l'agent
+    const insufficientLanguages = []; // Langues présentes mais niveau insuffisant
+
+    // Vérification de chaque langue requise par le gig
+    gig.skills.languages.forEach(gigLang => {
+      const gigLangId = gigLang.language?.toString();
+      const gigLevel = gigLang.proficiency?.toLowerCase();
+
+      // Recherche de la langue chez l'agent par ID
+      const agentLang = agent.personalInfo.languages.find(agentLang => {
+        const agentLangId = agentLang.language?.toString();
+        return agentLangId === gigLangId;
+      });
+
+      // Si la langue n'est pas trouvée chez l'agent
+      if (!agentLang) {
+        missingLanguages.push({
+          languageId: gigLangId,
+          requiredLevel: gigLang.proficiency
+        });
+        return;
+      }
+
+      const agentLevel = agentLang.proficiency?.toLowerCase();
+
+      // Définition des niveaux acceptables pour chaque niveau requis
+      const isLevelMatch = 
+        // Niveau "conversational" : accepte les niveaux professionnels et avancés
+        (gigLevel === "conversational" && 
+          ["professional working", "native or bilingual", "c1", "c2", "b2"].includes(agentLevel)) ||
+        // Niveau "professional" : accepte uniquement les niveaux professionnels et natifs
+        (gigLevel === "professional" && 
+          ["professional working", "native or bilingual", "c1", "c2"].includes(agentLevel)) ||
+        // Niveau "native" : accepte uniquement les niveaux natifs
+        (gigLevel === "native" && 
+          ["native or bilingual", "c2"].includes(agentLevel));
+
+      // Si le niveau correspond, ajouter aux langues matching
+      if (isLevelMatch) {
+        matchingLanguages.push({
+          languageId: gigLangId,
+          requiredLevel: gigLang.proficiency,
+          agentLevel: agentLang.proficiency
+        });
+      } else {
+        // Si le niveau ne correspond pas, ajouter aux langues insuffisantes
+        insufficientLanguages.push({
+          languageId: gigLangId,
+          requiredLevel: gigLang.proficiency,
+          agentLevel: agentLang.proficiency
+        });
+      }
+    });
+
+    // Calculer le score et le statut basé sur les langues qui matchent
+    const totalRequiredLanguages = gig.skills.languages.length;
+    const totalMatchingLanguages = matchingLanguages.length;
+    
+    let score = 0;
+    let matchStatus = "no_match";
+    
+    if (totalMatchingLanguages === 0) {
+      // Aucune langue ne matche
+      score = 0;
+      matchStatus = "no_match";
+    } else if (totalMatchingLanguages === totalRequiredLanguages) {
+      // Toutes les langues matchent
+      score = 1;
+      matchStatus = "perfect_match";
+    } else {
+      // Au moins une langue matche, mais pas toutes
+      score = totalMatchingLanguages / totalRequiredLanguages;
+      matchStatus = "partial_match";
+    }
+
+    // Retourner le résultat pour cet agent
+    return {
+      agent,
+      score: score,
+      details: {
+        matchingLanguages,
+        missingLanguages,
+        insufficientLanguages,
+        matchStatus: matchStatus
+      }
+    };
+  }).filter(match => match.score > 0); // Garder les agents avec au moins une langue commune
+};

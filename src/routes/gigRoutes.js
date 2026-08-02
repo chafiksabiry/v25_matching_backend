@@ -1,21 +1,34 @@
 import express from 'express';
 import {
-  getAllGigs,
-  getGigById,
   createGig,
+  getGigs,
+  getGig,
   updateGig,
-  deleteGig
+  deleteGig,
+  findGigsForAgent,
+  findAgentsForGig,
+  saveGigAvailability,
+  getGigAvailability,
+  updateGigAvailability
 } from '../controllers/gigController.js';
 
 const router = express.Router();
 
-router.route('/')
-  .get(getAllGigs)
-  .post(createGig);
+router.post('/', createGig);
+router.get('/', getGigs);
+router.get('/:id', getGig);
+router.put('/:id', updateGig);
+router.delete('/:id', deleteGig);
 
-router.route('/:id')
-  .get(getGigById)
-  .put(updateGig)
-  .delete(deleteGig);
+// Trouver des gigs pour un agent
+router.post('/find-gigs-for-agent', findGigsForAgent);
 
-export default router;
+// Trouver des agents pour un gig
+router.post('/find-agents-for-gig', findAgentsForGig);
+
+// Routes pour l'availability (schedule)
+router.post('/:id/availability', saveGigAvailability);
+router.get('/:id/availability', getGigAvailability);
+router.put('/:id/availability', updateGigAvailability);
+
+export default router; 

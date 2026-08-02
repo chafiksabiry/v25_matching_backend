@@ -1,20 +1,23 @@
 import express from 'express';
-import http from 'http';
-import mongoose from 'mongoose';
 import cors from 'cors';
+import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import gigRoutes from './routes/gigRoutes.js';
-import matchRoutes from './routes/matchRoutes.js';
 import agentRoutes from './routes/agentRoutes.js';
+import matchRoutes from './routes/matchRoutes.js';
 import gigAgentRoutes from './routes/gigAgentRoutes.js';
 import gigMatchingWeightsRoutes from './routes/gigMatchingWeightsRoutes.js';
 import enrollmentRoutes from './routes/enrollmentRoutes.js';
 import timeSlotRoutes from './routes/timeSlotRoutes.js';
 import slotRoutes from './routes/slotRoutes.js';
-import { setupEnrollmentWebSocket } from './websocket/enrollmentUpdates.js';
+
+// Load environment variables
 dotenv.config();
 
 const app = express();
+
+// Set up trust proxy for secure handling of headers
+app.set('trust proxy', true);
 
 const allowedOrigins = [
   'https://harx.ai',
@@ -51,10 +54,6 @@ const corsAllowedHeaders = [
   'X-File-Name',
 ];
 
-// Explicit CORS headers first (same pattern as gigs backend).
-// The `cors` package alone was returning Allow-Credentials / Allow-Methods
-// without Access-Control-Allow-Origin on Railway preflights, which blocks
-// harx26harxconnection-dev.netlify.app (Training + Marketplace enrolled gigs).
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (origin && isOriginAllowed(origin)) {
@@ -80,7 +79,6 @@ const corsOptions = {
   origin(origin, callback) {
     if (!origin) return callback(null, true);
     if (isOriginAllowed(origin)) {
-      // Reflect the exact origin string when credentials are enabled.
       return callback(null, origin);
     }
     console.log('CORS blocked origin:', origin);
@@ -93,33 +91,35 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
+// Middleware
 app.use(express.json());
 
 // Routes
 app.use('/api/gigs', gigRoutes);
+app.use('/api/agents', agentRoutes);
 app.use('/api/matches', matchRoutes);
-app.use('/api/reps', agentRoutes);
 app.use('/api/gig-agents', gigAgentRoutes);
 app.use('/api/gig-matching-weights', gigMatchingWeightsRoutes);
 app.use('/api/enrollment', enrollmentRoutes);
-app.use('/api/agents', agentRoutes);
 app.use('/api/time-slots', timeSlotRoutes);
 app.use('/api/slots', slotRoutes);
 
-// MongoDB Connection
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/matching';
-mongoose.connect(MONGODB_URI)
-  .then(() => console.log('Connected to MongoDB'))
-  .catch((error) => console.error('MongoDB connection error:', error));
+// MongoDB connection
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => {
+    console.log('Connected to MongoDB');
+  })
+  .catch((error) => {
+    console.error('MongoDB connection error:', error);
+  });
 
-// Create HTTP server so we can attach the WebSocket server on the same port.
-const server = http.createServer(app);
-
-// Live enrollment status updates (rep marketplace: PENDING → Enrolled).
-setupEnrollmentWebSocket(server);
-
-// Start server
-const PORT = process.env.PORT || 5011;
-server.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT} (HTTP + WS /enrollment-updates)`);
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ message: 'Something went wrong!' });
 });
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+}); 

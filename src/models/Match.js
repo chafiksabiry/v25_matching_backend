@@ -52,9 +52,9 @@ const matchDetailsSchema = new mongoose.Schema({
 });
 
 const matchSchema = new mongoose.Schema({
-  repId: {
+  agentId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Rep',
+    ref: 'Agent',
     required: true
   },
   gigId: {
@@ -81,8 +81,8 @@ const matchSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Ensure a rep can only have one active match per gig
-matchSchema.index({ repId: 1, gigId: 1 }, { unique: true });
+// Ensure an agent can only have one active match per gig
+matchSchema.index({ agentId: 1, gigId: 1 }, { unique: true });
 
 const Match = mongoose.model('Match', matchSchema);
 

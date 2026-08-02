@@ -1,119 +1,137 @@
+import { model, Schema } from 'mongoose';
 import mongoose from 'mongoose';
 
-const gigSchema = new mongoose.Schema({
-  companyId: {
-    type: String,
-    required: true
-  },
-  companyName: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  title: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  description: {
-    type: String,
-    required: true
-  },
-  industry: {
-    type: String,
-    required: true,
-    enum: [
-      'Technology',
-      'Healthcare',
-      'Finance',
-      'Retail',
-      'Manufacturing',
-      'Education',
-      'Real Estate',
-      'Hospitality',
-      'Automotive',
-      'Entertainment'
-    ]
-  },
-  requiredSkills: [{
-    type: String,
-    enum: [
-      'Cold Calling',
-      'Lead Generation',
-      'Sales Closing',
-      'Customer Service',
-      'Product Demonstration',
-      'Negotiation',
-      'Relationship Building',
-      'Technical Support',
-      'Market Research',
-      'Social Media Marketing'
-    ]
-  }],
-  preferredLanguages: [{
-    type: String,
-    enum: [
-      'English',
-      'Spanish',
-      'French',
-      'German',
-      'Mandarin',
-      'Japanese',
-      'Portuguese',
-      'Arabic',
-      'Hindi',
-      'Russian'
-    ]
-  }],
-  requiredExperience: {
-    type: Number,
-    required: true,
-    min: 0,
-    max: 10
-  },
-  expectedConversionRate: {
-    type: Number,
-    required: true,
-    min: 0,
-    max: 1
-  },
-  compensation: {
-    base: {
-      type: Number,
-      required: true
+const GigSchema = new Schema(
+  {
+    title: { type: String, required: false },
+    description: { type: String, required: false },
+    category: { type: String, required: false },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    companyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Company', default: null },
+    destination_zone: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Country',
+      required: false
+    },
+    activities: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Activity', required: false }],
+    industries: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Industry', required: false }],
+    seniority: {
+      level: { type: String, required: false },
+      yearsExperience: { type: String, required: false },
+    },
+    skills: {
+      professional: [{
+        skill: { type: mongoose.Schema.Types.ObjectId, ref: 'ProfessionalSkill', required: false },
+        level: { type: Number, required: false },
+        details: { type: String, required: false }
+      }],
+      technical: [{
+        skill: { type: mongoose.Schema.Types.ObjectId, ref: 'TechnicalSkill', required: false },
+        level: { type: Number, required: false },
+        details: { type: String, required: false }
+      }],
+      soft: [{
+        skill: { type: mongoose.Schema.Types.ObjectId, ref: 'SoftSkill', required: false },
+        level: { type: Number, required: false },
+        details: { type: String, required: false }
+      }],
+      languages: [{
+        language: { type: mongoose.Schema.Types.ObjectId, ref: 'Language', required: false },
+        proficiency: { type: String, required: false },
+        iso639_1: { type: String, required: false }
+      }]
+    },
+    availability: {
+      schedule: [{
+        day: { type: String, required: false },
+        hours: {
+          start: { type: String, required: false },
+          end: { type: String, required: false }
+        }
+      }],
+      time_zone: { type: mongoose.Schema.Types.ObjectId, ref: 'Timezone', required: false },
+      flexibility: [{ type: String }],
+      minimumHours: {
+        daily: { type: Number, required: false },
+        weekly: { type: Number, required: false },
+        monthly: { type: Number, required: false }
+      }
     },
     commission: {
-      type: Number,
-      required: true
-    }
-  },
-  duration: {
-    startDate: {
-      type: Date,
+      commission_per_call: { type: Number, required: false },
+      bonusAmount: { type: String, required: false },
+      currency: { type: mongoose.Schema.Types.ObjectId, ref: 'Currency', required: false },
+      minimumVolume: {
+        amount: { type: String, required: false },
+        period: { type: String, required: false },
+        unit: { type: String, required: false },
+      },
+      transactionCommission: { type: Number, required: false },
+      additionalDetails: { type: String, required: false },
+    },
+    leads: {
+      types: [
+        {
+          type: { type: String, enum: ['hot', 'warm', 'cold'] },
+          percentage: Number,
+          description: String,
+          conversionRate: Number,
+        },
+      ],
+      sources: [{ type: String }],
+    },
+    team: {
+      size: { type: String, required: false },
+      structure: [
+        {
+          roleId: String,
+          count: Number,
+          seniority: {
+            level: String,
+            yearsExperience: String,
+          },
+        },
+      ],
+      territories: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Country', required: false }],
+    },
+    highlights: [{ type: String, required: false }],
+    deliverables: [{ type: String, required: false }],
+    // 🆕 Agents tracking with status
+    agents: [{
+      agentId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Agent',
+        required: true
+      },
+      gigAgentId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'GigAgent',
+        required: false
+      },
+      status: {
+        type: String,
+        enum: ['invited', 'requested', 'enrolled', 'rejected', 'expired', 'cancelled', 'archived'],
+        required: true
+      },
+      enrollmentDate: Date,
+      invitationDate: Date,
+      updatedAt: {
+        type: Date,
+        default: Date.now
+      }
+    }],
+    status: {
+      type: String,
+      enum: ['to_activate', 'active', 'inactive', 'archived'],
+      default: 'to_activate',
       required: true
     },
-    endDate: {
-      type: Date,
-      required: true
-    }
   },
-  timezone: {
-    type: String,
-    required: true
-  },
-  targetRegion: {
-    type: String,
-    required: true
-  },
-  status: {
-    type: String,
-    enum: ['open', 'in-progress', 'completed', 'cancelled'],
-    default: 'open'
-  }
-}, {
-  timestamps: true
-});
+  { timestamps: true }
+);
 
-const Gig = mongoose.model('Gig', gigSchema);
+
+const Gig = model('Gig', GigSchema);
 
 export default Gig;
+export { GigSchema };
