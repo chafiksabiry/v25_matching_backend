@@ -51,8 +51,10 @@ const corsAllowedHeaders = [
   'X-File-Name',
 ];
 
-// Explicit CORS headers first so Railway preflights always include ACAO.
-// Production deploys from `main`; static origin arrays were missing Netlify shell.
+// Explicit CORS headers first (same pattern as gigs backend).
+// The `cors` package alone was returning Allow-Credentials / Allow-Methods
+// without Access-Control-Allow-Origin on Railway preflights, which blocks
+// harx26harxconnection-dev.netlify.app (Training + Marketplace enrolled gigs).
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (origin && isOriginAllowed(origin)) {
@@ -78,6 +80,7 @@ const corsOptions = {
   origin(origin, callback) {
     if (!origin) return callback(null, true);
     if (isOriginAllowed(origin)) {
+      // Reflect the exact origin string when credentials are enabled.
       return callback(null, origin);
     }
     console.log('CORS blocked origin:', origin);
