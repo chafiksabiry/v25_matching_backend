@@ -10,6 +10,14 @@ const activitySchema = new mongoose.Schema({
     type: String,
     required: false
   },
+  name_i18n: {
+    en: { type: String },
+    fr: { type: String },
+  },
+  description_i18n: {
+    en: { type: String },
+    fr: { type: String },
+  },
   category: {
     type: String,
     required: false
