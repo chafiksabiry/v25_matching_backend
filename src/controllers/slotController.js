@@ -198,33 +198,40 @@ export const reserveSlot = async (req, res) => {
             return res.status(400).json({ message: 'Slot is full' });
         }
 
-        // Check if agent already reserved this specific slot
-        const existingRes = await ReservationSlot.findOne({ slotId, agentId: finalAgentId, status: 'reserved' });
+        // Check if agent already reserved this occurrence (recurring slots reuse slotId).
+        const existingRes = await ReservationSlot.findOne({
+            slotId,
+            agentId: finalAgentId,
+            status: 'reserved',
+            $or: [{ reservationDate: occurrenceDate }, { date: occurrenceDate }],
+        });
         if (existingRes) return res.status(400).json({ message: 'Agent already reserved this slot' });
 
-        // Check for overlapping reservations on the same calendar day
+        // Proper interval overlap on the same calendar day: aStart < bEnd && bStart < aEnd
+        // (touching endpoints e.g. 10:00–11:00 then 11:00–12:00 do NOT conflict).
         const overlapping = await ReservationSlot.findOne({
             $and: [
                 { agentId: finalAgentId },
                 { status: 'reserved' },
                 { $or: [{ reservationDate: occurrenceDate }, { date: occurrenceDate }] },
-                {
-                    $or: [
-                        { startTime: { $lt: slot.endTime, $gte: slot.startTime } },
-                        { endTime: { $gt: slot.startTime, $lte: slot.endTime } }
-                    ]
-                }
-            ]
-        });
+                { startTime: { $lt: slot.endTime } },
+                { endTime: { $gt: slot.startTime } },
+            ],
+        }).populate('gigId', 'title');
 
         if (overlapping) {
+            const gigDoc = overlapping.gigId && typeof overlapping.gigId === 'object'
+                ? overlapping.gigId
+                : null;
             return res.status(400).json({
                 message: 'You have an overlapping reservation',
                 conflictingSlot: {
                     date: overlapping.reservationDate || overlapping.date,
                     startTime: overlapping.startTime,
-                    endTime: overlapping.endTime
-                }
+                    endTime: overlapping.endTime,
+                    gigId: gigDoc?._id || overlapping.gigId,
+                    gigTitle: gigDoc?.title || undefined,
+                },
             });
         }
 
