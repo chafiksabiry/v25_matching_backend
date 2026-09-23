@@ -272,7 +272,11 @@ const calculateExperienceScore = (agent, gig) => {
 // Get all matches
 export const getAllMatches = async (req, res) => {
   try {
-    const matches = await Match.find()
+    const filter = {};
+    if (req.query.agentId && mongoose.Types.ObjectId.isValid(String(req.query.agentId))) {
+      filter.agentId = req.query.agentId;
+    }
+    const matches = await Match.find(filter)
       .populate('agentId')
       .populate({
         path: 'gigId',
