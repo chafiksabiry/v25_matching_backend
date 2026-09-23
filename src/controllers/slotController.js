@@ -58,6 +58,33 @@ function resolveReservationOccurrenceDate(slot, bodyReservationDate) {
     return { occurrenceDate: bodyRaw };
 }
 
+function reservationOccurrenceKey(r) {
+    const raw = String(r?.reservationDate || r?.date || '').trim();
+    return ISO_DATE_RE.test(raw) ? raw : '';
+}
+
+/** Live reserved seats for a slot. Recurring templates are counted per calendar day. */
+async function countActiveReservations(slotId, occurrenceDate) {
+    const filter = { slotId, status: 'reserved' };
+    if (occurrenceDate && ISO_DATE_RE.test(occurrenceDate)) {
+        filter.$or = [{ reservationDate: occurrenceDate }, { date: occurrenceDate }];
+    }
+    return ReservationSlot.countDocuments(filter);
+}
+
+async function syncSlotOccupancy(slot, occurrenceDate) {
+    if (!slot) return 0;
+    const concrete = isConcreteSlotDate(slot.date);
+    const count = await countActiveReservations(
+        slot._id,
+        concrete ? undefined : occurrenceDate
+    );
+    slot.reservedCount = count;
+    slot.status = count >= (slot.capacity || 0) ? 'full' : 'available';
+    await slot.save();
+    return count;
+}
+
 /**
  * Generate slots automatically for a Gig based on parameters
  * POST /api/slots/generate
@@ -153,7 +180,33 @@ export const getSlots = async (req, res) => {
                 .sort({ date: 1, startTime: 1 });
         }
 
-        res.status(200).json(slots);
+        const slotDocs = Array.isArray(slots) ? slots : [];
+        const slotIds = slotDocs.map((s) => s._id).filter(Boolean);
+        const active = slotIds.length
+            ? await ReservationSlot.find({ slotId: { $in: slotIds }, status: 'reserved' })
+                .select('slotId reservationDate date')
+                .lean()
+            : [];
+
+        const payload = slotDocs.map((s) => {
+            const obj = typeof s.toObject === 'function' ? s.toObject() : { ...s };
+            const sid = String(s._id);
+            const mine = active.filter((r) => String(r.slotId) === sid);
+            const occupancyByDate = {};
+            for (const r of mine) {
+                const key = reservationOccurrenceKey(r);
+                if (!key) continue;
+                occupancyByDate[key] = (occupancyByDate[key] || 0) + 1;
+            }
+            if (isConcreteSlotDate(s.date)) {
+                obj.reservedCount = mine.length;
+                obj.status = obj.reservedCount >= (s.capacity || 0) ? 'full' : 'available';
+            }
+            obj.occupancyByDate = occupancyByDate;
+            return obj;
+        });
+
+        res.status(200).json(payload);
     } catch (error) {
         res.status(500).json({ message: 'Error fetching slots', error: error.message });
     }
@@ -194,7 +247,11 @@ export const reserveSlot = async (req, res) => {
             console.error('Error validating past slot reservation:', err);
         }
 
-        if (slot.reservedCount >= slot.capacity) {
+        const liveCount = await countActiveReservations(
+            slot._id,
+            isConcreteSlotDate(slot.date) ? undefined : occurrenceDate
+        );
+        if (liveCount >= slot.capacity) {
             return res.status(400).json({ message: 'Slot is full' });
         }
 
@@ -253,17 +310,11 @@ export const reserveSlot = async (req, res) => {
             { upsert: true, new: true, setDefaultsOnInsert: true }
         );
 
-        // Update Slot
-        slot.reservedCount += 1;
-        if (slot.reservedCount >= slot.capacity) slot.status = 'full';
-
-        // Add reference ID
         if (!slot.reservations) slot.reservations = [];
         if (!slot.reservations.some(id => id.toString() === reservation._id.toString())) {
             slot.reservations.push(reservation._id);
         }
-
-        await slot.save();
+        await syncSlotOccupancy(slot, occurrenceDate);
 
         const populatedSlot = await Slot.findById(slotId).populate('gigId').populate('reservations');
         res.status(200).json({ message: 'Slot reserved successfully', slot: populatedSlot, reservation });
@@ -292,18 +343,15 @@ export const cancelReservation = async (req, res) => {
         reservation.status = 'cancelled';
         await reservation.save();
 
-        // Update Slot
         const slot = await Slot.findById(reservation.slotId);
         if (slot) {
-            slot.reservedCount = Math.max(0, slot.reservedCount - 1);
-            if (slot.reservedCount < slot.capacity) slot.status = 'available';
-
-            // Remove reference ID
             if (slot.reservations) {
                 slot.reservations = slot.reservations.filter(id => id.toString() !== reservationId.toString());
             }
-
-            await slot.save();
+            await syncSlotOccupancy(
+                slot,
+                reservationOccurrenceKey(reservation) || undefined
+            );
         }
 
         res.status(200).json({ message: 'Reservation cancelled successfully', reservation, slot });
