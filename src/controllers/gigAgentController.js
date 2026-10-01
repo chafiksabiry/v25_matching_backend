@@ -1718,32 +1718,56 @@ export const agentRejectInvitation = async (req, res) => {
     const agentId = gigAgent.agentId;
     const gigId = gigAgent.gigId;
 
-    // 🆕 Supprimer complètement la relation au lieu de la marquer comme rejected
+    // Keep the enrollment in history with status=rejected (do not delete).
+    await gigAgent.rejectEnrollment(req.body?.notes || '');
+
     try {
-      // 1. Supprimer de Agent.gigs
-      await Agent.findByIdAndUpdate(
+      await syncAgentGigRelationship(
         agentId,
-        { $pull: { gigs: { gigId: gigId } } }
-      );
-
-      // 2. Supprimer de Gig.agents
-      await Gig.findByIdAndUpdate(
         gigId,
-        { $pull: { agents: { agentId: agentId } } }
+        'rejected',
+        { gigAgentId: gigAgent._id }
       );
-
-      // 3. Supprimer le document GigAgent
-      await GigAgent.findByIdAndDelete(req.params.id);
-
-      console.log(`✅ Invitation rejected and deleted: Agent ${agentId} <-> Gig ${gigId}`);
-
-    } catch (deleteError) {
-      console.error('Erreur lors de la suppression:', deleteError);
-      throw deleteError;
+    } catch (syncError) {
+      console.error('Erreur lors de la synchronisation (reject invitation):', syncError);
     }
 
+    let companyId;
+    try {
+      const gig = await Gig.findById(gigId).select('companyId');
+      companyId = gig?.companyId ? String(gig.companyId) : undefined;
+    } catch {
+      companyId = undefined;
+    }
+
+    try {
+      broadcastEnrollmentUpdate({
+        type: 'enrollment_update',
+        repId: String(agentId),
+        gigId: String(gigId),
+        companyId,
+        status: 'invitation_rejected',
+      });
+    } catch (wsError) {
+      console.error('[Enrollment WS] broadcast (invitation_rejected) failed:', wsError);
+    }
+
+    const updatedGigAgent = await GigAgent.findById(gigAgent._id)
+      .populate('agentId')
+      .populate({
+        path: 'gigId',
+        populate: [
+          { path: 'commission.currency' },
+          { path: 'destination_zone' },
+          { path: 'availability.time_zone' }
+        ]
+      });
+
+    console.log(`✅ Invitation rejected and kept in history: Agent ${agentId} <-> Gig ${gigId}`);
+
     res.status(StatusCodes.OK).json({
-      message: 'Invitation rejected and removed successfully'
+      message: 'Invitation rejected successfully',
+      gigAgent: updatedGigAgent
     });
 
   } catch (error) {
