@@ -57,9 +57,14 @@ const reservationSlotSchema = new mongoose.Schema({
     timestamps: true
 });
 
-// Index for quick lookup and preventing duplicates (one agent per slot)
-reservationSlotSchema.index({ slotId: 1, agentId: 1 }, { unique: true });
-// Index for finding agent's reservations on a specific date (for overlaps)
+// One reservation per agent per slot occurrence (recurring templates share slotId
+// across weeks — reservationDate distinguishes Mon week N from Mon week N+1).
+reservationSlotSchema.index(
+    { slotId: 1, agentId: 1, reservationDate: 1 },
+    { unique: true, name: 'slot_agent_reservationDate_unique' }
+);
+// Lookups for overlap checks on a given calendar day
+reservationSlotSchema.index({ agentId: 1, reservationDate: 1, startTime: 1 });
 reservationSlotSchema.index({ agentId: 1, date: 1, startTime: 1 });
 
 const ReservationSlot = mongoose.model('ReservationSlot', reservationSlotSchema);

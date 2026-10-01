@@ -292,10 +292,26 @@ export const reserveSlot = async (req, res) => {
             });
         }
 
-        // Create or reactivate Reservation (handles the unique index on {slotId, agentId})
-        const reservation = await ReservationSlot.findOneAndUpdate(
-            { slotId, agentId: finalAgentId },
-            {
+        // Upsert by (slotId, agentId, reservationDate) so each week of a recurring
+        // template is its own row — the old unique (slotId, agentId) overwrote prior weeks.
+        let reservation = await ReservationSlot.findOne({
+            slotId,
+            agentId: finalAgentId,
+            $or: [{ reservationDate: occurrenceDate }, { date: occurrenceDate }],
+        });
+
+        if (reservation) {
+            reservation.status = 'reserved';
+            reservation.gigId = slot.gigId;
+            reservation.date = occurrenceDate;
+            reservation.reservationDate = occurrenceDate;
+            reservation.startTime = slot.startTime;
+            reservation.endTime = slot.endTime;
+            reservation.duration = slot.duration;
+            reservation.notes = notes || reservation.notes || '';
+            await reservation.save();
+        } else {
+            reservation = await ReservationSlot.create({
                 slotId,
                 agentId: finalAgentId,
                 gigId: slot.gigId,
@@ -305,10 +321,9 @@ export const reserveSlot = async (req, res) => {
                 endTime: slot.endTime,
                 duration: slot.duration,
                 notes: notes || '',
-                status: 'reserved'
-            },
-            { upsert: true, new: true, setDefaultsOnInsert: true }
-        );
+                status: 'reserved',
+            });
+        }
 
         if (!slot.reservations) slot.reservations = [];
         if (!slot.reservations.some(id => id.toString() === reservation._id.toString())) {
