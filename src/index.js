@@ -109,7 +109,31 @@ app.use('/api/slots', slotRoutes);
 // MongoDB Connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/matching';
 mongoose.connect(MONGODB_URI)
-  .then(() => console.log('Connected to MongoDB'))
+  .then(async () => {
+    console.log('Connected to MongoDB');
+    // Migrate ReservationSlot unique key: (slotId, agentId) → (slotId, agentId, reservationDate)
+    // so each week of a recurring template keeps its own reservation row.
+    try {
+      const ReservationSlot = (await import('./models/ReservationSlot.js')).default;
+      const indexes = await ReservationSlot.collection.indexes();
+      const old = indexes.find(
+        (idx) =>
+          idx.unique &&
+          idx.key &&
+          idx.key.slotId === 1 &&
+          idx.key.agentId === 1 &&
+          idx.key.reservationDate == null
+      );
+      if (old?.name) {
+        await ReservationSlot.collection.dropIndex(old.name);
+        console.log(`Dropped legacy ReservationSlot index: ${old.name}`);
+      }
+      await ReservationSlot.syncIndexes();
+      console.log('ReservationSlot indexes synced');
+    } catch (idxErr) {
+      console.warn('ReservationSlot index migration skipped:', idxErr?.message || idxErr);
+    }
+  })
   .catch((error) => console.error('MongoDB connection error:', error));
 
 // Create HTTP server so we can attach the WebSocket server on the same port.
