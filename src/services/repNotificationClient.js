@@ -62,7 +62,9 @@ export async function persistEnrollmentNotification(input) {
         title,
         message,
         ...(gigId ? { gigId } : {}),
-        actionPath: input.actionPath || '/gigs',
+        actionPath:
+          input.actionPath ||
+          (gigId ? `/gig/${gigId}` : '/marketplace'),
         read: false,
       },
       {
@@ -110,6 +112,7 @@ export function notifyRepEnrollment({ repId, gigId, companyId, status }) {
         repId: payload.repId,
         gigId: payload.gigId,
         status: payload.status,
+        actionPath: payload.gigId ? `/gig/${payload.gigId}` : '/marketplace',
       }),
   };
 }
