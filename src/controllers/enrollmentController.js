@@ -7,6 +7,8 @@ import Country from '../models/Country.js';
 import { StatusCodes } from 'http-status-codes';
 import { sendEnrollmentInvitation as sendEmailInvitation, sendEnrollmentNotification as sendEmailNotification } from '../services/emailService.js';
 import { syncAgentGigRelationship } from '../utils/relationshipSync.js';
+import { broadcastEnrollmentUpdate } from '../websocket/enrollmentUpdates.js';
+import { persistEnrollmentNotification } from '../services/repNotificationClient.js';
 
 // Envoyer une invitation d'enrôlement à un agent
 export const sendEnrollmentInvitation = async (req, res) => {
@@ -750,6 +752,31 @@ export const acceptEnrollmentRequest = async (req, res) => {
       console.error('Erreur lors de l\'envoi de la notification:', emailError);
     }
 
+    const repId = String(gigAgent.agentId?._id || gigAgent.agentId);
+    const gigIdStr = String(gigAgent.gigId?._id || gigAgent.gigId);
+    const companyId = gigAgent.gigId?.companyId ? String(gigAgent.gigId.companyId) : undefined;
+    try {
+      broadcastEnrollmentUpdate({
+        type: 'enrollment_update',
+        repId,
+        gigId: gigIdStr,
+        companyId,
+        status: 'enrolled'
+      });
+    } catch (wsError) {
+      console.error('[Enrollment WS] acceptEnrollmentRequest broadcast failed:', wsError);
+    }
+    try {
+      await persistEnrollmentNotification({
+        repId,
+        gigId: gigIdStr,
+        status: 'enrolled',
+        actionPath: '/gigs',
+      });
+    } catch (notifError) {
+      console.error('[Enrollment] acceptEnrollmentRequest persist failed:', notifError);
+    }
+
     res.status(StatusCodes.OK).json({
       message: 'Demande d\'enrôlement acceptée avec succès',
       gigAgent: {
@@ -803,6 +830,31 @@ export const rejectEnrollmentRequest = async (req, res) => {
       await sendEmailNotification(gigAgent.agentId, gigAgent.gigId, 'rejected');
     } catch (emailError) {
       console.error('Erreur lors de l\'envoi de la notification:', emailError);
+    }
+
+    const repId = String(gigAgent.agentId?._id || gigAgent.agentId);
+    const gigIdStr = String(gigAgent.gigId?._id || gigAgent.gigId);
+    const companyId = gigAgent.gigId?.companyId ? String(gigAgent.gigId.companyId) : undefined;
+    try {
+      broadcastEnrollmentUpdate({
+        type: 'enrollment_update',
+        repId,
+        gigId: gigIdStr,
+        companyId,
+        status: 'rejected'
+      });
+    } catch (wsError) {
+      console.error('[Enrollment WS] rejectEnrollmentRequest broadcast failed:', wsError);
+    }
+    try {
+      await persistEnrollmentNotification({
+        repId,
+        gigId: gigIdStr,
+        status: 'rejected',
+        actionPath: '/gigs',
+      });
+    } catch (notifError) {
+      console.error('[Enrollment] rejectEnrollmentRequest persist failed:', notifError);
     }
 
     res.status(StatusCodes.OK).json({
