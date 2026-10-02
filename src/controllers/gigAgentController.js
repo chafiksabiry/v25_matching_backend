@@ -227,6 +227,8 @@ export const createGigAgent = async (req, res) => {
           gigId,
           companyId: gig.companyId,
           gigTitle: gig.title,
+          enrollmentId: savedGigAgent._id,
+          invitationSentAt: savedGigAgent.invitationSentAt || new Date(),
         });
         broadcastEnrollmentUpdate(inviteNotify.payload);
         await inviteNotify.persist();
@@ -325,6 +327,8 @@ export const createGigAgent = async (req, res) => {
         gigId,
         companyId: gig.companyId,
         gigTitle: gig.title,
+        enrollmentId: savedGigAgent._id,
+        invitationSentAt: savedGigAgent.invitationSentAt || new Date(),
       });
       broadcastEnrollmentUpdate(inviteNotify.payload);
       await inviteNotify.persist();

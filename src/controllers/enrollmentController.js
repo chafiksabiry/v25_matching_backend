@@ -86,6 +86,8 @@ export const sendEnrollmentInvitation = async (req, res) => {
         gigId,
         companyId: gig.companyId,
         gigTitle: gig.title,
+        enrollmentId: gigAgent._id,
+        invitationSentAt: gigAgent.invitationSentAt || new Date(),
       });
       broadcastEnrollmentUpdate(inviteNotify.payload);
       await inviteNotify.persist();
