@@ -8,7 +8,7 @@ import { StatusCodes } from 'http-status-codes';
 import { sendEnrollmentInvitation as sendEmailInvitation, sendEnrollmentNotification as sendEmailNotification } from '../services/emailService.js';
 import { syncAgentGigRelationship } from '../utils/relationshipSync.js';
 import { broadcastEnrollmentUpdate } from '../websocket/enrollmentUpdates.js';
-import { persistEnrollmentNotification } from '../services/repNotificationClient.js';
+import { persistEnrollmentNotification, notifyRepInvitation } from '../services/repNotificationClient.js';
 
 // Envoyer une invitation d'enrôlement à un agent
 export const sendEnrollmentInvitation = async (req, res) => {
@@ -78,6 +78,19 @@ export const sendEnrollmentInvitation = async (req, res) => {
       return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
         message: 'Invitation créée mais erreur lors de l\'envoi de l\'email'
       });
+    }
+
+    try {
+      const inviteNotify = await notifyRepInvitation({
+        repId: agentId,
+        gigId,
+        companyId: gig.companyId,
+        gigTitle: gig.title,
+      });
+      broadcastEnrollmentUpdate(inviteNotify.payload);
+      await inviteNotify.persist();
+    } catch (notifError) {
+      console.error('[Enrollment] sendEnrollmentInvitation notify failed:', notifError);
     }
 
     res.status(StatusCodes.CREATED).json({

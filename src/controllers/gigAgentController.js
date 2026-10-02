@@ -10,7 +10,7 @@ import { StatusCodes } from 'http-status-codes';
 import { sendMatchingNotification } from '../services/emailService.js';
 import { syncAgentGigRelationship, getAgentGigsWithDetails, getGigAgentsWithDetails } from '../utils/relationshipSync.js';
 import { broadcastEnrollmentUpdate } from '../websocket/enrollmentUpdates.js';
-import { persistEnrollmentNotification } from '../services/repNotificationClient.js';
+import { persistEnrollmentNotification, notifyRepInvitation } from '../services/repNotificationClient.js';
 
 // Get all gig agents
 export const getAllGigAgents = async (req, res) => {
@@ -220,6 +220,20 @@ export const createGigAgent = async (req, res) => {
           ]
         });
 
+      // 🔔 WS + DB notification so the REP sees the invite live (marketplace + bell)
+      try {
+        const inviteNotify = await notifyRepInvitation({
+          repId: agentId,
+          gigId,
+          companyId: gig.companyId,
+          gigTitle: gig.title,
+        });
+        broadcastEnrollmentUpdate(inviteNotify.payload);
+        await inviteNotify.persist();
+      } catch (notifError) {
+        console.error('[Enrollment] invite notification failed:', notifError);
+      }
+
       return res.status(StatusCodes.OK).json({
         message: 'Invitation renvoyée avec succès',
         gigAgent: populatedGigAgent,
@@ -303,6 +317,20 @@ export const createGigAgent = async (req, res) => {
           { path: 'companyId', select: 'name logo' }
         ]
       });
+
+    // 🔔 WS + DB notification so the REP sees the invite live (marketplace + bell)
+    try {
+      const inviteNotify = await notifyRepInvitation({
+        repId: agentId,
+        gigId,
+        companyId: gig.companyId,
+        gigTitle: gig.title,
+      });
+      broadcastEnrollmentUpdate(inviteNotify.payload);
+      await inviteNotify.persist();
+    } catch (notifError) {
+      console.error('[Enrollment] invite notification failed:', notifError);
+    }
 
     res.status(StatusCodes.CREATED).json({
       message: 'Assignation créée avec succès',
