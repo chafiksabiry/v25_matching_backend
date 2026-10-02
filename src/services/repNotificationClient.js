@@ -20,11 +20,20 @@ function resolveId(value) {
   return String(value);
 }
 
-function enrollmentCopy(status) {
+function enrollmentCopy(status, gigTitle) {
+  const titleSuffix = gigTitle ? ` (${gigTitle})` : '';
+  if (status === 'invited') {
+    return {
+      title: 'Nouvelle invitation',
+      message: gigTitle
+        ? `Une entreprise vous invite sur « ${gigTitle} ».`
+        : 'Une entreprise vous invite à rejoindre un gig.',
+    };
+  }
   if (status === 'enrolled') {
     return {
       title: 'Candidature approuvée',
-      message: 'Votre candidature a été approuvée — vous êtes inscrit !',
+      message: `Votre candidature a été approuvée — vous êtes inscrit !${titleSuffix}`,
     };
   }
   if (status === 'rejected') {
@@ -40,7 +49,7 @@ function enrollmentCopy(status) {
 }
 
 /**
- * @param {{ repId: unknown, gigId?: unknown, status: string, actionPath?: string }} input
+ * @param {{ repId: unknown, gigId?: unknown, status: string, actionPath?: string, gigTitle?: string }} input
  */
 export async function persistEnrollmentNotification(input) {
   const repId = resolveId(input.repId);
@@ -48,7 +57,7 @@ export async function persistEnrollmentNotification(input) {
   const status = String(input.status || '').trim();
   if (!repId || !status) return null;
 
-  const { title, message } = enrollmentCopy(status);
+  const { title, message } = enrollmentCopy(status, input.gigTitle);
   const notificationKey = `enrollment-${gigId || 'general'}-${status}`;
   const url = `${DASH_REP_API}/notifications/upsert`;
 
@@ -64,7 +73,11 @@ export async function persistEnrollmentNotification(input) {
         ...(gigId ? { gigId } : {}),
         actionPath:
           input.actionPath ||
-          (gigId ? `/gig/${gigId}` : '/marketplace'),
+          (status === 'invited'
+            ? '/marketplace?tab=invited'
+            : gigId
+              ? `/gig/${gigId}`
+              : '/marketplace'),
         read: false,
       },
       {
@@ -113,6 +126,30 @@ export function notifyRepEnrollment({ repId, gigId, companyId, status }) {
         gigId: payload.gigId,
         status: payload.status,
         actionPath: payload.gigId ? `/gig/${payload.gigId}` : '/marketplace',
+      }),
+  };
+}
+
+/** Notify REP in realtime (WS) + durable DB notification after a company invite. */
+export async function notifyRepInvitation({ repId, gigId, companyId, gigTitle }) {
+  const payload = {
+    type: 'enrollment_update',
+    repId: resolveId(repId),
+    gigId: resolveId(gigId),
+    companyId: companyId ? resolveId(companyId) : undefined,
+    status: 'invited',
+    gigTitle: gigTitle ? String(gigTitle) : undefined,
+  };
+
+  return {
+    payload,
+    persist: () =>
+      persistEnrollmentNotification({
+        repId: payload.repId,
+        gigId: payload.gigId,
+        status: 'invited',
+        gigTitle: payload.gigTitle,
+        actionPath: '/marketplace?tab=invited',
       }),
   };
 }
