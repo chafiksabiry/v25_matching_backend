@@ -175,7 +175,9 @@ export const getAgentGigsWithDetails = async (agentId, statusFilter = null) => {
       status: gigEntry.status,
       enrollmentDate: gigEntry.enrollmentDate,
       invitationDate: gigEntry.invitationDate,
-      updatedAt: gigEntry.updatedAt
+      updatedAt: gigEntry.updatedAt,
+      gigAgentId: gigEntry.gigAgentId,
+      id: gigEntry.gigAgentId,
     }));
 
     return gigsWithDetails;
