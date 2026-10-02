@@ -1430,7 +1430,6 @@ export const agentAcceptInvitation = async (req, res) => {
         repId,
         gigId,
         status: 'enrolled',
-        actionPath: '/gigs',
       });
     } catch (notifError) {
       console.error('[Enrollment] agentAcceptInvitation persist failed:', notifError);
@@ -1532,7 +1531,6 @@ export const acceptEnrollmentRequest = async (req, res) => {
         repId,
         gigId,
         status: 'enrolled',
-        actionPath: '/gigs',
       });
     } catch (notifError) {
       console.error('[Enrollment] persist notification failed:', notifError);
@@ -1676,7 +1674,6 @@ export const rejectEnrollmentRequest = async (req, res) => {
         repId: String(agentId),
         gigId: String(gigId),
         status: 'rejected',
-        actionPath: '/gigs',
       });
     } catch (notifError) {
       console.error('[Enrollment] persist rejection notification failed:', notifError);

@@ -771,7 +771,6 @@ export const acceptEnrollmentRequest = async (req, res) => {
         repId,
         gigId: gigIdStr,
         status: 'enrolled',
-        actionPath: '/gigs',
       });
     } catch (notifError) {
       console.error('[Enrollment] acceptEnrollmentRequest persist failed:', notifError);
@@ -851,7 +850,6 @@ export const rejectEnrollmentRequest = async (req, res) => {
         repId,
         gigId: gigIdStr,
         status: 'rejected',
-        actionPath: '/gigs',
       });
     } catch (notifError) {
       console.error('[Enrollment] rejectEnrollmentRequest persist failed:', notifError);
