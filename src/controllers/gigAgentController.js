@@ -10,6 +10,7 @@ import { StatusCodes } from 'http-status-codes';
 import { sendMatchingNotification } from '../services/emailService.js';
 import { syncAgentGigRelationship, getAgentGigsWithDetails, getGigAgentsWithDetails } from '../utils/relationshipSync.js';
 import { broadcastEnrollmentUpdate } from '../websocket/enrollmentUpdates.js';
+import { persistEnrollmentNotification } from '../services/repNotificationClient.js';
 
 // Get all gig agents
 export const getAllGigAgents = async (req, res) => {
@@ -1408,6 +1409,33 @@ export const agentAcceptInvitation = async (req, res) => {
         ]
       });
 
+    const repId = String(gigAgent.agentId);
+    const gigId = String(gigAgent.gigId);
+    const companyId = updatedGigAgent?.gigId?.companyId
+      ? String(updatedGigAgent.gigId.companyId)
+      : undefined;
+    try {
+      broadcastEnrollmentUpdate({
+        type: 'enrollment_update',
+        repId,
+        gigId,
+        companyId,
+        status: 'enrolled'
+      });
+    } catch (wsError) {
+      console.error('[Enrollment WS] agentAcceptInvitation broadcast failed:', wsError);
+    }
+    try {
+      await persistEnrollmentNotification({
+        repId,
+        gigId,
+        status: 'enrolled',
+        actionPath: '/gigs',
+      });
+    } catch (notifError) {
+      console.error('[Enrollment] agentAcceptInvitation persist failed:', notifError);
+    }
+
     res.status(StatusCodes.OK).json({
       message: 'Invitation accepted successfully',
       gigAgent: updatedGigAgent
@@ -1482,19 +1510,32 @@ export const acceptEnrollmentRequest = async (req, res) => {
         ]
       });
 
-    // 🔔 Notifier le rep en temps réel (marketplace: PENDING → Enrolled)
+    // 🔔 WebSocket temps réel + persistance DB (cloche / historique)
+    const repId = String(gigAgent.agentId);
+    const gigId = String(gigAgent.gigId);
+    const companyId = updatedGigAgent?.gigId?.companyId
+      ? String(updatedGigAgent.gigId.companyId)
+      : undefined;
     try {
       broadcastEnrollmentUpdate({
         type: 'enrollment_update',
-        repId: String(gigAgent.agentId),
-        gigId: String(gigAgent.gigId),
-        companyId: updatedGigAgent?.gigId?.companyId
-          ? String(updatedGigAgent.gigId.companyId)
-          : undefined,
+        repId,
+        gigId,
+        companyId,
         status: 'enrolled'
       });
     } catch (wsError) {
       console.error('[Enrollment WS] broadcast failed:', wsError);
+    }
+    try {
+      await persistEnrollmentNotification({
+        repId,
+        gigId,
+        status: 'enrolled',
+        actionPath: '/gigs',
+      });
+    } catch (notifError) {
+      console.error('[Enrollment] persist notification failed:', notifError);
     }
 
     res.status(StatusCodes.OK).json({
@@ -1618,7 +1659,7 @@ export const rejectEnrollmentRequest = async (req, res) => {
       throw deleteError;
     }
 
-    // 🔔 Notifier le rep en temps réel (marketplace: PENDING → Available)
+    // 🔔 WebSocket temps réel + persistance DB
     try {
       broadcastEnrollmentUpdate({
         type: 'enrollment_update',
@@ -1629,6 +1670,16 @@ export const rejectEnrollmentRequest = async (req, res) => {
       });
     } catch (wsError) {
       console.error('[Enrollment WS] broadcast (rejected) failed:', wsError);
+    }
+    try {
+      await persistEnrollmentNotification({
+        repId: String(agentId),
+        gigId: String(gigId),
+        status: 'rejected',
+        actionPath: '/gigs',
+      });
+    } catch (notifError) {
+      console.error('[Enrollment] persist rejection notification failed:', notifError);
     }
 
     res.status(StatusCodes.OK).json({
