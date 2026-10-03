@@ -15,6 +15,7 @@ import { StatusCodes } from 'http-status-codes';
 import { findMatches } from '../utils/matchingUtils.js';
 import { findLanguageMatches, getLanguageLevelScore } from '../utils/matchingAlgorithm.js';
 import { sendMatchingNotification } from '../services/emailService.js';
+import { notifyMatchingOpportunities } from '../services/repNotificationClient.js';
 import mongoose from 'mongoose';
 
 // 🆕 Fonction helper pour extraire les données propres d'un objet MongoDB
@@ -1755,6 +1756,13 @@ export const findMatchesForGigById = async (req, res) => {
     };
 
 
+
+    // Notify REPs with match ≥ 50% (durable + WS via dash_rep_back). Fire-and-forget.
+    void notifyMatchingOpportunities({
+      gigId: gig._id,
+      gigTitle: gig.title || gig.name,
+      matches: matchesWithInvitationStatus,
+    }).catch((err) => console.error('[Matching notif] notifyMatchingOpportunities failed:', err?.message || err));
 
     // Retourner la réponse finale avec les statistiques de filtrage
     res.json({

@@ -8,7 +8,11 @@ import { StatusCodes } from 'http-status-codes';
 import { sendEnrollmentInvitation as sendEmailInvitation, sendEnrollmentNotification as sendEmailNotification } from '../services/emailService.js';
 import { syncAgentGigRelationship } from '../utils/relationshipSync.js';
 import { broadcastEnrollmentUpdate } from '../websocket/enrollmentUpdates.js';
-import { persistEnrollmentNotification, notifyRepInvitation } from '../services/repNotificationClient.js';
+import {
+  persistEnrollmentNotification,
+  notifyRepInvitation,
+  fireTeammateNotifications,
+} from '../services/repNotificationClient.js';
 
 // Envoyer une invitation d'enrôlement à un agent
 export const sendEnrollmentInvitation = async (req, res) => {
@@ -185,6 +189,24 @@ export const acceptEnrollment = async (req, res) => {
     } catch (emailError) {
       console.error('Erreur lors de l\'envoi de la notification:', emailError);
     }
+
+    const acceptRepId = String(gigAgent.agentId?._id || gigAgent.agentId);
+    const acceptGigId = String(gigAgent.gigId?._id || gigAgent.gigId);
+    try {
+      await persistEnrollmentNotification({
+        repId: acceptRepId,
+        gigId: acceptGigId,
+        status: 'enrolled',
+      });
+    } catch (notifError) {
+      console.error('[Enrollment] acceptEnrollment persist failed:', notifError);
+    }
+    fireTeammateNotifications({
+      gigId: acceptGigId,
+      newRepId: acceptRepId,
+      agentDoc: gigAgent.agentId,
+      gigDoc: gigAgent.gigId || gig,
+    });
 
     res.status(StatusCodes.OK).json({
       message: 'Enrôlement accepté avec succès',
@@ -514,6 +536,24 @@ export const acceptEnrollmentById = async (req, res) => {
       console.error('Erreur lors de l\'envoi de la notification:', emailError);
     }
 
+    const byIdRepId = String(gigAgent.agentId?._id || gigAgent.agentId);
+    const byIdGigId = String(gigAgent.gigId?._id || gigAgent.gigId);
+    try {
+      await persistEnrollmentNotification({
+        repId: byIdRepId,
+        gigId: byIdGigId,
+        status: 'enrolled',
+      });
+    } catch (notifError) {
+      console.error('[Enrollment] acceptEnrollmentById persist failed:', notifError);
+    }
+    fireTeammateNotifications({
+      gigId: byIdGigId,
+      newRepId: byIdRepId,
+      agentDoc: gigAgent.agentId,
+      gigDoc: gigAgent.gigId || gig,
+    });
+
     res.status(StatusCodes.OK).json({
       message: 'Enrôlement accepté avec succès',
       gigAgent: {
@@ -790,6 +830,13 @@ export const acceptEnrollmentRequest = async (req, res) => {
     } catch (notifError) {
       console.error('[Enrollment] acceptEnrollmentRequest persist failed:', notifError);
     }
+
+    fireTeammateNotifications({
+      gigId: gigIdStr,
+      newRepId: repId,
+      agentDoc: gigAgent.agentId,
+      gigDoc: gigAgent.gigId || gig,
+    });
 
     res.status(StatusCodes.OK).json({
       message: 'Demande d\'enrôlement acceptée avec succès',

@@ -202,3 +202,192 @@ export async function notifyRepInvitation({
       }),
   };
 }
+
+/**
+ * Persist any activity notification into dash_rep_back (triggers WS broadcast on create).
+ * @param {{
+ *   repId: unknown,
+ *   kind: string,
+ *   notificationKey: string,
+ *   title: string,
+ *   message: string,
+ *   gigId?: unknown,
+ *   journeyId?: unknown,
+ *   actionPath?: string,
+ *   status?: string,
+ * }} input
+ */
+export async function persistActivityNotification(input) {
+  const repId = resolveId(input.repId);
+  const notificationKey = String(input.notificationKey || '').trim();
+  const kind = String(input.kind || 'general').trim();
+  if (!repId || !notificationKey || !kind) return null;
+
+  const gigId = resolveId(input.gigId);
+  const journeyId = resolveId(input.journeyId);
+  const url = `${DASH_REP_API}/notifications/upsert`;
+
+  try {
+    const res = await axios.post(
+      url,
+      {
+        notificationKey,
+        kind,
+        status: input.status || kind,
+        title: String(input.title || '').trim(),
+        message: String(input.message || '').trim(),
+        ...(gigId ? { gigId } : {}),
+        ...(journeyId ? { journeyId } : {}),
+        ...(input.actionPath ? { actionPath: String(input.actionPath) } : {}),
+        read: false,
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'x-agent-id': repId,
+        },
+        timeout: 8000,
+        validateStatus: () => true,
+      }
+    );
+
+    if (res.status >= 400) {
+      console.error(
+        '[RepNotification] activity upsert failed',
+        kind,
+        res.status,
+        typeof res.data === 'object' ? res.data : String(res.data || '')
+      );
+      return null;
+    }
+    return res.data?.data || res.data || null;
+  } catch (err) {
+    console.error('[RepNotification] activity upsert error', err?.message || err);
+    return null;
+  }
+}
+
+function scorePercent(raw) {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return NaN;
+  return n <= 1 ? Math.round(n * 100) : Math.round(n);
+}
+
+/**
+ * Notify agents with match score ≥ 50% for a gig (fire-and-forget, idempotent keys).
+ * @param {{ gigId: unknown, gigTitle?: string, matches: Array<{ agentId?: unknown, totalMatchingScore?: unknown, score?: unknown }> }} input
+ */
+export async function notifyMatchingOpportunities({ gigId, gigTitle, matches }) {
+  const gId = resolveId(gigId);
+  if (!gId || !Array.isArray(matches) || !matches.length) return;
+
+  let enrolledIds = new Set();
+  try {
+    const GigAgent = (await import('../models/GigAgent.js')).default;
+    const enrolled = await GigAgent.find({
+      gigId: gId,
+      enrollmentStatus: { $in: ['enrolled', 'accepted', 'active', 'approved'] },
+    })
+      .select('agentId')
+      .lean();
+    enrolledIds = new Set(enrolled.map((row) => resolveId(row.agentId)).filter(Boolean));
+  } catch (err) {
+    console.error('[RepNotification] enrolled lookup failed', err?.message || err);
+  }
+
+  const title = gigTitle ? String(gigTitle) : 'Gig';
+  const jobs = [];
+
+  for (const row of matches) {
+    const agentId = resolveId(row?.agentId?._id || row?.agentId || row?.agent?._id || row?.agent);
+    if (!agentId || enrolledIds.has(agentId)) continue;
+    const pct = scorePercent(row?.totalMatchingScore ?? row?.overallScore ?? row?.score ?? row?.matchScore);
+    if (!Number.isFinite(pct) || pct < 50) continue;
+
+    jobs.push(
+      persistActivityNotification({
+        repId: agentId,
+        kind: 'matching',
+        status: 'matching',
+        notificationKey: `match:${gId}`,
+        gigId: gId,
+        actionPath: `/marketplace?gigId=${encodeURIComponent(gId)}`,
+        title: 'Nouveau projet correspondant',
+        message: `« ${title} » matche à ${pct} % avec votre profil.`,
+      })
+    );
+  }
+
+  if (jobs.length) {
+    await Promise.allSettled(jobs);
+  }
+}
+
+/**
+ * Notify other enrolled REPs that a new teammate joined the gig.
+ */
+export async function notifyTeammatesOfNewRep({ gigId, newRepId, newRepName, gigTitle }) {
+  const gId = resolveId(gigId);
+  const joinerId = resolveId(newRepId);
+  if (!gId || !joinerId) return;
+
+  try {
+    const GigAgent = (await import('../models/GigAgent.js')).default;
+    const peers = await GigAgent.find({
+      gigId: gId,
+      enrollmentStatus: { $in: ['enrolled', 'accepted', 'active', 'approved'] },
+      agentId: { $ne: joinerId },
+    })
+      .select('agentId')
+      .lean();
+
+    const name = String(newRepName || 'REP').trim() || 'REP';
+    const title = gigTitle ? String(gigTitle) : 'votre GIG';
+    const jobs = peers
+      .map((row) => resolveId(row.agentId))
+      .filter(Boolean)
+      .map((peerId) =>
+        persistActivityNotification({
+          repId: peerId,
+          kind: 'teammate',
+          status: 'teammate',
+          notificationKey: `teammate:${gId}:${joinerId}`,
+          gigId: gId,
+          actionPath: `/workspace?gigId=${encodeURIComponent(gId)}`,
+          title: 'Nouveau REP sur votre GIG',
+          message: `${name} a rejoint « ${title} ».`,
+        })
+      );
+
+    if (jobs.length) await Promise.allSettled(jobs);
+  } catch (err) {
+    console.error('[RepNotification] teammate notify failed', err?.message || err);
+  }
+}
+
+function agentDisplayName(agent) {
+  if (!agent) return 'REP';
+  if (typeof agent === 'string') return 'REP';
+  return (
+    agent.personalInfo?.name ||
+    [agent.personalInfo?.firstName, agent.personalInfo?.lastName].filter(Boolean).join(' ') ||
+    agent.firstName ||
+    agent.name ||
+    'REP'
+  );
+}
+
+/** Convenience: resolve gig title + agent name then notify teammates (non-blocking). */
+export function fireTeammateNotifications({ gigId, newRepId, agentDoc, gigDoc }) {
+  const gigTitle =
+    (gigDoc && (gigDoc.title || gigDoc.name)) ||
+    (typeof gigDoc === 'object' && gigDoc?.title) ||
+    undefined;
+  const newRepName = agentDisplayName(agentDoc);
+  void notifyTeammatesOfNewRep({
+    gigId,
+    newRepId,
+    newRepName,
+    gigTitle,
+  }).catch((err) => console.error('[RepNotification] fireTeammate', err?.message || err));
+}
