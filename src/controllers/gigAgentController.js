@@ -10,7 +10,11 @@ import { StatusCodes } from 'http-status-codes';
 import { sendMatchingNotification } from '../services/emailService.js';
 import { syncAgentGigRelationship, getAgentGigsWithDetails, getGigAgentsWithDetails } from '../utils/relationshipSync.js';
 import { broadcastEnrollmentUpdate } from '../websocket/enrollmentUpdates.js';
-import { persistEnrollmentNotification, notifyRepInvitation } from '../services/repNotificationClient.js';
+import {
+  persistEnrollmentNotification,
+  notifyRepInvitation,
+  fireTeammateNotifications,
+} from '../services/repNotificationClient.js';
 
 // Get all gig agents
 export const getAllGigAgents = async (req, res) => {
@@ -1467,6 +1471,13 @@ export const agentAcceptInvitation = async (req, res) => {
       console.error('[Enrollment] agentAcceptInvitation persist failed:', notifError);
     }
 
+    fireTeammateNotifications({
+      gigId,
+      newRepId: repId,
+      agentDoc: updatedGigAgent?.agentId,
+      gigDoc: updatedGigAgent?.gigId,
+    });
+
     res.status(StatusCodes.OK).json({
       message: 'Invitation accepted successfully',
       gigAgent: updatedGigAgent
@@ -1567,6 +1578,13 @@ export const acceptEnrollmentRequest = async (req, res) => {
     } catch (notifError) {
       console.error('[Enrollment] persist notification failed:', notifError);
     }
+
+    fireTeammateNotifications({
+      gigId,
+      newRepId: repId,
+      agentDoc: updatedGigAgent?.agentId,
+      gigDoc: updatedGigAgent?.gigId,
+    });
 
     res.status(StatusCodes.OK).json({
       message: 'Enrollment request accepted successfully',
