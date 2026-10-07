@@ -164,10 +164,22 @@ export const getAgentGigsWithDetails = async (agentId, statusFilter = null) => {
 
     let gigs = agent.gigs || [];
 
-    // Filtrer par statut si spécifié
+    // Filtrer par statut d'enrollment si spécifié (enrolled / invited / …)
     if (statusFilter) {
       gigs = gigs.filter(g => g.status === statusFilter);
     }
+
+    // Drop deleted/unpopulated gigs. For enrolled (and unfiltered lists),
+    // keep only lifecycle-active company gigs — enrollment ≠ gig.status.
+    // Invited/requested keep non-active so pending invites still appear.
+    const requireLifecycleActive =
+      !statusFilter || statusFilter === 'enrolled';
+    gigs = gigs.filter((g) => {
+      const gigDoc = g.gigId;
+      if (!gigDoc || typeof gigDoc !== 'object') return false;
+      if (!requireLifecycleActive) return true;
+      return String(gigDoc.status || '').toLowerCase() === 'active';
+    });
 
     // Transformer les données pour un format plus lisible
     const gigsWithDetails = gigs.map(gigEntry => ({
