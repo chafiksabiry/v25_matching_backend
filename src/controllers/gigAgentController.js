@@ -1351,6 +1351,41 @@ export const getEnrollmentRequestsForCompany = async (req, res) => {
 };
 
 // Get active agents for a company
+/** POST /api/gig-agents/standing  { gigId, agentId, standing: 'active' | 'paused' } */
+export const setRepGigStanding = async (req, res) => {
+  try {
+    const { gigId, agentId, standing } = req.body || {};
+    const gid = asObjectIdOrEmpty(gigId);
+    const aid = asObjectIdOrEmpty(agentId);
+    if (!gid || !aid || !['active', 'paused'].includes(standing)) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        message: 'gigId, agentId and standing (active|paused) are required'
+      });
+    }
+    const ga = await GigAgent.findOne({
+      gigId: gid,
+      agentId: aid,
+      enrollmentStatus: { $in: ['enrolled', 'accepted'] }
+    });
+    if (!ga) {
+      return res.status(StatusCodes.NOT_FOUND).json({ message: 'Enrolled rep not found on this gig' });
+    }
+    ga.gigStanding = standing;
+    ga.gigStandingAt = new Date();
+    await ga.save();
+    res.status(StatusCodes.OK).json({
+      success: true,
+      id: ga._id,
+      gigId: String(ga.gigId),
+      agentId: String(ga.agentId),
+      gigStanding: ga.gigStanding
+    });
+  } catch (error) {
+    console.error('Error in setRepGigStanding:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
 export const getActiveAgentsForCompany = async (req, res) => {
   try {
     const { companyId } = req.params;
