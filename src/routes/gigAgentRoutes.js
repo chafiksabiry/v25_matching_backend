@@ -25,7 +25,8 @@ import {
   getAgentGigsWithStatus,
   getGigAgentsWithStatus,
   getSessionPlanning,
-  updateSessionPlanning
+  updateSessionPlanning,
+  setRepGigStanding
 } from '../controllers/gigAgentController.js';
 
 const router = express.Router();
@@ -35,6 +36,7 @@ router.get('/', getAllGigAgents);
 router.get('/stats', getGigAgentStats);
 router.get('/session-planning', getSessionPlanning);
 router.put('/session-planning', updateSessionPlanning);
+router.post('/standing', setRepGigStanding);
 router.get('/:id', getGigAgentById);
 router.post('/', createGigAgent);
 router.put('/:id', updateGigAgent);

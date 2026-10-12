@@ -237,6 +237,15 @@ const gigAgentSchema = new mongoose.Schema({
     enum: ['invited', 'requested', 'accepted', 'rejected', 'expired', 'removed', 'enrolled', 'archived', 'cancelled'],
     default: 'invited'
   },
+  /** Company decision on an enrolled rep: keep them working this gig, or pause them. */
+  gigStanding: {
+    type: String,
+    enum: ['active', 'paused'],
+    default: 'active'
+  },
+  gigStandingAt: {
+    type: Date
+  },
   invitationSentAt: {
     type: Date,
     default: Date.now
