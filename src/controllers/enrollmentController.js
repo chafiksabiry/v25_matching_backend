@@ -183,6 +183,25 @@ export const acceptEnrollment = async (req, res) => {
       await gig.save();
     }
 
+    // sendEnrollmentInvitation syncs Agent.gigs[] to 'invited', but nothing
+    // synced it to 'enrolled' here — GET /agents/:agentId/gigs?status=enrolled
+    // (what the call-eligibility check in dash_calls_backend reads) kept
+    // returning the gig as still 'invited' forever, so an accepted REP could
+    // never actually place a call for that gig.
+    try {
+      await syncAgentGigRelationship(
+        gigAgent.agentId?._id || gigAgent.agentId,
+        gigAgent.gigId?._id || gigAgent.gigId,
+        'enrolled',
+        {
+          enrollmentDate: gigAgent.enrollmentDate || new Date(),
+          gigAgentId: gigAgent._id
+        }
+      );
+    } catch (syncError) {
+      console.error('Erreur lors de la synchronisation (accept):', syncError);
+    }
+
     // Envoyer une notification de confirmation
     try {
       await sendEmailNotification(gigAgent.agentId, gigAgent.gigId, 'accepted');
