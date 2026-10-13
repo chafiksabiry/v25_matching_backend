@@ -14,6 +14,27 @@ import {
   fireTeammateNotifications,
 } from '../services/repNotificationClient.js';
 import { getAgentPlanLimits } from '../services/planLimitsClient.js';
+import { getCompanyMaxReps } from '../services/companyPlanLimitsClient.js';
+
+/**
+ * Enforces the company plan's REP-per-gig cap (cahier de recette PAY-14:
+ * e.g. STARTER = 1 REP/gig, nothing enforced it before). Returns an error
+ * message string when the cap is reached (and the acceptor should bail),
+ * or null when there is room (or no cap is configured — fails open).
+ */
+async function checkGigRepCapacity(gigId, companyId, excludeAgentId) {
+  const maxReps = await getCompanyMaxReps(companyId);
+  if (typeof maxReps !== 'number') return null;
+  const activeCount = await GigAgent.countDocuments({
+    gigId,
+    agentId: { $ne: excludeAgentId },
+    enrollmentStatus: { $in: ['enrolled', 'accepted'] }
+  });
+  if (activeCount >= maxReps) {
+    return `Limite de ${maxReps} REP(s) par gig atteinte pour le plan de l'entreprise. Passez à un plan supérieur pour inscrire plus de REPs.`;
+  }
+  return null;
+}
 
 // Counts toward the plan's gig cap: gigs the REP actively applied to or is
 // enrolled on. Company-initiated 'invited' rows are excluded — the REP
@@ -176,10 +197,21 @@ export const acceptEnrollment = async (req, res) => {
 
     // // Vérifier si l'enrôlement peut être effectué
     // if (!gigAgent.canEnroll()) {
-    //   return res.status(StatusCodes.BAD_REQUEST).json({ 
-    //     message: 'Cette invitation ne peut plus être utilisée' 
+    //   return res.status(StatusCodes.BAD_REQUEST).json({
+    //     message: 'Cette invitation ne peut plus être utilisée'
     //   });
     // }
+
+    {
+      const capacityError = await checkGigRepCapacity(
+        gigAgent.gigId?._id || gigAgent.gigId,
+        gigAgent.gigId?.companyId,
+        gigAgent.agentId?._id || gigAgent.agentId
+      );
+      if (capacityError) {
+        return res.status(StatusCodes.FORBIDDEN).json({ message: capacityError, code: 'PLAN_REP_LIMIT_REACHED' });
+      }
+    }
 
     // Accepter l'enrôlement
     await gigAgent.acceptEnrollment(notes);
@@ -543,6 +575,17 @@ export const acceptEnrollmentById = async (req, res) => {
       });
     }
 
+    {
+      const capacityError = await checkGigRepCapacity(
+        gigAgent.gigId?._id || gigAgent.gigId,
+        gigAgent.gigId?.companyId,
+        gigAgent.agentId?._id || gigAgent.agentId
+      );
+      if (capacityError) {
+        return res.status(StatusCodes.FORBIDDEN).json({ message: capacityError, code: 'PLAN_REP_LIMIT_REACHED' });
+      }
+    }
+
     // Accepter l'enrôlement
     await gigAgent.acceptEnrollment(notes);
 
@@ -833,6 +876,17 @@ export const acceptEnrollmentRequest = async (req, res) => {
       return res.status(StatusCodes.BAD_REQUEST).json({
         message: 'Seules les demandes d\'enrôlement peuvent être acceptées'
       });
+    }
+
+    {
+      const capacityError = await checkGigRepCapacity(
+        gigAgent.gigId?._id || gigAgent.gigId,
+        gigAgent.gigId?.companyId,
+        gigAgent.agentId?._id || gigAgent.agentId
+      );
+      if (capacityError) {
+        return res.status(StatusCodes.FORBIDDEN).json({ message: capacityError, code: 'PLAN_REP_LIMIT_REACHED' });
+      }
     }
 
     // Accepter la demande d'enrôlement
