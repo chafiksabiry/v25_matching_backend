@@ -13,6 +13,14 @@ import {
   notifyRepInvitation,
   fireTeammateNotifications,
 } from '../services/repNotificationClient.js';
+import { getAgentPlanLimits } from '../services/planLimitsClient.js';
+
+// Counts toward the plan's gig cap: gigs the REP actively applied to or is
+// enrolled on. Company-initiated 'invited' rows are excluded — the REP
+// hasn't opted in yet, so an invite alone shouldn't burn a slot. Terminal
+// negative states (rejected/expired/cancelled/archived/removed) free up a
+// slot and are excluded too.
+const GIG_CAP_COUNTED_STATUSES = ['requested', 'enrolled', 'accepted'];
 
 // Envoyer une invitation d'enrôlement à un agent
 export const sendEnrollmentInvitation = async (req, res) => {
@@ -722,6 +730,27 @@ export const requestEnrollment = async (req, res) => {
 
     // Vérifier si une assignation existe déjà
     let gigAgent = await GigAgent.findOne({ agentId, gigId });
+
+    // Plafond de gigs actifs du plan (ex. "Take a chance" = 3 gigs max).
+    // Ne s'applique qu'à une toute nouvelle candidature, pas à la mise à
+    // jour d'une demande existante déjà comptée.
+    if (!gigAgent) {
+      const { maxActiveGigs, planName } = await getAgentPlanLimits(agentId);
+      if (typeof maxActiveGigs === 'number') {
+        const activeCount = await GigAgent.countDocuments({
+          agentId,
+          enrollmentStatus: { $in: GIG_CAP_COUNTED_STATUSES }
+        });
+        if (activeCount >= maxActiveGigs) {
+          return res.status(StatusCodes.FORBIDDEN).json({
+            message: `Limite de ${maxActiveGigs} gigs atteinte pour votre plan${planName ? ` (${planName})` : ''}. Passez à un plan supérieur pour postuler à plus de gigs.`,
+            code: 'PLAN_GIG_LIMIT_REACHED',
+            maxActiveGigs,
+            planName
+          });
+        }
+      }
+    }
 
     if (!gigAgent) {
       // Créer une nouvelle assignation avec statut de demande
