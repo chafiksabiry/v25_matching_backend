@@ -96,6 +96,11 @@ const GigSchema = new Schema(
     },
     highlights: [{ type: String, required: false }],
     deliverables: [{ type: String, required: false }],
+    // acceptEnrollment() (enrollmentController) pushes the accepting agent
+    // here on every accept and reads it with .includes() first — without
+    // this field that call throws "Cannot read properties of undefined
+    // (reading 'includes')" and the enrollment is never accepted.
+    enrolledAgents: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Agent', default: [] }],
     // 🆕 Agents tracking with status
     agents: [{
       agentId: {
