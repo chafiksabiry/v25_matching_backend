@@ -167,15 +167,20 @@ export const getSlots = async (req, res) => {
             // Find slots where this agent has a reservation
             const reservations = await ReservationSlot.find({ agentId: finalAgentId, status: 'reserved' }).select('slotId');
             const slotIds = reservations.map(r => r.slotId);
+            // Not populating gigId: when the referenced Gig document is
+            // missing (e.g. not yet synced into this service), Mongoose
+            // silently nulls out a perfectly valid stored reference instead
+            // of leaving the raw id, which broke every gigId-based match on
+            // the frontend. Nothing here reads the populated gig fields —
+            // only its id, which the raw (unpopulated) ObjectId already
+            // gives as a plain string.
             slots = await Slot.find({ _id: { $in: slotIds } })
-                .populate('gigId')
                 .sort({ date: 1, startTime: 1 });
         } else {
             const filter = {};
             if (gigId) filter.gigId = gigId;
             if (date) filter.date = date;
             slots = await Slot.find(filter)
-                .populate('gigId')
                 .populate('reservations')
                 .sort({ date: 1, startTime: 1 });
         }
