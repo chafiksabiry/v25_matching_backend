@@ -13,6 +13,35 @@ import {
   notifyRepInvitation,
   fireTeammateNotifications,
 } from '../services/repNotificationClient.js';
+import { getAgentPlanLimits } from '../services/planLimitsClient.js';
+import { getCompanyMaxReps } from '../services/companyPlanLimitsClient.js';
+
+/**
+ * Enforces the company plan's REP-per-gig cap (cahier de recette PAY-14:
+ * e.g. STARTER = 1 REP/gig, nothing enforced it before). Returns an error
+ * message string when the cap is reached (and the acceptor should bail),
+ * or null when there is room (or no cap is configured — fails open).
+ */
+async function checkGigRepCapacity(gigId, companyId, excludeAgentId) {
+  const maxReps = await getCompanyMaxReps(companyId);
+  if (typeof maxReps !== 'number') return null;
+  const activeCount = await GigAgent.countDocuments({
+    gigId,
+    agentId: { $ne: excludeAgentId },
+    enrollmentStatus: { $in: ['enrolled', 'accepted'] }
+  });
+  if (activeCount >= maxReps) {
+    return `Limite de ${maxReps} REP(s) par gig atteinte pour le plan de l'entreprise. Passez à un plan supérieur pour inscrire plus de REPs.`;
+  }
+  return null;
+}
+
+// Counts toward the plan's gig cap: gigs the REP actively applied to or is
+// enrolled on. Company-initiated 'invited' rows are excluded — the REP
+// hasn't opted in yet, so an invite alone shouldn't burn a slot. Terminal
+// negative states (rejected/expired/cancelled/archived/removed) free up a
+// slot and are excluded too.
+const GIG_CAP_COUNTED_STATUSES = ['requested', 'enrolled', 'accepted'];
 
 // Envoyer une invitation d'enrôlement à un agent
 export const sendEnrollmentInvitation = async (req, res) => {
@@ -168,10 +197,21 @@ export const acceptEnrollment = async (req, res) => {
 
     // // Vérifier si l'enrôlement peut être effectué
     // if (!gigAgent.canEnroll()) {
-    //   return res.status(StatusCodes.BAD_REQUEST).json({ 
-    //     message: 'Cette invitation ne peut plus être utilisée' 
+    //   return res.status(StatusCodes.BAD_REQUEST).json({
+    //     message: 'Cette invitation ne peut plus être utilisée'
     //   });
     // }
+
+    {
+      const capacityError = await checkGigRepCapacity(
+        gigAgent.gigId?._id || gigAgent.gigId,
+        gigAgent.gigId?.companyId,
+        gigAgent.agentId?._id || gigAgent.agentId
+      );
+      if (capacityError) {
+        return res.status(StatusCodes.FORBIDDEN).json({ message: capacityError, code: 'PLAN_REP_LIMIT_REACHED' });
+      }
+    }
 
     // Accepter l'enrôlement
     await gigAgent.acceptEnrollment(notes);
@@ -181,6 +221,25 @@ export const acceptEnrollment = async (req, res) => {
     if (gig && !gig.enrolledAgents.includes(gigAgent.agentId)) {
       gig.enrolledAgents.push(gigAgent.agentId);
       await gig.save();
+    }
+
+    // sendEnrollmentInvitation syncs Agent.gigs[] to 'invited', but nothing
+    // synced it to 'enrolled' here — GET /agents/:agentId/gigs?status=enrolled
+    // (what the call-eligibility check in dash_calls_backend reads) kept
+    // returning the gig as still 'invited' forever, so an accepted REP could
+    // never actually place a call for that gig.
+    try {
+      await syncAgentGigRelationship(
+        gigAgent.agentId?._id || gigAgent.agentId,
+        gigAgent.gigId?._id || gigAgent.gigId,
+        'enrolled',
+        {
+          enrollmentDate: gigAgent.enrollmentDate || new Date(),
+          gigAgentId: gigAgent._id
+        }
+      );
+    } catch (syncError) {
+      console.error('Erreur lors de la synchronisation (accept):', syncError);
     }
 
     // Envoyer une notification de confirmation
@@ -516,6 +575,17 @@ export const acceptEnrollmentById = async (req, res) => {
       });
     }
 
+    {
+      const capacityError = await checkGigRepCapacity(
+        gigAgent.gigId?._id || gigAgent.gigId,
+        gigAgent.gigId?.companyId,
+        gigAgent.agentId?._id || gigAgent.agentId
+      );
+      if (capacityError) {
+        return res.status(StatusCodes.FORBIDDEN).json({ message: capacityError, code: 'PLAN_REP_LIMIT_REACHED' });
+      }
+    }
+
     // Accepter l'enrôlement
     await gigAgent.acceptEnrollment(notes);
 
@@ -704,6 +774,27 @@ export const requestEnrollment = async (req, res) => {
     // Vérifier si une assignation existe déjà
     let gigAgent = await GigAgent.findOne({ agentId, gigId });
 
+    // Plafond de gigs actifs du plan (ex. "Take a chance" = 3 gigs max).
+    // Ne s'applique qu'à une toute nouvelle candidature, pas à la mise à
+    // jour d'une demande existante déjà comptée.
+    if (!gigAgent) {
+      const { maxActiveGigs, planName } = await getAgentPlanLimits(agentId);
+      if (typeof maxActiveGigs === 'number') {
+        const activeCount = await GigAgent.countDocuments({
+          agentId,
+          enrollmentStatus: { $in: GIG_CAP_COUNTED_STATUSES }
+        });
+        if (activeCount >= maxActiveGigs) {
+          return res.status(StatusCodes.FORBIDDEN).json({
+            message: `Limite de ${maxActiveGigs} gigs atteinte pour votre plan${planName ? ` (${planName})` : ''}. Passez à un plan supérieur pour postuler à plus de gigs.`,
+            code: 'PLAN_GIG_LIMIT_REACHED',
+            maxActiveGigs,
+            planName
+          });
+        }
+      }
+    }
+
     if (!gigAgent) {
       // Créer une nouvelle assignation avec statut de demande
       gigAgent = new GigAgent({
@@ -785,6 +876,17 @@ export const acceptEnrollmentRequest = async (req, res) => {
       return res.status(StatusCodes.BAD_REQUEST).json({
         message: 'Seules les demandes d\'enrôlement peuvent être acceptées'
       });
+    }
+
+    {
+      const capacityError = await checkGigRepCapacity(
+        gigAgent.gigId?._id || gigAgent.gigId,
+        gigAgent.gigId?.companyId,
+        gigAgent.agentId?._id || gigAgent.agentId
+      );
+      if (capacityError) {
+        return res.status(StatusCodes.FORBIDDEN).json({ message: capacityError, code: 'PLAN_REP_LIMIT_REACHED' });
+      }
     }
 
     // Accepter la demande d'enrôlement

@@ -26,7 +26,13 @@ const CountrySchema = new Schema(
       png: { type: String, required: false },
       svg: { type: String, required: false },
       alt: { type: String, required: false }
-    }
+    },
+    // Legal consumer cooling-off / retraction period for this country, in
+    // calendar days. null = unset, falls back to the 14-day EU standard
+    // (Directive 2011/83/EU art. 9) wherever that delay is resolved.
+    // No other country's figure is pre-filled here — a real legal value
+    // must be entered deliberately, not guessed.
+    retractionDays: { type: Number, default: null, min: 0 }
   },
   { timestamps: true }
 );
