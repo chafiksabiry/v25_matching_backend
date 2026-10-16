@@ -145,7 +145,7 @@ const agentSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['draft', 'active', 'inactive'],
+    enum: ['draft', 'active', 'inactive', 'completed'],
     default: 'draft'
   },
   isBasicProfileCompleted: {

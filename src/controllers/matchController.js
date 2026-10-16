@@ -796,7 +796,7 @@ export const findMatchesForGigById = async (req, res) => {
 
 
 
-    const agents = await Agent.find({})
+    const agents = await Agent.find({ status: 'completed' })
       .populate('personalInfo.languages.language', 'name nativeName code')
       .populate('personalInfo.country', 'name code')
       .populate('availability.timeZone', 'zoneName countryCode countryName gmtOffset')
@@ -1874,7 +1874,7 @@ export const generateOptimalMatches = async (req, res) => {
 
     const finalWeights = { ...defaultWeights, ...weights };
 
-    const agents = await Agent.find();
+    const agents = await Agent.find({ status: 'completed' });
     const gigs = await Gig.find();
 
     const gigMatches = await Promise.all(
@@ -1908,7 +1908,7 @@ export const findLanguageMatchesForGig = async (req, res) => {
 
 
 
-    const agents = await Agent.find();
+    const agents = await Agent.find({ status: 'completed' });
     if (!agents || agents.length === 0) {
       return res.status(StatusCodes.OK).json({
         matches: [],
@@ -1940,6 +1940,7 @@ export const findSkillsMatchesForGig = async (req, res) => {
     }
 
     const agents = await Agent.find({
+      status: 'completed',
       'skills.technical': { $exists: true, $ne: [] }
     });
 
