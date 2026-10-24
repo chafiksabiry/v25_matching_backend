@@ -1,4 +1,5 @@
 import express from 'express';
+import { startCompanyMatchScanner } from './services/companyMatchScanner.js';
 import http from 'http';
 import mongoose from 'mongoose';
 import cors from 'cors';
@@ -147,4 +148,5 @@ setupEnrollmentWebSocket(server);
 const PORT = process.env.PORT || 5011;
 server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT} (HTTP + WS /enrollment-updates)`);
+  startCompanyMatchScanner();
 });
