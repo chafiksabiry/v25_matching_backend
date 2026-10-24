@@ -1,5 +1,7 @@
 import axios from 'axios';
 import crypto from 'node:crypto';
+import mongoose from 'mongoose';
+import CompanyMatchSeen from '../models/CompanyMatchSeen.js';
 
 /**
  * Pushes company-side notifications (REP applied / accepted / declined…) to comporchestrator_back, which stores
@@ -75,6 +77,76 @@ export async function notifyCompanyOfEnrollment({ type, agent, gig, enrollmentId
     return true;
   } catch (err) {
     console.error('[CompanyNotification] push failed', err?.message || err);
+    return null;
+  }
+}
+
+const MIN_COMPANY_MATCH_PERCENT = Number(process.env.COMPANY_MATCH_MIN_PERCENT || 60);
+
+const percentOf = (raw) => {
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return NaN;
+  return n <= 1 ? Math.round(n * 100) : Math.round(n);
+};
+
+/**
+ * Tells the company about REP profiles that match one of its gigs and that it has not been told about yet
+ * (a profile that just registered, or whose profile now fits). One summary notification per call.
+ * @param {{ gig: object, matches: Array<object> }} input
+ */
+export async function notifyCompanyOfNewMatches({ gig, matches }) {
+  try {
+    const companyId = resolveId(gig?.companyId);
+    const gigId = resolveId(gig?._id || gig?.id);
+    const token = signServiceToken();
+    if (!companyId || !gigId || !token || !Array.isArray(matches) || !matches.length) return null;
+
+    const candidates = matches
+      .map((m) => ({
+        agentId: resolveId(m?.agentId?._id || m?.agentId || m?.agent?._id || m?.agent),
+        pct: percentOf(m?.totalMatchingScore ?? m?.overallScore ?? m?.score ?? m?.matchScore),
+        name: repDisplayName(m?.agentInfo || m?.agent || {}),
+        invited: Boolean(m?.isInvited),
+      }))
+      .filter((c) => c.agentId && mongoose.Types.ObjectId.isValid(c.agentId) && c.pct >= MIN_COMPANY_MATCH_PERCENT && !c.invited);
+    if (!candidates.length) return null;
+
+    // Register as seen; only the rows that were actually inserted are "new".
+    const known = new Set(
+      (await CompanyMatchSeen.find({ gigId, agentId: { $in: candidates.map((c) => c.agentId) } }).select('agentId').lean()).map((r) =>
+        String(r.agentId)
+      )
+    );
+    const fresh = candidates.filter((c) => !known.has(c.agentId)).sort((a, b) => b.pct - a.pct);
+    if (!fresh.length) return null;
+    await CompanyMatchSeen.insertMany(
+      fresh.map((c) => ({ gigId, agentId: c.agentId })),
+      { ordered: false }
+    ).catch(() => undefined);
+
+    const best = fresh[0];
+    const title = fresh.length === 1 ? 'Nouveau profil correspondant' : `${fresh.length} nouveaux profils correspondants`;
+    const message =
+      fresh.length === 1
+        ? `${best.name} correspond à ${best.pct} % à « ${gig?.title || 'votre gig'} ».`
+        : `Pour « ${gig?.title || 'votre gig'} » : ${best.name} (${best.pct} %)${fresh.length > 1 ? ` et ${fresh.length - 1} autre(s) profil(s) à plus de ${MIN_COMPANY_MATCH_PERCENT} %.` : ''}`;
+
+    await axios.post(
+      `${COMPORCHESTRATOR_API_URL}/internal/company-notifications`,
+      {
+        companyId,
+        key: `match-${gigId}-${Date.now()}`,
+        kind: 'matching',
+        title,
+        message,
+        gigId,
+        actionPath: '/dashboard/rep-matching',
+      },
+      { headers: { Authorization: `Bearer ${token}` }, timeout: 8000, validateStatus: () => true }
+    );
+    return fresh.length;
+  } catch (err) {
+    console.error('[CompanyNotification] new matches push failed', err?.message || err);
     return null;
   }
 }

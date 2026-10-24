@@ -16,6 +16,7 @@ import { findMatches } from '../utils/matchingUtils.js';
 import { findLanguageMatches, getLanguageLevelScore } from '../utils/matchingAlgorithm.js';
 import { sendMatchingNotification } from '../services/emailService.js';
 import { notifyMatchingOpportunities } from '../services/repNotificationClient.js';
+import { notifyCompanyOfNewMatches } from '../services/companyNotificationClient.js';
 import mongoose from 'mongoose';
 
 // 🆕 Fonction helper pour extraire les données propres d'un objet MongoDB
@@ -1763,6 +1764,9 @@ export const findMatchesForGigById = async (req, res) => {
       gigTitle: gig.title || gig.name,
       matches: matchesWithInvitationStatus,
     }).catch((err) => console.error('[Matching notif] notifyMatchingOpportunities failed:', err?.message || err));
+
+    // Tell the company about profiles that match this gig and that it has not seen yet.
+    void notifyCompanyOfNewMatches({ gig, matches: matchesWithInvitationStatus });
 
     // Retourner la réponse finale avec les statistiques de filtrage
     res.json({
