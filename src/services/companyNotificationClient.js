@@ -23,10 +23,17 @@ export function signServiceToken(secret = process.env.JWT_SECRET) {
   return `${header}.${payload}.${signature}`;
 }
 
-const resolveId = (value) => {
+/**
+ * Id of a value that may be a string, an ObjectId or a populated document. An ObjectId must be read with
+ * toHexString(): Mongoose gives it an `_id` getter that returns itself, so following `_id` never ends.
+ */
+const resolveId = (value, depth = 0) => {
   if (value == null) return '';
-  if (typeof value === 'object') return resolveId(value._id || value.id || value.$oid);
-  return String(value);
+  if (typeof value !== 'object') return String(value);
+  if (typeof value.toHexString === 'function') return value.toHexString();
+  if (value.$oid) return String(value.$oid);
+  const inner = value._id ?? value.id;
+  return inner && inner !== value && depth < 3 ? resolveId(inner, depth + 1) : '';
 };
 
 export function repDisplayName(agent) {
@@ -61,9 +68,12 @@ export async function notifyCompanyOfEnrollment({ type, agent, gig, enrollmentId
     const gigId = resolveId(gig?._id || gig?.id);
     const build = COPY[type];
     const token = signServiceToken();
-    if (!companyId || !build || !token) return null;
+    if (!companyId || !build || !token) {
+      console.warn(`[CompanyNotification] ${type} skipped (companyId=${companyId || 'none'}, token=${token ? 'ok' : 'missing JWT_SECRET'})`);
+      return null;
+    }
     const copy = build(repDisplayName(agent), gig?.title || 'votre gig');
-    await axios.post(
+    const response = await axios.post(
       `${COMPORCHESTRATOR_API_URL}/internal/company-notifications`,
       {
         companyId,
@@ -74,6 +84,10 @@ export async function notifyCompanyOfEnrollment({ type, agent, gig, enrollmentId
       },
       { headers: { Authorization: `Bearer ${token}` }, timeout: 8000, validateStatus: () => true }
     );
+    if (response.status !== 201) {
+      console.error(`[CompanyNotification] ${type} rejected by the orchestrator: HTTP ${response.status}`);
+      return null;
+    }
     return true;
   } catch (err) {
     console.error('[CompanyNotification] push failed', err?.message || err);
@@ -131,19 +145,33 @@ export async function notifyCompanyOfNewMatches({ gig, matches }) {
         ? `${best.name} correspond à ${best.pct} % à « ${gig?.title || 'votre gig'} ».`
         : `Pour « ${gig?.title || 'votre gig'} » : ${best.name} (${best.pct} %)${fresh.length > 1 ? ` et ${fresh.length - 1} autre(s) profil(s) à plus de ${MIN_COMPANY_MATCH_PERCENT} %.` : ''}`;
 
-    await axios.post(
-      `${COMPORCHESTRATOR_API_URL}/internal/company-notifications`,
-      {
-        companyId,
-        key: `match-${gigId}-${Date.now()}`,
-        kind: 'matching',
-        title,
-        message,
-        gigId,
-        actionPath: '/dashboard/rep-matching',
-      },
-      { headers: { Authorization: `Bearer ${token}` }, timeout: 8000, validateStatus: () => true }
-    );
+    // The profiles were registered as seen above: if the push does not go through, unregister them so that the
+    // next scan tells the company about them instead of losing them.
+    const unregister = () => CompanyMatchSeen.deleteMany({ gigId, agentId: { $in: fresh.map((c) => c.agentId) } }).catch(() => undefined);
+    let response;
+    try {
+      response = await axios.post(
+        `${COMPORCHESTRATOR_API_URL}/internal/company-notifications`,
+        {
+          companyId,
+          key: `match-${gigId}-${Date.now()}`,
+          kind: 'matching',
+          title,
+          message,
+          gigId,
+          actionPath: '/dashboard/rep-matching',
+        },
+        { headers: { Authorization: `Bearer ${token}` }, timeout: 8000, validateStatus: () => true }
+      );
+    } catch (err) {
+      await unregister();
+      throw err;
+    }
+    if (response.status !== 201) {
+      await unregister();
+      console.error(`[CompanyNotification] new matches rejected by the orchestrator: HTTP ${response.status}`);
+      return null;
+    }
     return fresh.length;
   } catch (err) {
     console.error('[CompanyNotification] new matches push failed', err?.message || err);
