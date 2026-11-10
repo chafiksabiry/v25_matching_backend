@@ -1,5 +1,6 @@
 import Match from '../models/Match.js';
 import Agent from '../models/Agent.js';
+import { repsOnly } from '../utils/repsOnly.js';
 import Gig from '../models/Gig.js';
 import GigAgent from '../models/GigAgent.js';
 import Timezone from '../models/Timezone.js';
@@ -797,7 +798,8 @@ export const findMatchesForGigById = async (req, res) => {
 
 
 
-    const agents = await Agent.find({})
+    // Les agents salariés d'un centre d'appels (employerCompanyId) ne sont pas des REPS à proposer aux entreprises.
+    const agents = await Agent.find(repsOnly())
       .populate('personalInfo.languages.language', 'name nativeName code')
       .populate('personalInfo.country', 'name code')
       .populate('availability.timeZone', 'zoneName countryCode countryName gmtOffset')
@@ -1878,7 +1880,7 @@ export const generateOptimalMatches = async (req, res) => {
 
     const finalWeights = { ...defaultWeights, ...weights };
 
-    const agents = await Agent.find();
+    const agents = await Agent.find(repsOnly());
     const gigs = await Gig.find();
 
     const gigMatches = await Promise.all(
@@ -1912,7 +1914,7 @@ export const findLanguageMatchesForGig = async (req, res) => {
 
 
 
-    const agents = await Agent.find();
+    const agents = await Agent.find(repsOnly());
     if (!agents || agents.length === 0) {
       return res.status(StatusCodes.OK).json({
         matches: [],
@@ -1943,9 +1945,9 @@ export const findSkillsMatchesForGig = async (req, res) => {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Gig not found' });
     }
 
-    const agents = await Agent.find({
+    const agents = await Agent.find(repsOnly({
       'skills.technical': { $exists: true, $ne: [] }
-    });
+    }));
 
     if (!agents || agents.length === 0) {
       return res.status(StatusCodes.OK).json([]);
