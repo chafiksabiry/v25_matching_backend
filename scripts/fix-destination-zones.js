@@ -4,8 +4,11 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 // MongoDB connection
-const mongoURI = process.env.MONGODB_URI || 'mongodb://harx:gcZ62rl8hoME@38.242.208.242:27018/V25_Matching';
-
+const mongoURI = process.env.MONGODB_URI;
+if (!mongoURI) {
+  console.error('MONGODB_URI environment variable is required (set it in your shell, never in the code).');
+  process.exit(1);
+}
 // Define minimal schemas
 const GigSchema = new mongoose.Schema({
     destination_zone: mongoose.Schema.Types.Mixed,
