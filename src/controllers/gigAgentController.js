@@ -8,7 +8,7 @@ import Timezone from '../models/Timezone.js';
 import Country from '../models/Country.js';
 import { StatusCodes } from 'http-status-codes';
 import { sendMatchingNotification } from '../services/emailService.js';
-import { syncAgentGigRelationship, getAgentGigsWithDetails, getGigAgentsWithDetails } from '../utils/relationshipSync.js';
+import { syncAgentGigRelationship, getAgentGigsWithDetails, getGigAgentsWithDetails, AgentNotFoundError } from '../utils/relationshipSync.js';
 import { broadcastEnrollmentUpdate } from '../websocket/enrollmentUpdates.js';
 import {
   persistEnrollmentNotification,
@@ -2089,6 +2089,18 @@ export const getAgentGigsWithStatus = async (req, res) => {
     });
 
   } catch (error) {
+    // A rep who has no Agent record yet simply has no gigs: answer with an
+    // empty list instead of a 500 (the dashboard polls this endpoint).
+    if (error instanceof AgentNotFoundError) {
+      return res.status(StatusCodes.OK).json({
+        message: 'No agent record found for this id; no gigs',
+        count: 0,
+        agentId: req.params.agentId,
+        filterStatus: req.query.status || 'all',
+        agentFound: false,
+        gigs: []
+      });
+    }
     console.error('Error in getAgentGigsWithStatus:', error);
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       message: error.message
