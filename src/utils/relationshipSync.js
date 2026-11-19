@@ -181,8 +181,14 @@ export const getAgentGigsWithDetails = async (agentId, statusFilter = null) => {
       }
     }
 
+    // No matching_backend Agent document yet (e.g. a REP who hasn't been
+    // synced into this service's own Agent collection) is equivalent to
+    // "zero gigs here" for this read path, not a server error — the caller
+    // (REP dashboard / marketplace) treats a non-ok response as a hard
+    // failure and gives up loading the whole list, which broke the
+    // enrolled/invited gigs view for brand-new REPs.
     if (!agent) {
-      throw new AgentNotFoundError(agentId);
+      return [];
     }
 
     let gigs = agent.gigs || [];

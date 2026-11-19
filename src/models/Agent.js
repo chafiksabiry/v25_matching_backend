@@ -138,6 +138,12 @@ const agentSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     required: false
   },
+  // Renseigné pour un agent salarié d'un centre d'appels / accueil (pas un REP du réseau) : exclu du matching des entreprises.
+  employerCompanyId: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: false,
+    default: undefined
+  },
   plan: {
     type: String,
     required: false,

@@ -10,6 +10,7 @@ import { StatusCodes } from 'http-status-codes';
 import { sendMatchingNotification } from '../services/emailService.js';
 import { syncAgentGigRelationship, getAgentGigsWithDetails, getGigAgentsWithDetails, AgentNotFoundError } from '../utils/relationshipSync.js';
 import { broadcastEnrollmentUpdate } from '../websocket/enrollmentUpdates.js';
+import { notifyCompanyOfEnrollment } from '../services/companyNotificationClient.js';
 import {
   persistEnrollmentNotification,
   notifyRepInvitation,
@@ -1506,6 +1507,13 @@ export const agentAcceptInvitation = async (req, res) => {
       console.error('[Enrollment] agentAcceptInvitation persist failed:', notifError);
     }
 
+    void notifyCompanyOfEnrollment({
+      type: 'accepted',
+      agent: updatedGigAgent?.agentId,
+      gig: updatedGigAgent?.gigId,
+      enrollmentId: gigAgent._id,
+    });
+
     fireTeammateNotifications({
       gigId,
       newRepId: repId,
@@ -1896,6 +1904,13 @@ export const agentRejectInvitation = async (req, res) => {
         ]
       });
 
+    void notifyCompanyOfEnrollment({
+      type: 'rejected',
+      agent: updatedGigAgent?.agentId,
+      gig: updatedGigAgent?.gigId,
+      enrollmentId: gigAgent._id,
+    });
+
     console.log(`✅ Invitation rejected and kept in history: Agent ${agentId} <-> Gig ${gigId}`);
 
     res.status(StatusCodes.OK).json({
@@ -1981,6 +1996,9 @@ export const sendEnrollmentRequest = async (req, res) => {
           { path: 'availability.time_zone' }
         ]
       });
+
+    // Persistent bell notification for the company (the WebSocket event below is live only).
+    void notifyCompanyOfEnrollment({ type: 'requested', agent, gig, enrollmentId: gigAgent._id });
 
     // 🔔 Notifier la company en temps réel (dashboard: nouvelle demande "requested")
     try {

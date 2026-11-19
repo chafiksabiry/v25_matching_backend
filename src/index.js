@@ -1,4 +1,5 @@
 import express from 'express';
+import { startCompanyMatchScanner } from './services/companyMatchScanner.js';
 import http from 'http';
 import mongoose from 'mongoose';
 import cors from 'cors';
@@ -111,6 +112,7 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/matchi
 mongoose.connect(MONGODB_URI)
   .then(async () => {
     console.log('Connected to MongoDB');
+    console.log('[db-diag] database name:', mongoose.connection.db?.databaseName, 'host:', mongoose.connection.host);
     // Migrate ReservationSlot unique key: (slotId, agentId) → (slotId, agentId, reservationDate)
     // so each week of a recurring template keeps its own reservation row.
     try {
@@ -146,4 +148,5 @@ setupEnrollmentWebSocket(server);
 const PORT = process.env.PORT || 5011;
 server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT} (HTTP + WS /enrollment-updates)`);
+  startCompanyMatchScanner();
 });

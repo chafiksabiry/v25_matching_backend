@@ -13,6 +13,7 @@ import {
   notifyRepInvitation,
   fireTeammateNotifications,
 } from '../services/repNotificationClient.js';
+import { notifyCompanyOfEnrollment } from '../services/companyNotificationClient.js';
 import { getAgentPlanLimits } from '../services/planLimitsClient.js';
 import { getCompanyMaxReps } from '../services/companyPlanLimitsClient.js';
 
@@ -260,6 +261,7 @@ export const acceptEnrollment = async (req, res) => {
     } catch (notifError) {
       console.error('[Enrollment] acceptEnrollment persist failed:', notifError);
     }
+    void notifyCompanyOfEnrollment({ type: 'accepted', agent: gigAgent.agentId, gig: gigAgent.gigId, enrollmentId: gigAgent._id });
     fireTeammateNotifications({
       gigId: acceptGigId,
       newRepId: acceptRepId,
@@ -350,6 +352,7 @@ export const rejectEnrollment = async (req, res) => {
     } catch (emailError) {
       console.error('Erreur lors de l\'envoi de la notification:', emailError);
     }
+    void notifyCompanyOfEnrollment({ type: 'rejected', agent: gigAgent.agentId, gig: gigAgent.gigId, enrollmentId: gigAgent._id });
 
     res.status(StatusCodes.OK).json({
       message: 'Enrôlement refusé',
@@ -617,6 +620,7 @@ export const acceptEnrollmentById = async (req, res) => {
     } catch (notifError) {
       console.error('[Enrollment] acceptEnrollmentById persist failed:', notifError);
     }
+    void notifyCompanyOfEnrollment({ type: 'accepted', agent: gigAgent.agentId, gig: gigAgent.gigId, enrollmentId: gigAgent._id });
     fireTeammateNotifications({
       gigId: byIdGigId,
       newRepId: byIdRepId,
@@ -736,6 +740,7 @@ export const rejectEnrollmentById = async (req, res) => {
     } catch (error) {
       console.error('Erreur lors de l\'envoi de la notification:', error);
     }
+    void notifyCompanyOfEnrollment({ type: 'rejected', agent: gigAgent.agentId, gig: gigAgent.gigId, enrollmentId: gigAgent._id });
 
     res.status(StatusCodes.OK).json({
       message: 'Enrôlement refusé',
@@ -818,6 +823,8 @@ export const requestEnrollment = async (req, res) => {
     }
 
     await gigAgent.save();
+
+    void notifyCompanyOfEnrollment({ type: 'requested', agent, gig, enrollmentId: gigAgent._id });
 
     // 🆕 Synchroniser la relation Agent-Gig dès la demande
     try {

@@ -1,5 +1,6 @@
 import Match from '../models/Match.js';
 import Agent from '../models/Agent.js';
+import { repsOnly } from '../utils/repsOnly.js';
 import Gig from '../models/Gig.js';
 import GigAgent from '../models/GigAgent.js';
 import Timezone from '../models/Timezone.js';
@@ -16,6 +17,7 @@ import { findMatches } from '../utils/matchingUtils.js';
 import { findLanguageMatches, getLanguageLevelScore } from '../utils/matchingAlgorithm.js';
 import { sendMatchingNotification } from '../services/emailService.js';
 import { notifyMatchingOpportunities } from '../services/repNotificationClient.js';
+import { notifyCompanyOfNewMatches } from '../services/companyNotificationClient.js';
 import mongoose from 'mongoose';
 
 // 🆕 Fonction helper pour extraire les données propres d'un objet MongoDB
@@ -796,7 +798,9 @@ export const findMatchesForGigById = async (req, res) => {
 
 
 
-    const agents = await Agent.find({ status: 'completed' })
+    // Les agents salariés d'un centre d'appels (employerCompanyId) ne sont pas des REPS à proposer aux entreprises.
+    // Profils publiés seulement (status 'completed', règle de main cf7b68a).
+    const agents = await Agent.find(repsOnly({ status: 'completed' }))
       .populate('personalInfo.languages.language', 'name nativeName code')
       .populate('personalInfo.country', 'name code')
       .populate('availability.timeZone', 'zoneName countryCode countryName gmtOffset')
@@ -1764,6 +1768,9 @@ export const findMatchesForGigById = async (req, res) => {
       matches: matchesWithInvitationStatus,
     }).catch((err) => console.error('[Matching notif] notifyMatchingOpportunities failed:', err?.message || err));
 
+    // Tell the company about profiles that match this gig and that it has not seen yet.
+    void notifyCompanyOfNewMatches({ gig, matches: matchesWithInvitationStatus });
+
     // Retourner la réponse finale avec les statistiques de filtrage
     res.json({
       preferedmatches: matchesWithInvitationStatus,
@@ -1874,7 +1881,7 @@ export const generateOptimalMatches = async (req, res) => {
 
     const finalWeights = { ...defaultWeights, ...weights };
 
-    const agents = await Agent.find({ status: 'completed' });
+    const agents = await Agent.find(repsOnly({ status: 'completed' }));
     const gigs = await Gig.find();
 
     const gigMatches = await Promise.all(
@@ -1908,7 +1915,7 @@ export const findLanguageMatchesForGig = async (req, res) => {
 
 
 
-    const agents = await Agent.find({ status: 'completed' });
+    const agents = await Agent.find(repsOnly({ status: 'completed' }));
     if (!agents || agents.length === 0) {
       return res.status(StatusCodes.OK).json({
         matches: [],
@@ -1939,10 +1946,10 @@ export const findSkillsMatchesForGig = async (req, res) => {
       return res.status(StatusCodes.NOT_FOUND).json({ message: 'Gig not found' });
     }
 
-    const agents = await Agent.find({
+    const agents = await Agent.find(repsOnly({
       status: 'completed',
       'skills.technical': { $exists: true, $ne: [] }
-    });
+    }));
 
     if (!agents || agents.length === 0) {
       return res.status(StatusCodes.OK).json([]);
