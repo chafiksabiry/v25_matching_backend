@@ -213,7 +213,7 @@ export const findAgentsForGig = async (req, res) => {
     }
     
     // Récupérer tous les agents actifs avec populate des timezones
-    const agents = await Agent.find({ status: 'active' })
+    const agents = await Agent.find({ status: 'completed' })
       .populate('availability.timeZone', 'countryCode zoneName gmtOffset')
       .populate('personalInfo.country', 'name cca2');
     

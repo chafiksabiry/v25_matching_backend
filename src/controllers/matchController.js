@@ -799,7 +799,8 @@ export const findMatchesForGigById = async (req, res) => {
 
 
     // Les agents salariés d'un centre d'appels (employerCompanyId) ne sont pas des REPS à proposer aux entreprises.
-    const agents = await Agent.find(repsOnly())
+    // Profils publiés seulement (status 'completed', règle de main cf7b68a).
+    const agents = await Agent.find(repsOnly({ status: 'completed' }))
       .populate('personalInfo.languages.language', 'name nativeName code')
       .populate('personalInfo.country', 'name code')
       .populate('availability.timeZone', 'zoneName countryCode countryName gmtOffset')
@@ -1880,7 +1881,7 @@ export const generateOptimalMatches = async (req, res) => {
 
     const finalWeights = { ...defaultWeights, ...weights };
 
-    const agents = await Agent.find(repsOnly());
+    const agents = await Agent.find(repsOnly({ status: 'completed' }));
     const gigs = await Gig.find();
 
     const gigMatches = await Promise.all(
@@ -1914,7 +1915,7 @@ export const findLanguageMatchesForGig = async (req, res) => {
 
 
 
-    const agents = await Agent.find(repsOnly());
+    const agents = await Agent.find(repsOnly({ status: 'completed' }));
     if (!agents || agents.length === 0) {
       return res.status(StatusCodes.OK).json({
         matches: [],
@@ -1946,6 +1947,7 @@ export const findSkillsMatchesForGig = async (req, res) => {
     }
 
     const agents = await Agent.find(repsOnly({
+      status: 'completed',
       'skills.technical': { $exists: true, $ne: [] }
     }));
 

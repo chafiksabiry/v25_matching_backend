@@ -1,7 +1,10 @@
 import { MongoClient } from 'mongodb';
 
-const uri = 'mongodb://mongo:DiGaBWUZXCkIxlZMuntztBaFJcOlUJIg@maglev.proxy.rlwy.net:40270/?authSource=admin';
-
+const uri = process.env.MONGODB_URI;
+if (!uri) {
+  console.error('MONGODB_URI environment variable is required (set it in your shell, never in the code).');
+  process.exit(1);
+}
 async function testConnection() {
     const client = new MongoClient(uri, {
         serverSelectionTimeoutMS: 30000,

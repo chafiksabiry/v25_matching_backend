@@ -8,7 +8,7 @@ import Timezone from '../models/Timezone.js';
 import Country from '../models/Country.js';
 import { StatusCodes } from 'http-status-codes';
 import { sendMatchingNotification } from '../services/emailService.js';
-import { syncAgentGigRelationship, getAgentGigsWithDetails, getGigAgentsWithDetails } from '../utils/relationshipSync.js';
+import { syncAgentGigRelationship, getAgentGigsWithDetails, getGigAgentsWithDetails, AgentNotFoundError } from '../utils/relationshipSync.js';
 import { broadcastEnrollmentUpdate } from '../websocket/enrollmentUpdates.js';
 import { notifyCompanyOfEnrollment } from '../services/companyNotificationClient.js';
 import {
@@ -1352,6 +1352,41 @@ export const getEnrollmentRequestsForCompany = async (req, res) => {
 };
 
 // Get active agents for a company
+/** POST /api/gig-agents/standing  { gigId, agentId, standing: 'active' | 'paused' } */
+export const setRepGigStanding = async (req, res) => {
+  try {
+    const { gigId, agentId, standing } = req.body || {};
+    const gid = asObjectIdOrEmpty(gigId);
+    const aid = asObjectIdOrEmpty(agentId);
+    if (!gid || !aid || !['active', 'paused'].includes(standing)) {
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        message: 'gigId, agentId and standing (active|paused) are required'
+      });
+    }
+    const ga = await GigAgent.findOne({
+      gigId: gid,
+      agentId: aid,
+      enrollmentStatus: { $in: ['enrolled', 'accepted'] }
+    });
+    if (!ga) {
+      return res.status(StatusCodes.NOT_FOUND).json({ message: 'Enrolled rep not found on this gig' });
+    }
+    ga.gigStanding = standing;
+    ga.gigStandingAt = new Date();
+    await ga.save();
+    res.status(StatusCodes.OK).json({
+      success: true,
+      id: ga._id,
+      gigId: String(ga.gigId),
+      agentId: String(ga.agentId),
+      gigStanding: ga.gigStanding
+    });
+  } catch (error) {
+    console.error('Error in setRepGigStanding:', error);
+    res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: error.message });
+  }
+};
+
 export const getActiveAgentsForCompany = async (req, res) => {
   try {
     const { companyId } = req.params;
@@ -2072,6 +2107,18 @@ export const getAgentGigsWithStatus = async (req, res) => {
     });
 
   } catch (error) {
+    // A rep who has no Agent record yet simply has no gigs: answer with an
+    // empty list instead of a 500 (the dashboard polls this endpoint).
+    if (error instanceof AgentNotFoundError) {
+      return res.status(StatusCodes.OK).json({
+        message: 'No agent record found for this id; no gigs',
+        count: 0,
+        agentId: req.params.agentId,
+        filterStatus: req.query.status || 'all',
+        agentFound: false,
+        gigs: []
+      });
+    }
     console.error('Error in getAgentGigsWithStatus:', error);
     res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       message: error.message

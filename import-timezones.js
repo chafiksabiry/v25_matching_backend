@@ -1,11 +1,18 @@
 import { MongoClient } from 'mongodb';
 
 // MongoDB connection string for Railway
-const MONGODB_URI = 'mongodb://mongo:DiGaBWUZXCkIxlZMuntztBaFJcOlUJIg@maglev.proxy.rlwy.net:40270/?authSource=admin';
+const MONGODB_URI = process.env.MONGODB_URI;
+if (!MONGODB_URI) {
+  console.error('MONGODB_URI environment variable is required (set it in your shell, never in the code).');
+  process.exit(1);
+}
 const DB_NAME = 'harx';
 const COLLECTION_NAME = 'timezones';
-const API_KEY = 'MLOUKSOHKJJY';
-
+const API_KEY = process.env.TIMEZONEDB_API_KEY;
+if (!API_KEY) {
+  console.error('TIMEZONEDB_API_KEY environment variable is required (set it in your shell, never in the code).');
+  process.exit(1);
+}
 async function importTimezones() {
     const client = new MongoClient(MONGODB_URI, {
         serverSelectionTimeoutMS: 30000,

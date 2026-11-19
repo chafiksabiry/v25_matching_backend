@@ -1,6 +1,37 @@
 import Agent from '../models/Agent.js';
 import Gig from '../models/Gig.js';
 import Company from '../models/Company.js';
+import mongoose from 'mongoose';
+
+/**
+ * Raised when no Agent document matches the id (neither as _id nor as userId).
+ * Callers map it to an empty result / 404 instead of a server error.
+ */
+export class AgentNotFoundError extends Error {
+  constructor(agentId) {
+    super('Agent not found');
+    this.name = 'AgentNotFoundError';
+    this.code = 'AGENT_NOT_FOUND';
+    this.agentId = agentId;
+  }
+}
+
+const AGENT_GIGS_POPULATE = {
+  path: 'gigs.gigId',
+  populate: [
+    { path: 'commission.currency' },
+    { path: 'destination_zone' },
+    { path: 'availability.time_zone' },
+    { path: 'companyId' },
+    { path: 'industries' },
+    { path: 'activities' },
+    { path: 'team.territories' },
+    { path: 'skills.technical.skill' },
+    { path: 'skills.professional.skill' },
+    { path: 'skills.soft.skill' },
+    { path: 'skills.languages.language' }
+  ]
+};
 
 /**
  * Synchronise la relation Agent-Gig dans les deux collections
@@ -140,23 +171,15 @@ export const removeAgentGigRelationship = async (agentId, gigId) => {
  */
 export const getAgentGigsWithDetails = async (agentId, statusFilter = null) => {
   try {
-    const agent = await Agent.findById(agentId)
-      .populate({
-        path: 'gigs.gigId',
-        populate: [
-          { path: 'commission.currency' },
-          { path: 'destination_zone' },
-          { path: 'availability.time_zone' },
-          { path: 'companyId' },
-          { path: 'industries' },
-          { path: 'activities' },
-          { path: 'team.territories' },
-          { path: 'skills.technical.skill' },
-          { path: 'skills.professional.skill' },
-          { path: 'skills.soft.skill' },
-          { path: 'skills.languages.language' }
-        ]
-      });
+    // The id may be the Agent _id or the owning user's id (same convention as
+    // agentController.getAgentById): try _id first, then userId.
+    let agent = null;
+    if (mongoose.Types.ObjectId.isValid(agentId)) {
+      agent = await Agent.findById(agentId).populate(AGENT_GIGS_POPULATE);
+      if (!agent) {
+        agent = await Agent.findOne({ userId: agentId }).populate(AGENT_GIGS_POPULATE);
+      }
+    }
 
     // No matching_backend Agent document yet (e.g. a REP who hasn't been
     // synced into this service's own Agent collection) is equivalent to
@@ -201,6 +224,7 @@ export const getAgentGigsWithDetails = async (agentId, statusFilter = null) => {
     return gigsWithDetails;
 
   } catch (error) {
+    if (error instanceof AgentNotFoundError) throw error;
     console.error('❌ Error getting agent gigs:', error);
     throw error;
   }
